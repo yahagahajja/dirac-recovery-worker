@@ -1,0 +1,9 @@
+{
+  "name": "dirac-recovery-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "argon2": "^0.40.3"
+  }
+}
