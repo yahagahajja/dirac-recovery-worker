@@ -3303,6 +3303,8 @@ const DIRAC_TABLE_DB_MAP = Object.freeze({
   security_customer_recovery_codes: 'customerSecurity',
   security_customer_sessions: 'customerSecurity',
   security_customer_settings: 'customerSecurity',
+  security_lost_passkey_recovery_requests: 'customerSecurity',
+  security_lost_passkey_recovery_sessions: 'customerSecurity',
 
   public_mfa_recovery_codes: 'publicMfa',
   public_security_challenges: 'publicMfa',
@@ -6037,6 +6039,71 @@ function customerSecurityRecoveryWorkerAllowedCaller() {
   return customerSecurityRecoveryWorkerAsciiToken(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER);
 }
 
+
+function customerSecurityRecoveryWorkerMainEnvDiagnostics() {
+  const rawUrl = String(process.env.DIRAC_RECOVERY_WORKER_URL || '').trim();
+  const rawSecret = String(process.env.DIRAC_RECOVERY_WORKER_SECRET || '').trim();
+  const rawCaller = String(process.env.DIRAC_RECOVERY_WORKER_CALLER || '').trim();
+  const server2OnlyEnv = [
+    'DIRAC_RECOVERY_WORKER_ALLOWED_CALLER',
+    'DIRAC_RECOVERY_WORKER_MAX_BODY_BYTES',
+    'DIRAC_RECOVERY_WORKER_CLOCK_SKEW_SECONDS',
+    'DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB',
+    'DIRAC_LOST_PASSKEY_ARGON2_TIME_COST'
+  ];
+  const diagnostics = {
+    role: 'server1_main_recovery_caller',
+    required_env: [
+      'DIRAC_RECOVERY_WORKER_URL',
+      'DIRAC_RECOVERY_WORKER_SECRET',
+      'DIRAC_RECOVERY_WORKER_CALLER'
+    ],
+    server2_only_env: server2OnlyEnv,
+    allowed_shared_env: [
+      'DIRAC_RECOVERY_WORKER_SECRET',
+      'DOMAIN_COOKIE_SAMESITE'
+    ],
+    missing_env: [],
+    invalid_env: [],
+    wrong_server_env: [],
+    env_state: {
+      DIRAC_RECOVERY_WORKER_URL: rawUrl ? 'present' : 'missing',
+      DIRAC_RECOVERY_WORKER_SECRET: rawSecret ? 'present' : 'missing',
+      DIRAC_RECOVERY_WORKER_CALLER: rawCaller ? 'present' : 'missing'
+    }
+  };
+  for (const name of server2OnlyEnv) {
+    const present = String(process.env[name] || '').trim() ? true : false;
+    diagnostics.env_state[name] = present ? 'present_on_server1_remove_it' : 'absent';
+    if (present) diagnostics.wrong_server_env.push(name + ' belongs to Vercel 2, remove it from Vercel 1');
+  }
+
+  if (!rawUrl) diagnostics.missing_env.push('DIRAC_RECOVERY_WORKER_URL');
+  else {
+    try {
+      const url = new URL(rawUrl);
+      diagnostics.env_state.worker_url_protocol = url.protocol.replace(/:$/, '');
+      diagnostics.env_state.worker_url_host = url.hostname;
+      diagnostics.env_state.worker_url_path = url.pathname.replace(/\/+$/, '') || '/';
+      if (url.protocol !== 'https:') diagnostics.invalid_env.push('DIRAC_RECOVERY_WORKER_URL must use https');
+      if (!url.hostname) diagnostics.invalid_env.push('DIRAC_RECOVERY_WORKER_URL host is empty');
+    } catch (_) {
+      diagnostics.invalid_env.push('DIRAC_RECOVERY_WORKER_URL is not a valid URL');
+    }
+  }
+
+  if (!rawSecret) diagnostics.missing_env.push('DIRAC_RECOVERY_WORKER_SECRET');
+  else if (Buffer.byteLength(rawSecret, 'utf8') < 64) diagnostics.invalid_env.push('DIRAC_RECOVERY_WORKER_SECRET must be at least 64 bytes');
+
+  if (!rawCaller) diagnostics.missing_env.push('DIRAC_RECOVERY_WORKER_CALLER');
+  else if (!customerSecurityRecoveryWorkerAsciiToken(rawCaller)) diagnostics.invalid_env.push('DIRAC_RECOVERY_WORKER_CALLER must match ASCII /^[A-Za-z0-9_.-]{1,80}$/');
+
+  diagnostics.ok = diagnostics.missing_env.length === 0
+    && diagnostics.invalid_env.length === 0
+    && diagnostics.wrong_server_env.length === 0;
+  return diagnostics;
+}
+
 function customerSecurityRecoveryWorkerMaxBodyBytes() {
   const raw = Number(process.env.DIRAC_RECOVERY_WORKER_MAX_BODY_BYTES || 32768);
   if (!Number.isFinite(raw)) return 32768;
@@ -6483,6 +6550,17 @@ async function customerSecurityRecoveryCodesStatus(req, res, action) {
 }
 
 async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings) {
+  const workerEnvDiagnostics = customerSecurityRecoveryWorkerMainEnvDiagnostics();
+  if (!workerEnvDiagnostics.ok) {
+    try { console.error('[recovery-worker-main-env-invalid]', JSON.stringify(workerEnvDiagnostics)); } catch (_) {}
+    return res.status(503).json({
+      ok: false,
+      code: 'RECOVERY_WORKER_ENV_INVALID',
+      message: 'Konfigurasi recovery worker di Vercel 1 belum valid.',
+      worker_env: workerEnvDiagnostics
+    });
+  }
+
   const workerUrl = customerSecurityRecoveryWorkerUrl();
   const secret = customerSecurityRecoveryWorkerSecret();
   const caller = customerSecurityRecoveryWorkerCaller();
@@ -15505,6 +15583,8 @@ function diracV101ServiceRoleAllowedTables() {
     'security_customer_recovery_codes',
     'security_customer_sessions',
     'security_customer_settings',
+    'security_lost_passkey_recovery_requests',
+    'security_lost_passkey_recovery_sessions',
     'dirac_security_rate_limits',
     String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim(),
     String(process.env.DOMAIN_LOGIN_RATE_TABLE || '').trim()
@@ -19432,6 +19512,8 @@ function diracBolaIdorV121OwnedTablePolicy(table) {
     security_customer_sessions: { ownerColumns: ['customer_id'], objectColumns: ['id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
     security_customer_settings: { ownerColumns: ['customer_id'], objectColumns: ['id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
     security_customer_recovery_codes: { ownerColumns: ['customer_id'], objectColumns: ['id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
+    security_lost_passkey_recovery_requests: { ownerColumns: ['customer_id', 'auth_user_id'], objectColumns: ['id', 'request_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id', 'auth_user_id'] },
+    security_lost_passkey_recovery_sessions: { ownerColumns: ['customer_id', 'auth_user_id'], objectColumns: ['id', 'request_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id', 'auth_user_id'] },
     domain_passkeys: { ownerColumns: ['customer_id', 'auth_user_id', 'user_id', 'email'], objectColumns: ['id', 'credential_id'], insertMayUseBodyOwner: true },
     security_customer_login_logs: { ownerColumns: ['customer_id', 'auth_user_id', 'email'], objectColumns: ['id'], insertMayUseBodyOwner: true },
     security_customer_account_requests: { ownerColumns: ['customer_id', 'auth_user_id', 'email'], objectColumns: ['id'], insertMayUseBodyOwner: true },
@@ -19735,6 +19817,8 @@ function diracBolaIdorV122OwnedTablePolicy(table) {
     security_customer_sessions: { ownerColumns: ['customer_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
     security_customer_settings: { ownerColumns: ['customer_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
     security_customer_recovery_codes: { ownerColumns: ['customer_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
+    security_lost_passkey_recovery_requests: { ownerColumns: ['customer_id', 'auth_user_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id', 'auth_user_id'] },
+    security_lost_passkey_recovery_sessions: { ownerColumns: ['customer_id', 'auth_user_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id', 'auth_user_id'] },
     domain_passkeys: { ownerColumns: ['customer_id', 'auth_user_id', 'user_id', 'email'], insertMayUseBodyOwner: true },
     security_customer_login_logs: { ownerColumns: ['customer_id', 'auth_user_id', 'email'], insertMayUseBodyOwner: true },
     security_customer_account_requests: { ownerColumns: ['customer_id', 'auth_user_id', 'email'], insertMayUseBodyOwner: true },
