@@ -17936,6 +17936,7 @@ function diracV119ShouldInspectSupabaseWrite(path, options = {}) {
   if (!table) return false;
 
   // Jangan ganggu tabel keamanan, session/logout, dan payment gateway/provider payload.
+  if (table === 'security_lost_passkey_recovery_requests' || table === 'security_lost_passkey_recovery_sessions') return false;
   if (/^security_customer_/i.test(table)) return false;
   if (table === 'dirac_security_rate_limits') return false;
   if (table === String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim()) return false;
