@@ -6024,12 +6024,17 @@ function customerSecurityRecoveryWorkerSecret() {
   return secret;
 }
 
+function customerSecurityRecoveryWorkerAsciiToken(value) {
+  const clean = String(value || '').trim();
+  return /^[A-Za-z0-9_.-]{1,80}$/.test(clean) ? clean : '';
+}
+
 function customerSecurityRecoveryWorkerCaller() {
-  return String(process.env.DIRAC_RECOVERY_WORKER_CALLER || '').trim();
+  return customerSecurityRecoveryWorkerAsciiToken(process.env.DIRAC_RECOVERY_WORKER_CALLER);
 }
 
 function customerSecurityRecoveryWorkerAllowedCaller() {
-  return String(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER || '').trim();
+  return customerSecurityRecoveryWorkerAsciiToken(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER);
 }
 
 function customerSecurityRecoveryWorkerMaxBodyBytes() {
@@ -6513,6 +6518,8 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
+  const workerDebugEnabled = String(process.env.DIRAC_RECOVERY_WORKER_DEBUG || '').trim().toLowerCase() === 'true';
+
   try {
     const response = await fetch(target.toString(), {
       method: 'POST',
@@ -6526,13 +6533,31 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
       body: JSON.stringify(payload),
       signal: controller ? controller.signal : undefined
     });
-    const data = await response.json().catch(() => ({}));
+    const workerResponseText = await response.text().catch(() => '');
+    let data = {};
+    try { data = workerResponseText ? JSON.parse(workerResponseText) : {}; } catch (_) { data = {}; }
     if (!response.ok || !data || data.ok !== true) {
-      return res.status(response.status || data.status || 502).json({
+      const workerFailureBody = {
         ok: false,
         code: data && data.code || 'RECOVERY_WORKER_FAILED',
         message: data && data.message || 'Recovery worker belum dapat memproses permintaan.'
-      });
+      };
+      try {
+        console.error('[recovery-worker-response-failed]', JSON.stringify({
+          status: response.status,
+          statusText: response.statusText,
+          code: workerFailureBody.code,
+          message: String(workerFailureBody.message || '').slice(0, 200),
+          workerHost: target.hostname,
+          workerPath: target.pathname
+        }));
+      } catch (_) {}
+      if (workerDebugEnabled) {
+        workerFailureBody.worker_status = response.status;
+        workerFailureBody.worker_status_text = String(response.statusText || '').slice(0, 80);
+        workerFailureBody.worker_body_preview = String(workerResponseText || '').replace(/[<>]/g, '').slice(0, 800);
+      }
+      return res.status(response.status || data.status || 502).json(workerFailureBody);
     }
     return res.status(200).json({
       ok: true,
@@ -6542,12 +6567,31 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
       message: data.message || 'File recovery terenkripsi sudah dikirim ke email resmi akun.',
       time: data.time || diracNowIso()
     });
-  } catch (_) {
-    return res.status(502).json({
+  } catch (error) {
+    const workerErrorName = String(error && error.name || '').slice(0, 80);
+    const workerErrorMessage = String(error && error.message || '').slice(0, 240);
+    try {
+      console.error('[recovery-worker-unreachable]', JSON.stringify({
+        name: workerErrorName,
+        message: workerErrorMessage,
+        workerHost: target.hostname,
+        workerPath: target.pathname,
+        timeoutMs
+      }));
+    } catch (_) {}
+    const unreachableBody = {
       ok: false,
       code: 'RECOVERY_WORKER_UNREACHABLE',
       message: 'Recovery worker belum bisa dihubungi.'
-    });
+    };
+    if (workerDebugEnabled) {
+      unreachableBody.worker_error_name = workerErrorName;
+      unreachableBody.worker_error_message = workerErrorMessage;
+      unreachableBody.worker_host = target.hostname;
+      unreachableBody.worker_path = target.pathname;
+      unreachableBody.worker_timeout_ms = timeoutMs;
+    }
+    return res.status(502).json(unreachableBody);
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -26079,6 +26123,13 @@ function diracCentralZeroDayShieldV146(req, ctx, normalized) {
   return { ok: true };
 }
 
+function diracCentralNormalizeHostV146(value) {
+  const clean = String(value || '').trim().toLowerCase().split(',')[0].trim().replace(/:\d+$/, '');
+  if (!clean || /[\/\s\u0000-\u001f\u007f]/.test(clean)) return '';
+  if (!/^[a-z0-9.-]+$/.test(clean)) return '';
+  return clean;
+}
+
 function diracCentralProxyHeaderGuardV146(headers) {
   headers = headers || {};
   const names = Object.keys(headers).map((name) => String(name || '').toLowerCase());
@@ -26090,22 +26141,34 @@ function diracCentralProxyHeaderGuardV146(headers) {
     if (proto !== 'https') return { ok: false };
   }
 
-  const rawHost = String(headers['x-forwarded-host'] || '').trim().toLowerCase();
-  if (rawHost) {
-    const host = rawHost.split(',')[0].trim().replace(/:\d+$/, '');
+  const rawForwardedHost = String(headers['x-forwarded-host'] || '').trim();
+  if (rawForwardedHost) {
+    const host = diracCentralNormalizeHostV146(rawForwardedHost);
+    if (!host) return { ok: false };
     const allowedHosts = new Set(Array.from(DIRAC_CENTRAL_ALLOWED_ORIGINS_V146).map((origin) => {
       try { return new URL(origin).hostname.toLowerCase(); } catch (_) { return ''; }
     }).filter(Boolean));
-    if (!allowedHosts.has(host)) return { ok: false };
+    const runtimeHost = diracCentralNormalizeHostV146(headers.host || process.env.VERCEL_URL || '');
+    const vercelHost = diracCentralNormalizeHostV146(process.env.VERCEL_URL || '');
+    if (!allowedHosts.has(host) && host !== runtimeHost && host !== vercelHost) return { ok: false };
   }
 
   return { ok: true };
 }
 
+async function diracCentralRecoveryWorkerIdorGuardV146(req, ctx) {
+  if (!req || req.__diracRecoveryWorkerVerified !== true) return { ok: false, reason: 'recovery_worker_signature_required' };
+  if (typeof customerSecurityResolveLostPasskeyWorkerOwner !== 'function') return { ok: false, reason: 'recovery_worker_owner_guard_missing' };
+  const owner = await customerSecurityResolveLostPasskeyWorkerOwner(ctx && ctx.body || {}).catch(() => null);
+  if (!owner || owner.ok !== true) return { ok: false, reason: 'recovery_worker_owner_invalid' };
+  ctx.__diracRecoveryWorkerOwnerCheckedV146 = true;
+  return { ok: true };
+}
+
 async function diracCentralIdorBolaGuardV146(req, ctx) {
   if (ctx && ctx.classification === 'server' && ctx.action === 'midtrans_webhook') return { ok: true, skipped: 'server_to_server_signed_webhook' };
-  if (ctx && ctx.classification === 'server' && ctx.action === DIRAC_RECOVERY_WORKER_ACTION && req && req.__diracRecoveryWorkerVerified === true) {
-    return { ok: true, skipped: 'signed_recovery_worker' };
+  if (ctx && ctx.classification === 'server' && ctx.action === DIRAC_RECOVERY_WORKER_ACTION) {
+    return await diracCentralRecoveryWorkerIdorGuardV146(req, ctx);
   }
   const ids = diracCentralCollectIdsV146(req, ctx.body);
   if (diracCentralIsAuthBootstrapIdentityOnlyV146(ctx.action, ids)) return { ok: true, skipped: 'auth_bootstrap_identity_only' };
