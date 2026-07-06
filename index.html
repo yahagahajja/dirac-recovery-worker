@@ -1,0 +1,1256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Alto Studio creates refined luxury interiors for private residences, penthouses, and hospitality spaces."
+    />
+    <title>Alto Studio | Luxury Interior Design</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Playfair+Display:ital,wght@0,300;0,400;0,500;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --cream: #faf8f4;
+        --charcoal: #111111;
+        --graphite: #222222;
+        --muted: #555555;
+        --soft: #6e6e6e;
+        --gold: #c9a56a;
+        --gold-dark: #a8813d;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        background-color: var(--cream);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.022'/%3E%3C/svg%3E");
+        color: var(--graphite);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+        font-synthesis: none;
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      img,
+      video {
+        -webkit-user-drag: none;
+        user-select: none;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+
+      .intro {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        overflow: hidden;
+        background: #080808;
+        transition:
+          opacity 1.2s var(--ease),
+          transform 1.2s var(--ease),
+          visibility 1.2s var(--ease);
+      }
+
+      .intro.is-hidden {
+        opacity: 0;
+        transform: scale(1.05);
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .intro video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .intro::before,
+      .intro::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        pointer-events: none;
+      }
+
+      .intro::before {
+        top: 0;
+        height: 15%;
+        background: linear-gradient(to bottom, rgba(8, 8, 8, 0.6), transparent);
+      }
+
+      .intro::after {
+        bottom: 0;
+        height: 35%;
+        background: linear-gradient(to top, #080808, transparent);
+      }
+
+      .navbar {
+        position: fixed;
+        inset: 0 0 auto;
+        z-index: 50;
+        transition:
+          background-color 700ms ease,
+          box-shadow 700ms ease,
+          backdrop-filter 700ms ease;
+      }
+
+      .navbar.is-scrolled {
+        background: rgba(250, 248, 244, 0.95);
+        backdrop-filter: blur(20px);
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+      }
+
+      .nav-inner {
+        width: 100%;
+        max-width: 1440px;
+        height: 72px;
+        margin: 0 auto;
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .logo {
+        display: flex;
+        align-items: baseline;
+        gap: 2px;
+      }
+
+      .logo-a {
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: 26px;
+        font-weight: 300;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        color: var(--gold);
+      }
+
+      .logo-rest {
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        color: var(--charcoal);
+      }
+
+      .nav-links {
+        display: none;
+        align-items: center;
+        gap: 40px;
+      }
+
+      .nav-links a {
+        position: relative;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--muted);
+        transition: color 300ms ease;
+      }
+
+      .nav-links a:hover {
+        color: var(--charcoal);
+      }
+
+      .nav-links a::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        bottom: -8px;
+        width: 0;
+        height: 1px;
+        background: var(--gold);
+        transition: width 500ms var(--ease);
+      }
+
+      .nav-links a:hover::after {
+        width: 100%;
+      }
+
+      .nav-cta {
+        display: none;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 999px;
+        padding: 12px 20px;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--charcoal);
+        transition: all 300ms ease;
+      }
+
+      .nav-cta:hover {
+        transform: translateY(-1px);
+        background: var(--charcoal);
+        border-color: var(--charcoal);
+        color: #ffffff;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      }
+
+      .hamburger {
+        position: relative;
+        z-index: 60;
+        width: 40px;
+        height: 40px;
+        border: 0;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      .hamburger span {
+        position: absolute;
+        width: 28px;
+        height: 1px;
+        background: var(--charcoal);
+        transition:
+          transform 300ms ease,
+          opacity 300ms ease;
+      }
+
+      .hamburger span:nth-child(1) {
+        transform: translateY(-10px);
+      }
+
+      .hamburger span:nth-child(3) {
+        transform: translateY(10px);
+      }
+
+      .hamburger.is-open span:nth-child(1) {
+        transform: rotate(45deg);
+      }
+
+      .hamburger.is-open span:nth-child(2) {
+        opacity: 0;
+      }
+
+      .hamburger.is-open span:nth-child(3) {
+        transform: rotate(-45deg);
+      }
+
+      .mobile-menu {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        height: 0;
+        overflow: hidden;
+        background: var(--cream);
+        transition: height 500ms var(--ease);
+      }
+
+      .mobile-menu.is-open {
+        height: 100vh;
+      }
+
+      .mobile-menu-content {
+        min-height: 100vh;
+        padding: 112px 24px 40px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .mobile-links {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .mobile-links a {
+        opacity: 0;
+        transform: translateX(-20px);
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: 36px;
+        line-height: 1.1;
+        color: var(--charcoal);
+        transition:
+          opacity 500ms ease,
+          transform 500ms var(--ease);
+      }
+
+      .mobile-menu.is-open .mobile-links a {
+        opacity: 1;
+        transform: translateX(0);
+      }
+
+      .mobile-menu.is-open .mobile-links a:nth-child(1) {
+        transition-delay: 120ms;
+      }
+
+      .mobile-menu.is-open .mobile-links a:nth-child(2) {
+        transition-delay: 180ms;
+      }
+
+      .mobile-menu.is-open .mobile-links a:nth-child(3) {
+        transition-delay: 240ms;
+      }
+
+      .mobile-menu.is-open .mobile-links a:nth-child(4) {
+        transition-delay: 300ms;
+      }
+
+      .mobile-menu.is-open .mobile-links a:nth-child(5) {
+        transition-delay: 360ms;
+      }
+
+      .mobile-cta {
+        display: inline-flex;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 16px 24px;
+        background: var(--charcoal);
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        opacity: 0;
+        transform: translateY(18px);
+        transition:
+          opacity 500ms ease 420ms,
+          transform 500ms var(--ease) 420ms;
+      }
+
+      .mobile-menu.is-open .mobile-cta {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .hero {
+        position: relative;
+        min-height: 100vh;
+        overflow: hidden;
+      }
+
+      .hero-bg,
+      .hero-bg img,
+      .hero-bg video,
+      .hero-overlay {
+        position: absolute;
+        inset: 0;
+      }
+
+      .hero-bg img,
+      .hero-bg video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .hero-outline {
+        filter: invert(100%);
+        opacity: 0;
+      }
+
+      .hero-video {
+        opacity: 1;
+        transition: opacity 1000ms ease;
+      }
+
+      .hero-video.is-ended {
+        opacity: 0;
+      }
+
+      .top-strip {
+        pointer-events: none;
+        position: absolute;
+        inset: 0 0 auto;
+        height: 250px;
+        background: linear-gradient(to bottom, #ffffff 30%, transparent);
+      }
+
+      .content-grade {
+        background: linear-gradient(
+          to right,
+          rgba(250, 248, 244, 0.93) 0%,
+          rgba(250, 248, 244, 0.78) 28%,
+          rgba(250, 248, 244, 0.42) 52%,
+          rgba(250, 248, 244, 0.06) 72%,
+          rgba(250, 248, 244, 0) 88%
+        );
+      }
+
+      .warm-grade {
+        mix-blend-mode: multiply;
+        background: linear-gradient(
+          155deg,
+          rgba(201, 165, 106, 0.08) 0%,
+          rgba(180, 120, 60, 0.05) 40%,
+          rgba(20, 14, 6, 0.18) 100%
+        );
+      }
+
+      .bottom-vignette {
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.12) 0%, transparent 35%);
+      }
+
+      .sunrise-bloom {
+        position: absolute;
+        top: -5%;
+        right: 5%;
+        width: 45%;
+        height: 55%;
+        background: radial-gradient(circle, rgba(255, 220, 150, 0.1), transparent 68%);
+        filter: blur(40px);
+      }
+
+      .hero-overlay {
+        pointer-events: none;
+      }
+
+      .hero-inner {
+        position: relative;
+        z-index: 10;
+        width: 100%;
+        max-width: 1440px;
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 112px 24px 96px;
+        display: flex;
+        align-items: center;
+      }
+
+      .hero-copy {
+        width: 100%;
+        max-width: 900px;
+        padding-top: 32px;
+      }
+
+      .hero-copy.is-changing .fade-item {
+        opacity: 0;
+        transform: translateY(-20px);
+        transition:
+          opacity 500ms ease,
+          transform 500ms var(--ease);
+      }
+
+      .fade-item {
+        opacity: 0;
+        transform: translateY(40px);
+        animation: fadeUp 1.2s var(--ease) forwards;
+      }
+
+      .fade-item:nth-child(1) {
+        animation-delay: 120ms;
+      }
+
+      .fade-item:nth-child(2) {
+        animation-delay: 250ms;
+      }
+
+      .fade-item:nth-child(3) {
+        animation-delay: 380ms;
+      }
+
+      .fade-item:nth-child(4) {
+        animation-delay: 510ms;
+      }
+
+      @keyframes fadeUp {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .eyebrow {
+        margin: 0 0 28px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 40px;
+        height: 1px;
+        background: var(--gold);
+      }
+
+      .eyebrow span {
+        color: var(--gold);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: clamp(38px, 6vw, 82px);
+        font-weight: 400;
+        line-height: 1.02;
+        letter-spacing: -0.025em;
+        color: var(--charcoal);
+      }
+
+      h1 span {
+        display: block;
+      }
+
+      h1 .accent {
+        color: var(--gold);
+        font-style: italic;
+      }
+
+      .cta-row {
+        margin-top: 40px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .primary-cta {
+        width: max-content;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        border-radius: 999px;
+        padding: 17px 34px;
+        background: var(--gold);
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        transition:
+          transform 300ms ease,
+          background 300ms ease,
+          box-shadow 300ms ease;
+      }
+
+      .primary-cta:hover {
+        transform: translateY(-2px);
+        background: var(--gold-dark);
+        box-shadow: 0 12px 40px rgba(201, 165, 106, 0.4);
+      }
+
+      .primary-cta svg {
+        width: 16px;
+        height: 16px;
+        transition: transform 300ms ease;
+      }
+
+      .primary-cta:hover svg {
+        transform: translateX(4px);
+      }
+
+      .secondary-cta {
+        width: max-content;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(110, 110, 110, 0.35);
+        color: var(--soft);
+        font-size: 15px;
+        font-weight: 400;
+        transition:
+          color 300ms ease,
+          border-color 300ms ease;
+      }
+
+      .secondary-cta:hover {
+        color: var(--graphite);
+        border-color: rgba(34, 34, 34, 0.6);
+      }
+
+      .stats {
+        margin-top: 56px;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 24px 32px;
+      }
+
+      .stat {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+      }
+
+      .stat-number {
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: 40px;
+        font-weight: 500;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        color: var(--charcoal);
+      }
+
+      .stat-label {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .divider {
+        display: none;
+        width: 1px;
+        height: 36px;
+        background: rgba(0, 0, 0, 0.1);
+      }
+
+      .project-card {
+        position: absolute;
+        right: 32px;
+        bottom: 40px;
+        z-index: 20;
+        display: none;
+        width: 320px;
+        padding: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.1);
+        box-shadow:
+          0 4px 20px rgba(0, 0, 0, 0.1),
+          0 16px 48px rgba(0, 0, 0, 0.14),
+          inset 0 1px 0 rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(14px) saturate(160%);
+      }
+
+      .featured-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 20px;
+        padding: 4px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .featured-tag span {
+        color: var(--gold);
+      }
+
+      .project-card h2 {
+        margin: 0;
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: 22px;
+        font-weight: 400;
+        color: #ffffff;
+      }
+
+      .project-card .location {
+        margin: 8px 0 0;
+        color: rgba(255, 255, 255, 0.65);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .project-meta {
+        margin: 20px 0;
+        padding: 16px 0;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      .project-meta p {
+        margin: 0;
+      }
+
+      .project-meta .label {
+        color: rgba(255, 255, 255, 0.45);
+        font-size: 9px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .project-meta .value {
+        margin-top: 4px;
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.25);
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--gold);
+      }
+
+      .scroll-indicator {
+        position: absolute;
+        left: 50%;
+        bottom: 24px;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        transform: translateX(-50%);
+      }
+
+      .scroll-indicator span:first-child {
+        color: rgba(17, 17, 17, 0.55);
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+      }
+
+      .scroll-line {
+        width: 1px;
+        height: 56px;
+        background: linear-gradient(to bottom, transparent, var(--gold));
+      }
+
+      .vertical-text {
+        position: absolute;
+        right: -58px;
+        top: 50%;
+        z-index: 20;
+        display: none;
+        transform: rotate(90deg);
+        color: rgba(255, 255, 255, 0.3);
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+      }
+
+      .preview-section {
+        width: 100%;
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 80px 24px;
+        display: grid;
+        gap: 40px;
+      }
+
+      .preview-section p.eyebrow-text {
+        margin: 0 0 16px;
+        color: var(--gold);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+      }
+
+      .preview-section h2 {
+        margin: 0;
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: clamp(34px, 5vw, 68px);
+        font-weight: 400;
+        line-height: 1.04;
+        letter-spacing: -0.02em;
+        color: var(--charcoal);
+      }
+
+      .service-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .service-card {
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        background: rgba(255, 255, 255, 0.35);
+        padding: 28px;
+        backdrop-filter: blur(8px);
+      }
+
+      .service-card::before {
+        content: "";
+        display: block;
+        width: 40px;
+        height: 1px;
+        margin-bottom: 40px;
+        background: var(--gold);
+      }
+
+      .service-card h3 {
+        margin: 0;
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: 24px;
+        font-weight: 400;
+        color: var(--charcoal);
+      }
+
+      .service-card p {
+        margin: 16px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.75;
+      }
+
+      /* Smooth tag pulse */
+      @keyframes tagPulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50%       { opacity: 0.5; transform: scale(0.75); }
+      }
+
+      .tag-pulse {
+        animation: tagPulse 2.4s ease-in-out infinite;
+      }
+
+      /* Scroll indicator line */
+      @keyframes scrollLine {
+        0%   { clip-path: inset(0 0 100% 0); opacity: 0; }
+        30%  { clip-path: inset(0 0 0% 0);   opacity: 0.5; }
+        70%  { clip-path: inset(0 0 0% 0);   opacity: 0.5; }
+        100% { clip-path: inset(100% 0 0% 0); opacity: 0; }
+      }
+
+      .scroll-line {
+        animation: scrollLine 2.8s ease-in-out infinite;
+      }
+
+      /* Outline Image Soft Sweep Mask Reveal */
+      @keyframes softSweepReveal {
+        0% {
+          -webkit-mask-position: 200% 0;
+          opacity: 0;
+        }
+        15% {
+          opacity: 1;
+        }
+        85% {
+          opacity: 1;
+        }
+        100% {
+          -webkit-mask-position: -100% 0;
+          opacity: 0;
+        }
+      }
+
+      .soft-sweep-mask {
+        -webkit-mask-image: linear-gradient(to right, transparent 0%, black 20%, black 80%, transparent 100%);
+        -webkit-mask-size: 200% 100%;
+        -webkit-mask-repeat: no-repeat;
+        animation: softSweepReveal 8s infinite linear;
+        opacity: 0;
+      }
+
+      @media (min-width: 640px) {
+        .cta-row {
+          flex-direction: row;
+          align-items: center;
+        }
+
+        .divider {
+          display: block;
+        }
+
+        .service-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (min-width: 768px) {
+        .nav-inner {
+          height: 88px;
+          padding: 0 48px;
+        }
+
+        .nav-links,
+        .nav-cta {
+          display: flex;
+        }
+
+        .hamburger {
+          display: none;
+        }
+
+        .hero-inner {
+          padding-left: 64px;
+          padding-right: 64px;
+        }
+
+        .preview-section {
+          padding-left: 64px;
+          padding-right: 64px;
+        }
+      }
+
+      @media (min-width: 1024px) {
+        .nav-inner {
+          padding: 0 96px;
+        }
+
+        .hero-inner {
+          padding-left: 96px;
+          padding-right: 96px;
+        }
+
+        .hero-copy {
+          max-width: 900px;
+        }
+
+        .project-card {
+          display: block;
+          right: 56px;
+          bottom: 48px;
+        }
+
+        .preview-section {
+          grid-template-columns: 0.85fr 1.15fr;
+          padding-left: 96px;
+          padding-right: 96px;
+        }
+      }
+
+      @media (min-width: 1280px) {
+        .hero-inner {
+          padding-left: 128px;
+          padding-right: 128px;
+        }
+
+        .hero-copy {
+          max-width: 1100px;
+        }
+
+        .vertical-text {
+          display: block;
+        }
+      }
+
+      @media (max-width: 420px) {
+        .primary-cta {
+          width: 100%;
+        }
+
+        .stat {
+          width: calc(50% - 16px);
+          gap: 0;
+        }
+
+        .stat-number {
+          font-size: 36px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="intro" id="intro">
+      <video
+        id="introVideo"
+        src="https://res.cloudinary.com/dprydfxok/video/upload/v1782477674/hero-interior-design-video_uumnpx.webm"
+        autoplay
+        muted
+        playsinline
+      ></video>
+    </div>
+
+    <header class="navbar" id="navbar">
+      <nav class="nav-inner" aria-label="Main navigation">
+        <a href="#" class="logo" aria-label="Alto Studio home">
+          <span class="logo-a">A</span>
+          <span class="logo-rest">LTO</span>
+        </a>
+        <div class="nav-links">
+          <a href="#projects">Projects</a>
+          <a href="#services">Services</a>
+          <a href="#about">About</a>
+          <a href="#journal">Journal</a>
+          <a href="#contact">Contact</a>
+        </div>
+        <a href="#contact" class="nav-cta">Start Project</a>
+        <button class="hamburger" id="hamburger" type="button" aria-label="Toggle navigation menu" aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </nav>
+    </header>
+
+    <div class="mobile-menu" id="mobileMenu">
+      <div class="mobile-menu-content">
+        <div class="mobile-links">
+          <a href="#projects">Projects</a>
+          <a href="#services">Services</a>
+          <a href="#about">About</a>
+          <a href="#journal">Journal</a>
+          <a href="#contact">Contact</a>
+        </div>
+        <a href="#contact" class="mobile-cta">Start Project</a>
+      </div>
+    </div>
+
+    <main>
+      <section class="hero">
+        <div class="hero-bg">
+          <img
+            src="https://res.cloudinary.com/dprydfxok/image/upload/v1782973434/interior-desing-hero_pahfv0.png"
+            alt="Luxury cream-toned interior with sculptural furniture"
+            draggable="false"
+          />
+          <img
+            id="outlineImage"
+            class="hero-outline"
+            src="https://res.cloudinary.com/dprydfxok/image/upload/v1782973999/interior-desing-hero-outline_bahcaa.png"
+            alt=""
+            aria-hidden="true"
+            draggable="false"
+          />
+          <video
+            id="heroVideo"
+            class="hero-video"
+            src="https://res.cloudinary.com/dprydfxok/video/upload/v1782477674/hero-interior-design-video_uumnpx.webm"
+            autoplay
+            muted
+            playsinline
+          ></video>
+        </div>
+
+        <div class="hero-overlay top-strip"></div>
+        <div class="hero-overlay content-grade"></div>
+        <div class="hero-overlay warm-grade"></div>
+        <div class="hero-overlay bottom-vignette"></div>
+        <div class="hero-overlay sunrise-bloom"></div>
+
+        <div class="hero-inner">
+          <div class="hero-copy" id="heroCopy">
+            <p class="eyebrow fade-item"><span id="heroEyebrow">Alto Studio</span></p>
+            <h1 class="fade-item" id="heroTitle">
+              <span>Luxury interiors</span>
+              <span class="accent">shaped with</span>
+              <span>quiet precision</span>
+            </h1>
+            <div class="cta-row fade-item">
+              <a href="#projects" class="primary-cta">
+                Explore Projects
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </a>
+              <a href="#contact" class="secondary-cta">Book Consultation</a>
+            </div>
+            <div class="stats fade-item">
+              <div class="stat">
+                <div>
+                  <div class="stat-number">12+</div>
+                  <div class="stat-label">Years</div>
+                </div>
+                <span class="divider"></span>
+              </div>
+              <div class="stat">
+                <div>
+                  <div class="stat-number">86</div>
+                  <div class="stat-label">Projects</div>
+                </div>
+                <span class="divider"></span>
+              </div>
+              <div class="stat">
+                <div>
+                  <div class="stat-number">24</div>
+                  <div class="stat-label">Awards</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="project-card" aria-label="Featured project">
+          <div class="featured-tag"><span>✦</span> Featured</div>
+          <h2>Luxury Penthouse</h2>
+          <p class="location">Dubai Marina</p>
+          <div class="project-meta">
+            <div>
+              <p class="label">Area</p>
+              <p class="value">420m2</p>
+            </div>
+            <div>
+              <p class="label">Scope</p>
+              <p class="value">Full</p>
+            </div>
+            <div>
+              <p class="label">Year</p>
+              <p class="value">2026</p>
+            </div>
+          </div>
+          <div class="status-pill">
+            <span class="status-dot tag-pulse"></span>
+            In Progress
+          </div>
+        </aside>
+
+        <div class="scroll-indicator" aria-hidden="true">
+          <span>Scroll</span>
+          <span class="scroll-line"></span>
+        </div>
+
+        <div class="vertical-text">Curated Spaces - 2026</div>
+      </section>
+
+      <section class="preview-section" id="projects">
+        <div>
+          <p class="eyebrow-text">Selected Work</p>
+          <h2>Calm materials, exact proportions, lasting presence.</h2>
+        </div>
+        <div class="service-grid" id="services">
+          <article class="service-card">
+            <h3>Private residences</h3>
+            <p>Bespoke planning, refined finishes, and measured detailing for interiors shaped around daily use.</p>
+          </article>
+          <article class="service-card">
+            <h3>Penthouse styling</h3>
+            <p>Bespoke planning, refined finishes, and measured detailing for interiors shaped around daily use.</p>
+          </article>
+          <article class="service-card" id="about">
+            <h3>Hospitality interiors</h3>
+            <p>Bespoke planning, refined finishes, and measured detailing for interiors shaped around daily use.</p>
+          </article>
+          <article class="service-card" id="journal">
+            <h3>Art direction</h3>
+            <p>Bespoke planning, refined finishes, and measured detailing for interiors shaped around daily use.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const intro = document.getElementById("intro");
+      const introVideo = document.getElementById("introVideo");
+      const navbar = document.getElementById("navbar");
+      const hamburger = document.getElementById("hamburger");
+      const mobileMenu = document.getElementById("mobileMenu");
+      const heroVideo = document.getElementById("heroVideo");
+      const outlineImage = document.getElementById("outlineImage");
+      const heroCopy = document.getElementById("heroCopy");
+      const heroEyebrow = document.getElementById("heroEyebrow");
+      const heroTitle = document.getElementById("heroTitle");
+
+      const slides = [
+        {
+          eyebrow: "Alto Studio",
+          lines: ["Luxury interiors", "shaped with", "quiet precision"],
+          accent: 1,
+        },
+        {
+          eyebrow: "Private Residences",
+          lines: ["Warm restraint", "crafted for", "modern living"],
+          accent: 0,
+        },
+        {
+          eyebrow: "Bespoke Direction",
+          lines: ["Layered spaces", "with material", "depth"],
+          accent: 2,
+        },
+      ];
+
+      let activeSlide = 0;
+
+      function hideIntro() {
+        intro.classList.add("is-hidden");
+      }
+
+      function endHeroVideo() {
+        heroVideo.classList.add("is-ended");
+        outlineImage.classList.add("soft-sweep-mask");
+      }
+
+      function updateNavbar() {
+        navbar.classList.toggle("is-scrolled", window.scrollY >= 60);
+      }
+
+      function closeMenu() {
+        hamburger.classList.remove("is-open");
+        mobileMenu.classList.remove("is-open");
+        hamburger.setAttribute("aria-expanded", "false");
+        document.body.style.overflow = "";
+      }
+
+      function toggleMenu() {
+        const isOpen = hamburger.classList.toggle("is-open");
+        mobileMenu.classList.toggle("is-open", isOpen);
+        hamburger.setAttribute("aria-expanded", String(isOpen));
+        document.body.style.overflow = isOpen ? "hidden" : "";
+      }
+
+      function renderSlide(slide) {
+        heroEyebrow.textContent = slide.eyebrow;
+        heroTitle.innerHTML = slide.lines
+          .map((line, index) => `<span class="${index === slide.accent ? "accent" : ""}">${line}</span>`)
+          .join("");
+      }
+
+      function cycleSlide() {
+        heroCopy.classList.add("is-changing");
+        window.setTimeout(() => {
+          activeSlide = (activeSlide + 1) % slides.length;
+          renderSlide(slides[activeSlide]);
+          heroCopy.classList.remove("is-changing");
+          heroCopy.querySelectorAll(".fade-item").forEach((item) => {
+            item.style.animation = "none";
+            item.offsetHeight;
+            item.style.animation = "";
+          });
+        }, 520);
+      }
+
+      introVideo.addEventListener("ended", hideIntro);
+      heroVideo.addEventListener("ended", endHeroVideo);
+      window.setTimeout(hideIntro, 15000);
+      window.setTimeout(endHeroVideo, 15000);
+
+      window.addEventListener("scroll", updateNavbar, { passive: true });
+      updateNavbar();
+
+      hamburger.addEventListener("click", toggleMenu);
+      mobileMenu.querySelectorAll("a").forEach((link) => link.addEventListener("click", closeMenu));
+
+      window.setInterval(cycleSlide, 5000);
+    </script>
+  </body>
+</html>
