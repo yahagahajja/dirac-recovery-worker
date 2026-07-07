@@ -25391,7 +25391,9 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     req.__diracCentralSecurityGuardPassedV146 = true;
     return await nextHandler(req, res);
   } catch (error) {
-    try { console.error('[dirac-central-security-v146]', diracCentralSafeErrorV146(error)); } catch (_) {}
+    const safeDebug = diracCentralSafeDebugErrorV155(error, ctx);
+    try { console.error('[dirac-central-security-v146]', safeDebug); } catch (_) {}
+    if (ctx) ctx.centralErrorDebugV155 = safeDebug;
     if (ctx && req && req.__diracCentralSecurityGuardPassedV146 && ctx.action === 'domain_dashboard_me') {
       return await diracCentralBanAndBlockV146(req, res, ctx, ctx.action, method, 'domain_dashboard_handler_error');
     }
@@ -27146,7 +27148,7 @@ async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason
   await diracCentralWritePersistentBanV146(req, res, action, method, threat).catch(() => null);
   const identityKey = String(ctx && ctx.identity && ctx.identity.key || '').trim();
   if (identityKey && typeof writePersistentSecurityJson === 'function') {
-    await writePersistentSecurityJson(identityKey, {
+    const centralBanRecord = {
       type: 'central_guard_global_ban_v146',
       action: String(action || '').slice(0, 80),
       method: String(method || '').slice(0, 12),
@@ -27155,7 +27157,11 @@ async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason
       risk: threat.risk,
       blocked_until_ms: blockedUntilMs,
       created_at: new Date(now).toISOString()
-    }, blockedUntilMs, Math.ceil((blockedUntilMs - now) / 1000)).catch(() => false);
+    };
+    if (threat.kind === 'central_guard_error' && ctx && ctx.centralErrorDebugV155) {
+      centralBanRecord.safe_debug = ctx.centralErrorDebugV155;
+    }
+    await writePersistentSecurityJson(identityKey, centralBanRecord, blockedUntilMs, Math.ceil((blockedUntilMs - now) / 1000)).catch(() => false);
   }
   diracCentralSetMemoryBanV146(ctx && ctx.identity, blockedUntilMs, reason);
   return diracCentralBlockedResponseV146(res, reason);
@@ -27596,6 +27602,42 @@ function diracCentralSafeErrorV146(error) {
   const message = String(error && (error.code || error.name || error.message) || error || 'central_security_error');
   if (/password|token|secret|cookie|authorization|service_role|apikey|csrf|hmac|hash/i.test(message)) return 'central_security_internal_error';
   return message.slice(0, 180);
+}
+
+function diracCentralSafeDebugErrorV155(error, ctx) {
+  const rawName = String(error && error.name || 'Error').replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 80) || 'Error';
+  const rawCode = String(error && error.code || '').replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 80);
+  const rawMessage = String(error && error.message || error || 'central_security_error');
+  const sensitivePattern = /password|token|secret|cookie|authorization|service_role|apikey|csrf|hmac|hash|private[_-]?key|owner[_-]?master/i;
+  const safeMessage = sensitivePattern.test(rawMessage)
+    ? 'redacted_sensitive_error_message'
+    : rawMessage.replace(/[\r\n\t]+/g, ' ').slice(0, 260);
+  const stack = String(error && error.stack || '')
+    .split('\n')
+    .slice(1, 8)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line
+      .replace(/\((?:file:\/\/)?\/var\/task\//g, '(/var/task/')
+      .replace(/\((?:file:\/\/)?\/mnt\/data\//g, '(/mnt/data/')
+      .replace(/([A-Za-z0-9+/=_-]{24,})/g, '[redacted]')
+      .slice(0, 180));
+
+  const pass = ctx && ctx.guardPassport && typeof ctx.guardPassport === 'object' ? ctx.guardPassport : {};
+  const passedStages = Object.keys(pass).filter((key) => pass[key]).slice(-12);
+
+  return {
+    safe_error_debug_version: 'v155',
+    action: String(ctx && ctx.action || '').slice(0, 80),
+    method: String(ctx && ctx.method || '').slice(0, 12),
+    error_name: rawName,
+    error_code: rawCode || undefined,
+    safe_message: safeMessage,
+    message_was_redacted: sensitivePattern.test(rawMessage),
+    last_guard_stages: passedStages,
+    handler_already_entered: Boolean(ctx && ctx.req && ctx.req.__diracCentralSecurityGuardPassedV146),
+    stack_top: stack
+  };
 }
 
 try {
