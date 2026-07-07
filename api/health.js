@@ -6297,7 +6297,9 @@ function customerSecurityExtractAccountPasswordForPdfV156(body) {
 }
 
 function customerSecurityBuildPdfPasswordV156(accountPassword, websiteRecoveryCode, emailPdfCode) {
-  return String(accountPassword || '').normalize('NFC') + String(websiteRecoveryCode || '').trim() + String(emailPdfCode || '').trim();
+  // PDF Standard Security Handler only uses the first 32 bytes of the entered password.
+  // Keep the two recovery factors at the front so missing/altered website/email code cannot be ignored.
+  return String(websiteRecoveryCode || '').trim() + ':' + String(emailPdfCode || '').trim() + ':' + String(accountPassword || '').normalize('NFC');
 }
 
 async function customerSecurityVerifyAccountPasswordForPdfV156(email, accountPassword) {
@@ -7050,7 +7052,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
       delivery: 'encrypted_pdf_email_attachment',
       file_name: fileName,
       file_format: 'password_protected_pdf',
-      pdf_password_formula: 'account_password_plus_website_code_plus_email_2_digit_code',
+      pdf_password_formula: 'website_code_plus_email_2_digit_code_plus_account_password',
       website_recovery_code_hash: customerSecurityLostPasskeyHashHex('website-recovery-code', websiteRecoveryCode),
       email_pdf_code_hash: customerSecurityLostPasskeyHashHex('email-pdf-code', emailPdfCode),
       inner_encrypted_file_sha256: encrypted.fileSha256,
