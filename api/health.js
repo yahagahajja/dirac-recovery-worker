@@ -11190,7 +11190,14 @@ async function diracPasskeyA2FListActivePasskeys(owner) {
   if (owner && owner.customerId && customerSecurityLooksLikeUuid(owner.customerId)) {
     await fetchRows('user_id=eq.' + encodeURIComponent(owner.customerId));
   }
-  if (owner && owner.email && isValidAuthEmail(owner.email)) {
+
+  let isRecoveryWorkerContext = false;
+  try {
+    const ctx = typeof diracCentralCurrentContextV149 === 'function' ? diracCentralCurrentContextV149() : null;
+    isRecoveryWorkerContext = Boolean(ctx && ctx.action === DIRAC_RECOVERY_WORKER_ACTION);
+  } catch (_) {}
+
+  if (!isRecoveryWorkerContext && owner && owner.email && isValidAuthEmail(owner.email)) {
     await fetchRows('email=eq.' + encodeURIComponent(owner.email));
   }
 
