@@ -5956,6 +5956,7 @@ const LOST_PASSKEY_RECOVERY_FILE_KEY_MIN_BYTES = 3000;
 const LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT = 5;
 const DIRAC_RECOVERY_WORKER_ACTION = 'dirac_recovery_worker_generate';
 const DIRAC_RECOVERY_WORKER_TASK_GENERATE = 'lost_passkey_generate';
+const DIRAC_RECOVERY_WORKER_TASK_VERIFY = 'lost_passkey_verify';
 
 function customerSecurityNormalizeLostPasskeyRequestId(value) {
   const clean = String(value || '').trim();
@@ -6794,7 +6795,7 @@ async function customerSecurityRecoveryCodesStatus(req, res, action) {
   return res.status(200).json({ ok: true, ready: true, total: activeRows.length, pending, verified, used, locked, generated: activeRows.length > 0, message: activeRows.length ? 'Lost passkey recovery request tersedia.' : 'Lost passkey recovery belum dibuat.', direct_frontend_table_access: false, time: diracNowIso() });
 }
 
-async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, workerOptions = {}) {
+async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, pdfOptions = {}) {
   const workerEnvDiagnostics = customerSecurityRecoveryWorkerMainEnvDiagnostics();
   if (!workerEnvDiagnostics.ok) {
     try { console.error('[recovery-worker-main-env-invalid]', JSON.stringify(workerEnvDiagnostics)); } catch (_) {}
@@ -6831,7 +6832,7 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
     user_agent_hash: bindings.userAgentHash,
     active_passkey_count: Math.max(0, activePasskeys.length),
     requested_at: diracNowIso(),
-    account_password: String(workerOptions.accountPassword || '')
+    account_password: String(pdfOptions.accountPassword || pdfOptions.account_password || '')
   };
   const canonical = customerSecurityLostPasskeyCanonical(payload);
   const timestamp = String(Date.now());
@@ -6936,6 +6937,54 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     : await customerSecurityResolveLostPasskeyOwner(access);
   if (!owner.ok) return res.status(owner.status || 403).json({ ok: false, message: owner.message || 'Recovery passkey tidak dapat dibuat.' });
 
+  let recoveryPdfOptions = null;
+
+  if (localWorker) {
+    const accountPassword = customerSecurityExtractAccountPasswordForPdfV156({ account_password: override && override.accountPassword || '' });
+    if (!accountPassword) {
+      return res.status(400).json({
+        ok: false,
+        code: 'ACCOUNT_PASSWORD_REQUIRED_FOR_RECOVERY_PDF',
+        message: 'Password akun wajib diisi untuk membuat password PDF recovery.'
+      });
+    }
+    const verifiedPassword = await customerSecurityVerifyAccountPasswordForPdfV156(owner.email, accountPassword);
+    if (!verifiedPassword.ok) {
+      await customerSecurityRegisterFailedVerification(req, action, 'recovery_pdf_account_password_invalid', access.customerId);
+      return res.status(403).json({ ok: false, code: 'ACCOUNT_PASSWORD_INVALID', message: 'Password akun belum sesuai.' });
+    }
+    const websiteRecoveryCode = customerSecurityGenerateWebsiteRecoveryCodeV156();
+    const emailPdfCode = customerSecurityGenerateEmailPdfCodeV156();
+    recoveryPdfOptions = {
+      pdfPassword: customerSecurityBuildPdfPasswordV156(accountPassword, websiteRecoveryCode, emailPdfCode),
+      websiteRecoveryCode,
+      emailPdfCode
+    };
+  }
+
+  if (!localWorker) {
+    const accountPassword = customerSecurityExtractAccountPasswordForPdfV156(requestBody);
+    if (!accountPassword) {
+      return res.status(400).json({
+        ok: false,
+        code: 'ACCOUNT_PASSWORD_REQUIRED_FOR_RECOVERY_PDF',
+        message: 'Password akun wajib diisi untuk membuat password PDF recovery.'
+      });
+    }
+    const verifiedPassword = await customerSecurityVerifyAccountPasswordForPdfV156(owner.email, accountPassword);
+    if (!verifiedPassword.ok) {
+      await customerSecurityRegisterFailedVerification(req, action, 'recovery_pdf_account_password_invalid', access.customerId);
+      return res.status(403).json({ ok: false, code: 'ACCOUNT_PASSWORD_INVALID', message: 'Password akun belum sesuai.' });
+    }
+    const websiteRecoveryCode = customerSecurityGenerateWebsiteRecoveryCodeV156();
+    const emailPdfCode = customerSecurityGenerateEmailPdfCodeV156();
+    recoveryPdfOptions = {
+      pdfPassword: customerSecurityBuildPdfPasswordV156(accountPassword, websiteRecoveryCode, emailPdfCode),
+      websiteRecoveryCode,
+      emailPdfCode
+    };
+  }
+
   const activePasskeys = localWorker && override && Array.isArray(override.activePasskeys)
     ? override.activePasskeys
     : await customerSecurityLostPasskeyActivePasskeys(owner);
@@ -6948,35 +6997,8 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     : customerSecurityLostPasskeyBindings(req, owner);
 
   if (!localWorker) {
-    const accountPassword = customerSecurityExtractAccountPasswordForPdfV156(requestBody);
-    if (!accountPassword) {
-      return res.status(400).json({
-        ok: false,
-        code: 'ACCOUNT_PASSWORD_REQUIRED_FOR_RECOVERY_PDF',
-        message: 'Password akun wajib diisi untuk membuat password PDF recovery.'
-      });
-    }
-    return customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, {
-      accountPassword
-    });
+    return customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, recoveryPdfOptions || {});
   }
-
-  const accountPassword = customerSecurityExtractAccountPasswordForPdfV156({ account_password: String(override && override.accountPassword || '') });
-  if (!accountPassword) {
-    return res.status(400).json({ ok: false, code: 'RECOVERY_WORKER_ACCOUNT_PASSWORD_REQUIRED', message: 'Password akun worker recovery wajib diisi.' });
-  }
-  const verifiedPassword = await customerSecurityVerifyAccountPasswordForPdfV156(owner.email, accountPassword);
-  if (!verifiedPassword.ok) {
-    return res.status(403).json({ ok: false, code: 'ACCOUNT_PASSWORD_INVALID', message: 'Password akun belum sesuai.' });
-  }
-
-  const generatedWebsiteRecoveryCode = customerSecurityGenerateWebsiteRecoveryCodeV156();
-  const generatedEmailPdfCode = customerSecurityGenerateEmailPdfCodeV156();
-  const recoveryPdfOptions = {
-    pdfPassword: customerSecurityBuildPdfPasswordV156(accountPassword, generatedWebsiteRecoveryCode, generatedEmailPdfCode),
-    websiteRecoveryCode: generatedWebsiteRecoveryCode,
-    emailPdfCode: generatedEmailPdfCode
-  };
 
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
@@ -24822,6 +24844,145 @@ async function customerSecurityResolveLostPasskeyWorkerOwner(body) {
   return { ok: true, authUserId, customerId, email: customerEmail, customer };
 }
 
+async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, override = {}) {
+  const owner = override && override.owner;
+  const bindings = override && override.bindings;
+  const access = override && override.access || { customerId: owner && owner.customerId };
+  const requestId = customerSecurityNormalizeLostPasskeyRequestId(override && override.requestId || '');
+  const code = customerSecurityNormalizeRecoveryCodeInput(override && override.recoveryCode || '');
+
+  if (!owner || !owner.ok || !bindings || !requestId) {
+    await customerSecurityRegisterFailedVerification(req, action, 'invalid_recovery_worker_verify_payload', access && access.customerId).catch(() => null);
+    return res.status(400).json({ ok: false, message: 'Request recovery tidak valid.' });
+  }
+  if (Array.from(code).length !== CUSTOMER_SECURITY_RECOVERY_CODE_LENGTH) {
+    await customerSecurityRegisterFailedVerification(req, action, 'invalid_recovery_code_length', access.customerId).catch(() => null);
+    return res.status(400).json({
+      ok: false,
+      message: 'Recovery code tidak valid. Masukkan tepat 500 karakter dari file recovery terenkripsi.'
+    });
+  }
+
+  const path = '/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?select=' +
+    encodeURIComponent('id,request_id,customer_id,auth_user_id,email_hash,customer_binding_hash,auth_user_binding_hash,device_binding_hash,recovery_code_hash,status,attempt_count,expires_at,used_at,revoked_at,locked_at,old_passkey_ids') +
+    '&request_id=eq.' + encodeURIComponent(requestId) +
+    '&limit=1';
+
+  const result = await supabaseFetch(path, { method: 'GET', auth: 'service' });
+  if (!result.ok) {
+    return res.status(500).json({ ok: false, message: 'Gagal membaca recovery request.' });
+  }
+
+  const row = Array.isArray(result.data) ? result.data[0] : null;
+  if (!row || !row.id) {
+    await customerSecurityRegisterFailedVerification(req, action, 'recovery_request_not_found', access.customerId).catch(() => null);
+    return res.status(404).json({ ok: false, message: 'Recovery request tidak ditemukan.' });
+  }
+
+  const nowMs = Date.now();
+  if (row.status !== 'pending' || row.used_at || row.revoked_at || row.locked_at || new Date(row.expires_at).getTime() <= nowMs) {
+    return customerSecuritySendRecoveryError(res, 403, row.status === 'used' || row.used_at ? 'used' : 'expired');
+  }
+
+  const expectedHash = customerSecurityLostPasskeyRecoveryCodeHash(requestId, row.customer_id, code);
+  if (!safeEqual(String(row.recovery_code_hash || ''), expectedHash)) {
+    const nextAttempts = Number(row.attempt_count || 0) + 1;
+    const lock = nextAttempts >= LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT;
+    await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
+      method: 'PATCH',
+      auth: 'service',
+      body: {
+        attempt_count: nextAttempts,
+        status: lock ? 'locked' : row.status,
+        locked_at: lock ? diracNowIso() : row.locked_at || null,
+        metadata: { last_failed_verify_at: diracNowIso(), failed_verify_source: action }
+      }
+    }).catch(() => null);
+    await customerSecurityRegisterFailedVerification(req, action, lock ? 'recovery_code_locked' : 'recovery_code_not_matched', access.customerId).catch(() => null);
+    return res.status(lock ? 423 : 403).json({ ok: false, message: lock ? 'Recovery request dikunci karena terlalu banyak percobaan.' : 'Recovery code salah, sudah dipakai, atau sudah expired.' });
+  }
+
+  if (String(owner.customerId) !== String(row.customer_id) || String(owner.authUserId) !== String(row.auth_user_id)) {
+    await customerSecurityRegisterFailedVerification(req, action, 'recovery_owner_mismatch', access.customerId).catch(() => null);
+    return res.status(403).json({ ok: false, message: 'Recovery request tidak cocok dengan sesi login ini.' });
+  }
+  if (!safeEqual(String(row.email_hash || ''), bindings.emailBindingHash)
+    || !safeEqual(String(row.customer_binding_hash || ''), bindings.customerBindingHash)
+    || !safeEqual(String(row.auth_user_binding_hash || ''), bindings.authUserBindingHash)) {
+    await customerSecurityRegisterFailedVerification(req, action, 'recovery_binding_mismatch', access.customerId).catch(() => null);
+    return res.status(403).json({ ok: false, message: 'Recovery binding tidak cocok dengan akun login.' });
+  }
+
+  const activePasskeys = await customerSecurityLostPasskeyActivePasskeys(owner);
+  if (!activePasskeys.length) {
+    return res.status(409).json({ ok: false, message: 'Passkey lama tidak ditemukan untuk akun ini.' });
+  }
+
+  const now = diracNowIso();
+  const recoverySessionToken = crypto.randomBytes(32).toString('base64url');
+  const recoverySessionHash = customerSecurityLostPasskeyRecoverySessionHash(recoverySessionToken);
+  const sessionExpiresAt = new Date(Date.now() + Math.max(5, Math.min(30, Number(process.env.DIRAC_LOST_PASSKEY_SESSION_MINUTES || 10))) * 60 * 1000).toISOString();
+  const sessionCreated = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_SESSION_TABLE, {
+    method: 'POST',
+    auth: 'service',
+    prefer: 'return=representation',
+    body: [{
+      request_id: requestId,
+      customer_id: owner.customerId,
+      auth_user_id: owner.authUserId,
+      recovery_session_hash: recoverySessionHash,
+      purpose: LOST_PASSKEY_RECOVERY_PURPOSE,
+      status: 'verified',
+      created_at: now,
+      expires_at: sessionExpiresAt,
+      metadata: { source: action, old_passkey_count: activePasskeys.length }
+    }]
+  });
+  if (!sessionCreated.ok) {
+    return res.status(sessionCreated.status || 500).json({ ok: false, message: 'Gagal membuat recovery session.' });
+  }
+
+  const patched = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
+    method: 'PATCH',
+    auth: 'service',
+    prefer: 'return=representation',
+    body: {
+      status: 'verified',
+      metadata: {
+        source: 'lost_passkey_recovery_code_verify',
+        verified_by_endpoint: action,
+        verified_at: now
+      }
+    }
+  });
+
+  if (!patched.ok) {
+    return res.status(500).json({ ok: false, message: 'Gagal menandai recovery request sebagai verified.' });
+  }
+
+  await customerSecurityWriteGuardEvent(access.customerId, {
+    event_type: 'lost_passkey_recovery_verified',
+    status: 'success',
+    risk_level: 'high',
+    description: 'Customer memverifikasi recovery code terenkripsi untuk pemulihan Passkey.',
+    req,
+    metadata: { action, request_id: requestId }
+  });
+
+  return res.status(200).json({
+    ok: true,
+    active: true,
+    method: 'recovery_code',
+    purpose: LOST_PASSKEY_RECOVERY_PURPOSE,
+    message: 'Recovery code valid. Recovery session terbatas untuk daftar Passkey baru sudah dibuat.',
+    recovery_session_token: recoverySessionToken,
+    recovery_session_expires_at: sessionExpiresAt,
+    dashboard_access: false,
+    recovery_code_verified: true,
+    time: now
+  });
+}
+
 async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
   if (!customerSecurityRecoveryWorkerLocalEnabled()) {
     return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_DISABLED', message: 'Recovery worker tidak aktif di deployment ini.' });
@@ -24830,25 +24991,45 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
     return res.status(403).json({ ok: false, code: 'RECOVERY_WORKER_SIGNATURE_REQUIRED', message: 'Worker signature tidak valid.' });
   }
   const body = await readBody(req);
-  if (!body || body.action !== DIRAC_RECOVERY_WORKER_ACTION || body.worker_action !== DIRAC_RECOVERY_WORKER_TASK_GENERATE) {
+  if (!body || body.action !== DIRAC_RECOVERY_WORKER_ACTION) {
     return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_ACTION_INVALID', message: 'Worker action tidak valid.' });
   }
+  if (body.pdf_password !== undefined || body.website_recovery_code !== undefined || body.email_pdf_code !== undefined) {
+    return res.status(403).json({ ok: false, code: 'RECOVERY_WORKER_LEGACY_FIELD_REJECTED', message: 'Payload worker recovery legacy ditolak.' });
+  }
+
   const owner = await customerSecurityResolveLostPasskeyWorkerOwner(body);
   if (!owner.ok) return res.status(owner.status || 403).json({ ok: false, message: owner.message || 'Worker recovery ditolak.' });
   const bindings = customerSecurityLostPasskeyWorkerBindings(body, owner);
   if (!bindings) return res.status(403).json({ ok: false, code: 'RECOVERY_WORKER_BINDING_INVALID', message: 'Binding recovery tidak valid.' });
-  const activePasskeys = await customerSecurityLostPasskeyActivePasskeys(owner);
-  if (!activePasskeys.length) {
-    return res.status(409).json({ ok: false, code: 'ACTIVE_PASSKEY_NOT_FOUND', message: 'Passkey aktif untuk akun ini belum ditemukan.' });
+
+  const workerTask = String(body.worker_action || '');
+  if (workerTask === DIRAC_RECOVERY_WORKER_TASK_GENERATE) {
+    const activePasskeys = await customerSecurityLostPasskeyActivePasskeys(owner);
+    if (!activePasskeys.length) {
+      return res.status(409).json({ ok: false, code: 'ACTIVE_PASSKEY_NOT_FOUND', message: 'Passkey aktif untuk akun ini belum ditemukan.' });
+    }
+    return customerSecurityGenerateRecoveryCodes(req, res, 'customer_security_recovery_codes_generate', {
+      localWorker: true,
+      access: { customerId: owner.customerId },
+      owner,
+      activePasskeys,
+      bindings,
+      accountPassword: String(body.account_password || '')
+    });
   }
-  return customerSecurityGenerateRecoveryCodes(req, res, 'customer_security_recovery_codes_generate', {
-    localWorker: true,
-    access: { customerId: owner.customerId },
-    owner,
-    activePasskeys,
-    bindings,
-    accountPassword: String(body.account_password || '')
-  });
+
+  if (workerTask === DIRAC_RECOVERY_WORKER_TASK_VERIFY) {
+    return customerSecurityVerifyRecoveryCodeLocalWorker(req, res, 'customer_security_recovery_code_verify', {
+      access: { customerId: owner.customerId },
+      owner,
+      bindings,
+      requestId: String(body.request_id || ''),
+      recoveryCode: String(body.recovery_code || body.code || '')
+    });
+  }
+
+  return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_TASK_INVALID', message: 'Worker task recovery tidak valid.' });
 }
 
 const __diracRecoveryWorkerPreviousHandler = module.exports;
@@ -26022,7 +26203,8 @@ function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
   const signature = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-signature');
   if (!/^[a-zA-Z0-9_-]{32,120}$/.test(signature)) return { ok: false, reason: 'recovery_worker_signature_missing' };
   const body = ctx.body || {};
-  if (body.action !== DIRAC_RECOVERY_WORKER_ACTION || body.worker_action !== DIRAC_RECOVERY_WORKER_TASK_GENERATE) {
+  if (body.action !== DIRAC_RECOVERY_WORKER_ACTION
+    || ![DIRAC_RECOVERY_WORKER_TASK_GENERATE, DIRAC_RECOVERY_WORKER_TASK_VERIFY].includes(String(body.worker_action || ''))) {
     return { ok: false, reason: 'recovery_worker_body_action_invalid' };
   }
   const expected = customerSecurityRecoveryWorkerSign(caller, timestampText, customerSecurityLostPasskeyCanonical(body));
@@ -27541,7 +27723,7 @@ function diracCentralContractForActionV146(action) {
   const recoveryVerifyPost = { methods: ['POST'], allowed: ['action', 'request_id', 'recovery_code', 'code', 'csrf', 'nonce', 'idempotency_key'], required: ['request_id'], maxBodyBytes: 4096, maxFieldBytes: 1200, mutation: true };
   const recoveryWorkerPost = {
     methods: ['POST'],
-    allowed: ['action', 'worker_action', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'ip_hash', 'user_agent_hash', 'active_passkey_count', 'requested_at', 'account_password'],
+    allowed: ['action', 'worker_action', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'ip_hash', 'user_agent_hash', 'active_passkey_count', 'requested_at', 'account_password', 'request_id', 'recovery_code', 'code'],
     required: ['action', 'worker_action', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'ip_hash', 'user_agent_hash'],
     maxBodyBytes: customerSecurityRecoveryWorkerMaxBodyBytes(),
     maxFieldBytes: 1024,
