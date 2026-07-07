@@ -15586,6 +15586,8 @@ function diracV101ServiceRoleAllowedTables() {
     'security_customer_events',
     'security_customer_login_logs',
     'security_customer_recovery_codes',
+    'security_lost_passkey_recovery_requests',
+    'security_lost_passkey_recovery_sessions',
     'security_customer_sessions',
     'security_customer_settings',
     'dirac_security_rate_limits',
