@@ -3303,8 +3303,6 @@ const DIRAC_TABLE_DB_MAP = Object.freeze({
   security_customer_recovery_codes: 'customerSecurity',
   security_customer_sessions: 'customerSecurity',
   security_customer_settings: 'customerSecurity',
-  security_lost_passkey_recovery_requests: 'customerSecurity',
-  security_lost_passkey_recovery_sessions: 'customerSecurity',
 
   public_mfa_recovery_codes: 'publicMfa',
   public_security_challenges: 'publicMfa',
@@ -15583,8 +15581,6 @@ function diracV101ServiceRoleAllowedTables() {
     'security_customer_recovery_codes',
     'security_customer_sessions',
     'security_customer_settings',
-    'security_lost_passkey_recovery_requests',
-    'security_lost_passkey_recovery_sessions',
     'dirac_security_rate_limits',
     String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim(),
     String(process.env.DOMAIN_LOGIN_RATE_TABLE || '').trim()
@@ -15837,7 +15833,7 @@ async function diracV107RegisterHardBan(req, res, action, method, threat) {
   }));
 
   const write = await diracV107WriteRows(rows);
-  return { ok: write.ok || rows.length > 0, wrote: write.wrote || 0, total: rows.length, blockedUntilMs };
+  return { ok: !!(write && write.ok), wrote: write && write.wrote || 0, total: rows.length, blockedUntilMs };
 }
 
 function diracV107BuildKeys(req) {
@@ -17768,6 +17764,33 @@ try {
   }
 } catch (_) {}
 
+
+/* ============================================================
+   DIRAC CROSS-DEPLOY BAN KEY SYNC v151 - NARROW PATCH
+   Tujuan:
+   - Menambah satu key hard-ban stabil lintas Vercel deployment.
+   - Key tidak memakai origin/host, sehingga Vercel 1 dan Vercel 2 membaca ban DB yang sama.
+   - Tidak mengubah endpoint, login/hash, A2F, payment, email template, atau cookie SameSite.
+   ============================================================ */
+const DIRAC_CROSS_DEPLOY_BAN_KEY_SYNC_V151 = 'dirac-cross-deploy-ban-key-sync-v151';
+
+try {
+  if (typeof diracV107BuildKeys === 'function' && !diracV107BuildKeys.__diracCrossDeployV151Wrapped) {
+    const __diracCrossDeployV151OriginalBuildKeys = diracV107BuildKeys;
+    diracV107BuildKeys = function diracV107BuildKeysCrossDeployV151(req) {
+      const keys = __diracCrossDeployV151OriginalBuildKeys(req) || [];
+      try {
+        const ip = typeof diracV107Ip === 'function' ? String(diracV107Ip(req) || '').trim() : '';
+        if (ip && ip !== 'unknown' && typeof diracV107KeysForValue === 'function') {
+          keys.push(...diracV107KeysForValue('stable_ip', 'stable-ip-v151|' + ip));
+        }
+      } catch (_) {}
+      return Array.from(new Map(keys.map((item) => [String(item && item.key || ''), item])).values()).filter((item) => item && item.key);
+    };
+    Object.defineProperty(diracV107BuildKeys, '__diracCrossDeployV151Wrapped', { value: true, enumerable: false });
+  }
+} catch (_) {}
+
 /* ============================================================
    DIRAC LOGOUT + 5-MINUTE IDLE SESSION COMPATIBILITY v118
    Tujuan:
@@ -17936,7 +17959,6 @@ function diracV119ShouldInspectSupabaseWrite(path, options = {}) {
   if (!table) return false;
 
   // Jangan ganggu tabel keamanan, session/logout, dan payment gateway/provider payload.
-  if (table === 'security_lost_passkey_recovery_requests' || table === 'security_lost_passkey_recovery_sessions') return false;
   if (/^security_customer_/i.test(table)) return false;
   if (table === 'dirac_security_rate_limits') return false;
   if (table === String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim()) return false;
@@ -19513,8 +19535,6 @@ function diracBolaIdorV121OwnedTablePolicy(table) {
     security_customer_sessions: { ownerColumns: ['customer_id'], objectColumns: ['id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
     security_customer_settings: { ownerColumns: ['customer_id'], objectColumns: ['id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
     security_customer_recovery_codes: { ownerColumns: ['customer_id'], objectColumns: ['id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
-    security_lost_passkey_recovery_requests: { ownerColumns: ['customer_id', 'auth_user_id'], objectColumns: ['id', 'request_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id', 'auth_user_id'] },
-    security_lost_passkey_recovery_sessions: { ownerColumns: ['customer_id', 'auth_user_id'], objectColumns: ['id', 'request_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id', 'auth_user_id'] },
     domain_passkeys: { ownerColumns: ['customer_id', 'auth_user_id', 'user_id', 'email'], objectColumns: ['id', 'credential_id'], insertMayUseBodyOwner: true },
     security_customer_login_logs: { ownerColumns: ['customer_id', 'auth_user_id', 'email'], objectColumns: ['id'], insertMayUseBodyOwner: true },
     security_customer_account_requests: { ownerColumns: ['customer_id', 'auth_user_id', 'email'], objectColumns: ['id'], insertMayUseBodyOwner: true },
@@ -19818,8 +19838,6 @@ function diracBolaIdorV122OwnedTablePolicy(table) {
     security_customer_sessions: { ownerColumns: ['customer_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
     security_customer_settings: { ownerColumns: ['customer_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
     security_customer_recovery_codes: { ownerColumns: ['customer_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id'] },
-    security_lost_passkey_recovery_requests: { ownerColumns: ['customer_id', 'auth_user_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id', 'auth_user_id'] },
-    security_lost_passkey_recovery_sessions: { ownerColumns: ['customer_id', 'auth_user_id'], insertMayUseBodyOwner: true, requiredBodyOwners: ['customer_id', 'auth_user_id'] },
     domain_passkeys: { ownerColumns: ['customer_id', 'auth_user_id', 'user_id', 'email'], insertMayUseBodyOwner: true },
     security_customer_login_logs: { ownerColumns: ['customer_id', 'auth_user_id', 'email'], insertMayUseBodyOwner: true },
     security_customer_account_requests: { ownerColumns: ['customer_id', 'auth_user_id', 'email'], insertMayUseBodyOwner: true },
@@ -24319,7 +24337,7 @@ try {
 
       const result = await __diracV145OriginalRegisterHardBan(req, res, action, method, threat);
       const blockedUntilMs = Number(result && result.blockedUntilMs || 0);
-      if (blockedUntilMs > now) {
+      if (blockedUntilMs > now && result && result.ok && Number(result.wrote || 0) > 0) {
         DIRAC_SECURITY_WRITE_CACHE_V145.set(cacheKey, {
           until: now + diracV145WriteCoalesceMs(),
           blockedUntilMs,
@@ -25038,7 +25056,6 @@ try {
   const __diracCentralPreviousV107ShouldSkipV146 = typeof diracV107ShouldSkip === 'function' ? diracV107ShouldSkip : null;
   if (__diracCentralPreviousV107ShouldSkipV146 && !__diracCentralPreviousV107ShouldSkipV146.__diracCentralPassthroughV146) {
     diracV107ShouldSkip = function diracV107ShouldSkipCentralPassthroughV146(req, action, method) {
-      if (req && req.__diracCentralSecurityGuardPassedV146 && !diracCentralIsA2FActionV148(action)) return true;
       return __diracCentralPreviousV107ShouldSkipV146(req, action, method);
     };
     Object.defineProperty(diracV107ShouldSkip, '__diracCentralPassthroughV146', { value: true, enumerable: false });
@@ -25049,7 +25066,6 @@ try {
   const __diracCentralPreviousV143ThreatV146 = typeof diracV143DetectRequestThreat === 'function' ? diracV143DetectRequestThreat : null;
   if (__diracCentralPreviousV143ThreatV146 && !__diracCentralPreviousV143ThreatV146.__diracCentralPassthroughV146) {
     diracV143DetectRequestThreat = function diracV143DetectRequestThreatCentralPassthroughV146(req, action, method) {
-      if (req && req.__diracCentralSecurityGuardPassedV146 && !diracCentralIsA2FActionV148(action)) return { detected: false, skipped: 'central_security_guard_v146' };
       return __diracCentralPreviousV143ThreatV146(req, action, method);
     };
     Object.defineProperty(diracV143DetectRequestThreat, '__diracCentralPassthroughV146', { value: true, enumerable: false });
@@ -25060,7 +25076,6 @@ try {
   const __diracCentralPreviousV143InspectOwnershipV146 = typeof diracV143InspectOwnership === 'function' ? diracV143InspectOwnership : null;
   if (__diracCentralPreviousV143InspectOwnershipV146 && !__diracCentralPreviousV143InspectOwnershipV146.__diracCentralPassthroughV146) {
     diracV143InspectOwnership = async function diracV143InspectOwnershipCentralPassthroughV146(req, body) {
-      if (req && req.__diracCentralSecurityGuardPassedV146 && !diracCentralIsA2FActionV148(req && req.query && req.query.action)) return { ok: true, skipped: 'central_security_guard_v146' };
       return __diracCentralPreviousV143InspectOwnershipV146(req, body);
     };
     Object.defineProperty(diracV143InspectOwnership, '__diracCentralPassthroughV146', { value: true, enumerable: false });
@@ -25074,6 +25089,38 @@ try {
       const decision = await diracCentralInspectServiceRoleAccessV146(path, options).catch(() => ({ ok: true }));
       if (decision && decision.block) return diracCentralBlockedSupabaseResultV146(decision);
       const ctx = diracCentralCurrentContextV149();
+      const requestCacheKey = ctx ? diracCentralSupabaseRequestCacheKeyV151(path, options) : '';
+
+      if (ctx && requestCacheKey) {
+        ctx.__diracCentralSupabaseRequestCacheV151 = ctx.__diracCentralSupabaseRequestCacheV151 || new Map();
+        const cachedPromise = ctx.__diracCentralSupabaseRequestCacheV151.get(requestCacheKey);
+        if (cachedPromise) {
+          const cachedResult = await cachedPromise;
+          return diracCentralCloneSupabaseResultV151(cachedResult);
+        }
+
+        if (options && options.auth === 'service') ctx.__diracCentralSafeServiceRoleFetchV146 = true;
+        const fetchPromise = __diracCentralPreviousSupabaseFetchV146(path, options)
+          .then((result) => {
+            if (!result || result.ok !== true) {
+              try { ctx.__diracCentralSupabaseRequestCacheV151.delete(requestCacheKey); } catch (_) {}
+            }
+            return diracCentralCloneSupabaseResultV151(result);
+          })
+          .catch((error) => {
+            try { ctx.__diracCentralSupabaseRequestCacheV151.delete(requestCacheKey); } catch (_) {}
+            throw error;
+          });
+
+        ctx.__diracCentralSupabaseRequestCacheV151.set(requestCacheKey, fetchPromise);
+        try {
+          const result = await fetchPromise;
+          return diracCentralCloneSupabaseResultV151(result);
+        } finally {
+          if (ctx) ctx.__diracCentralSafeServiceRoleFetchV146 = false;
+        }
+      }
+
       if (ctx && options && options.auth === 'service') ctx.__diracCentralSafeServiceRoleFetchV146 = true;
       try {
         return await __diracCentralPreviousSupabaseFetchV146(path, options);
@@ -25111,6 +25158,45 @@ try {
     Object.defineProperty(module.exports, '__diracCentralSecurityGuardV146', { value: true, enumerable: false });
   }
 } catch (_) {}
+
+
+function diracCentralSupabaseRequestCacheKeyV151(path, options = {}) {
+  const method = String(options && options.method || 'GET').toUpperCase();
+  if (method !== 'GET') return '';
+
+  const rawPath = String(path || '');
+  if (!diracCentralIsRequestCacheableSupabaseReadV151(rawPath)) return '';
+
+  const authMode = String(options && options.auth || 'anon');
+  const bearerHash = loginSecurityHash(String(options && options.bearer || 'default'));
+  return ['supabase-read-v151', method, authMode, bearerHash, rawPath].join('|');
+}
+
+function diracCentralIsRequestCacheableSupabaseReadV151(path) {
+  const value = String(path || '');
+  return /^\/auth\/v1\/user(?:$|[?#])/.test(value)
+    || /^\/rest\/v1\/security_customer_auth_links(?:$|[?#])/.test(value)
+    || /^\/rest\/v1\/products(?:$|[?#])/.test(value)
+    || /^\/rest\/v1\/domain_tld_prices(?:$|[?#])/.test(value);
+}
+
+function diracCentralCloneSupabaseResultV151(result) {
+  if (!result || typeof result !== 'object') return result;
+  const cloned = { ...result };
+  if (Object.prototype.hasOwnProperty.call(cloned, 'data')) {
+    cloned.data = diracCentralJsonCloneV151(cloned.data);
+  }
+  return cloned;
+}
+
+function diracCentralJsonCloneV151(value) {
+  if (value === null || value === undefined) return value;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (_) {
+    return value;
+  }
+}
 
 function diracCentralRunWithAsyncContextV149(fn) {
   if (!DIRAC_CENTRAL_ASYNC_CONTEXT_V149 || typeof fn !== 'function') return fn();
@@ -25194,6 +25280,10 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
       return diracCentralDisabledResponseV146(res);
     }
 
+    const vercel2OnlyGuard = diracCentralVercel2OnlyActionGuardV150(action);
+    if (!vercel2OnlyGuard.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, vercel2OnlyGuard.reason);
+    diracCentralStampV146(ctx, 'vercel2_action_checked');
+
     ctx.classification = diracCentralClassifyActionV146(action);
     diracCentralStampV146(ctx, 'classification_checked');
 
@@ -25260,25 +25350,20 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
       return await diracCentralBanAndBlockV146(req, res, ctx, action, method, 'html_security_report');
     }
 
-	    if (DIRAC_CENTRAL_SENSITIVE_ACTIONS_V146.has(action)
-      && !ctx.isA2FAction
-      && action !== 'customer_security_recovery_codes_generate'
-      && action !== 'customer_security_recovery_code_verify') ctx.skipHeavyScan = true;
+    ctx.skipHeavyScan = false;
 
-    if (!ctx.skipHeavyScan) {
-      const sampleGuard = diracCentralSampleCollectorV146(req, ctx);
-      if (!sampleGuard.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, sampleGuard.reason);
-      diracCentralStampV146(ctx, 'sample_checked');
+    const sampleGuard = diracCentralSampleCollectorV146(req, ctx);
+    if (!sampleGuard.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, sampleGuard.reason);
+    diracCentralStampV146(ctx, 'sample_checked');
 
-      const normalized = diracCentralNormalizeSampleV146(ctx.sample);
-      const threat = diracCentralThreatPatternGuardV146(normalized, ctx);
-      if (threat.detected) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, threat.kind);
-      diracCentralStampV146(ctx, 'threat_checked');
+    const normalized = diracCentralNormalizeSampleV146(ctx.sample);
+    const threat = diracCentralThreatPatternGuardV146(normalized, ctx);
+    if (threat.detected) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, threat.kind);
+    diracCentralStampV146(ctx, 'threat_checked');
 
-      const zeroDay = diracCentralZeroDayShieldV146(req, ctx, normalized);
-      if (!zeroDay.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, zeroDay.reason);
-      diracCentralStampV146(ctx, 'zeroday_checked');
-    }
+    const zeroDay = diracCentralZeroDayShieldV146(req, ctx, normalized);
+    if (!zeroDay.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, zeroDay.reason);
+    diracCentralStampV146(ctx, 'zeroday_checked');
 
     const idor = await diracCentralIdorBolaGuardV146(req, ctx);
     if (!idor.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, idor.reason);
@@ -25512,6 +25597,48 @@ function diracCentralClassifyActionV146(action) {
   return 'browser';
 }
 
+function diracCentralVercel2OnlyActionGuardV150(action) {
+  const clean = String(action || '').trim().toLowerCase();
+  if (!clean) return { ok: false, reason: 'vercel2_action_empty' };
+
+  const vercel2OnlyActions = diracCentralVercel2OnlyActionsV150();
+  if (!vercel2OnlyActions.has(clean)) return { ok: true };
+
+  if (diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')) return { ok: true };
+  if (diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED')) return { ok: true };
+  if (diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') === 'vercel2') return { ok: true };
+  if (diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE') === 'vercel2') return { ok: true };
+
+  return { ok: false, reason: 'vercel2_only_action_blocked' };
+}
+
+function diracCentralVercel2OnlyActionsV150() {
+  const actions = new Set([
+    'customer_security_recovery_codes_generate',
+    'customer_security_recovery_code_verify',
+    String(typeof DIRAC_RECOVERY_WORKER_ACTION !== 'undefined' ? DIRAC_RECOVERY_WORKER_ACTION : '').trim().toLowerCase()
+  ].filter(Boolean));
+
+  for (const item of diracCentralEnvCsvV150('DIRAC_CENTRAL_VERCEL2_ONLY_ACTIONS')) actions.add(item);
+  for (const item of diracCentralEnvCsvV150('DIRAC_VERCEL2_ONLY_ACTIONS')) actions.add(item);
+  return actions;
+}
+
+function diracCentralEnvCsvV150(name) {
+  return String(process.env[name] || '')
+    .split(/[\s,]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => /^[a-z0-9_-]{1,80}$/.test(item));
+}
+
+function diracCentralEnvValueV150(name) {
+  return String(process.env[name] || '').trim().toLowerCase();
+}
+
+function diracCentralEnvTrueV150(name) {
+  return /^(1|true|yes|on|enabled|enable)$/i.test(String(process.env[name] || '').trim());
+}
+
 function diracCentralStampV146(ctx, name) {
   if (!ctx) return;
   if (!ctx.guardPassport || typeof ctx.guardPassport !== 'object') ctx.guardPassport = Object.create(null);
@@ -25534,7 +25661,8 @@ function diracCentralIntegrityVerifierV146(ctx) {
     'contract_checked',
     'idor_checked',
     'circuit_checked',
-    'mfa_checked'
+    'mfa_checked',
+    'vercel2_action_checked'
   ];
   if (ctx && ctx.classification === 'server') required.push('server_guard_checked');
   if (ctx && ctx.classification === 'public_read') required.push('public_read_checked', 'sample_checked', 'threat_checked', 'zeroday_checked');
@@ -26251,15 +26379,15 @@ async function diracCentralRecoveryWorkerIdorGuardV146(req, ctx) {
 }
 
 async function diracCentralIdorBolaGuardV146(req, ctx) {
-  if (ctx && ctx.classification === 'server' && ctx.action === 'midtrans_webhook') return { ok: true, skipped: 'server_to_server_signed_webhook' };
+  if (ctx && ctx.classification === 'server' && ctx.action === 'midtrans_webhook') return { ok: true, guarded: 'server_to_server_signed_webhook' };
   if (ctx && ctx.classification === 'server' && ctx.action === DIRAC_RECOVERY_WORKER_ACTION) {
     return await diracCentralRecoveryWorkerIdorGuardV146(req, ctx);
   }
   const ids = diracCentralCollectIdsV146(req, ctx.body);
-  if (diracCentralIsAuthBootstrapIdentityOnlyV146(ctx.action, ids)) return { ok: true, skipped: 'auth_bootstrap_identity_only' };
-  if (diracCentralIsAuthSelfReadOnlyV146(ctx.action, ids)) return { ok: true, skipped: 'auth_self_read_only' };
+  if (diracCentralIsAuthBootstrapIdentityOnlyV146(ctx.action, ids)) return { ok: true, guarded: 'auth_bootstrap_identity_only' };
+  if (diracCentralIsAuthSelfReadOnlyV146(ctx.action, ids)) return { ok: true, guarded: 'auth_self_read_only' };
   const needsOwner = ids.length > 0 || DIRAC_CENTRAL_USER_DATA_ACTIONS_V146.has(ctx.action);
-  if (!needsOwner) return { ok: true, skipped: 'no_sensitive_id_and_not_user_data' };
+  if (!needsOwner) return { ok: true, guarded: 'no_sensitive_id_and_not_user_data' };
   if (ids.length > 12) return { ok: false, reason: 'idor_too_many_ids' };
 
   let owner = await diracCentralResolveOwnerV146(req);
@@ -26399,10 +26527,10 @@ async function diracCentralInspectServiceRoleAccessV146(path, options = {}) {
   const table = diracCentralExtractRestTableV146(path);
   if (!diracCentralOwnedTableV146(table)) return { ok: true };
   const method = String(options.method || 'GET').toUpperCase();
-  if (diracCentralIsRegisterBootstrapServiceRoleV146(ctx, table, path, options, method)) return { ok: true, skipped: 'domain_register_bootstrap_service_role' };
-  if (diracCentralIsCheckoutOwnerBootstrapServiceRoleV146(ctx, table, path, options, method)) return { ok: true, skipped: 'checkout_owner_bootstrap_service_role' };
-  if (diracCentralIsCheckoutOrderCreateServiceRoleV146(ctx, table, path, options, method)) return { ok: true, skipped: 'checkout_order_create_service_role' };
-  if (diracCentralIsPasskeyServiceRoleV146(ctx, table, path, options, method)) return { ok: true, skipped: 'passkey_owner_scoped_service_role' };
+  if (diracCentralIsRegisterBootstrapServiceRoleV146(ctx, table, path, options, method)) return { ok: true, guarded: 'domain_register_bootstrap_service_role' };
+  if (diracCentralIsCheckoutOwnerBootstrapServiceRoleV146(ctx, table, path, options, method)) return { ok: true, guarded: 'checkout_owner_bootstrap_service_role' };
+  if (diracCentralIsCheckoutOrderCreateServiceRoleV146(ctx, table, path, options, method)) return { ok: true, guarded: 'checkout_order_create_service_role' };
+  if (diracCentralIsPasskeyServiceRoleV146(ctx, table, path, options, method)) return { ok: true, guarded: 'passkey_owner_scoped_service_role' };
   const hasOwnerScope = diracCentralPathHasOwnerScopeV146(path, options.body);
   const hasObjectScope = diracCentralPathHasObjectScopeV146(path, options.body);
   if (!hasOwnerScope && !hasObjectScope) {
@@ -26448,7 +26576,7 @@ async function diracCentralInspectServiceRoleAccessV146(path, options = {}) {
 
 async function diracCentralServiceRoleOwnerScopeGuardV146(ctx, path, body) {
   if (!ctx || ctx.classification === 'server') return { ok: true };
-  if (ctx.__diracCentralOwnerScopeResolvingV146 === true) return { ok: true, skipped: 'owner_scope_internal_lookup' };
+  if (ctx.__diracCentralOwnerScopeResolvingV146 === true) return { ok: true, guarded: 'owner_scope_internal_lookup' };
   const ids = diracCentralExtractServiceRoleScopeIdsV146(path, body);
   if (!ids.customerIds.length && !ids.authUserIds.length && !ids.userIds.length) return { ok: true };
   let owner = null;
@@ -27434,7 +27562,6 @@ try {
   const __diracCentralPreviousCsrfShouldCheckV146 = typeof diracCsrfShouldCheckRequest === 'function' ? diracCsrfShouldCheckRequest : null;
   if (__diracCentralPreviousCsrfShouldCheckV146 && !__diracCentralPreviousCsrfShouldCheckV146.__diracCentralPassthroughV146) {
     diracCsrfShouldCheckRequest = function diracCsrfShouldCheckRequestCentralPassthroughV146(action, method) {
-      if (diracCentralCurrentContextPassedV146() && !diracCentralIsA2FActionV148(action)) return false;
       return __diracCentralPreviousCsrfShouldCheckV146(action, method);
     };
     Object.defineProperty(diracCsrfShouldCheckRequest, '__diracCentralPassthroughV146', { value: true, enumerable: false });
@@ -27445,7 +27572,6 @@ try {
   const __diracCentralPreviousV137CsrfShouldForceV146 = typeof diracV137CsrfShouldForce === 'function' ? diracV137CsrfShouldForce : null;
   if (__diracCentralPreviousV137CsrfShouldForceV146 && !__diracCentralPreviousV137CsrfShouldForceV146.__diracCentralPassthroughV146) {
     diracV137CsrfShouldForce = function diracV137CsrfShouldForceCentralPassthroughV146(action, method) {
-      if (diracCentralCurrentContextPassedV146() && !diracCentralIsA2FActionV148(action)) return false;
       return __diracCentralPreviousV137CsrfShouldForceV146(action, method);
     };
     Object.defineProperty(diracV137CsrfShouldForce, '__diracCentralPassthroughV146', { value: true, enumerable: false });
@@ -27456,7 +27582,6 @@ try {
   const __diracCentralPreviousV138CsrfShouldForceV146 = typeof diracV138CsrfShouldForce === 'function' ? diracV138CsrfShouldForce : null;
   if (__diracCentralPreviousV138CsrfShouldForceV146 && !__diracCentralPreviousV138CsrfShouldForceV146.__diracCentralPassthroughV146) {
     diracV138CsrfShouldForce = function diracV138CsrfShouldForceCentralPassthroughV146(action, method) {
-      if (diracCentralCurrentContextPassedV146() && !diracCentralIsA2FActionV148(action)) return false;
       return __diracCentralPreviousV138CsrfShouldForceV146(action, method);
     };
     Object.defineProperty(diracV138CsrfShouldForce, '__diracCentralPassthroughV146', { value: true, enumerable: false });
@@ -27467,7 +27592,6 @@ try {
   const __diracCentralPreviousV128InspectHttpV146 = typeof diracBolaIdorV128InspectHttpRequest === 'function' ? diracBolaIdorV128InspectHttpRequest : null;
   if (__diracCentralPreviousV128InspectHttpV146 && !__diracCentralPreviousV128InspectHttpV146.__diracCentralPassthroughV146) {
     diracBolaIdorV128InspectHttpRequest = async function diracBolaIdorV128InspectHttpRequestCentralPassthroughV146(req) {
-      if (req && req.__diracCentralSecurityGuardPassedV146 && !diracCentralIsA2FActionV148(req && req.query && req.query.action)) return { ok: true, skipped: 'central_security_guard_v146' };
       return __diracCentralPreviousV128InspectHttpV146(req);
     };
     Object.defineProperty(diracBolaIdorV128InspectHttpRequest, '__diracCentralPassthroughV146', { value: true, enumerable: false });
@@ -27478,7 +27602,6 @@ try {
   const __diracCentralPreviousV132InspectHttpV146 = typeof diracBolaIdorV132InspectHttpQuery === 'function' ? diracBolaIdorV132InspectHttpQuery : null;
   if (__diracCentralPreviousV132InspectHttpV146 && !__diracCentralPreviousV132InspectHttpV146.__diracCentralPassthroughV146) {
     diracBolaIdorV132InspectHttpQuery = async function diracBolaIdorV132InspectHttpQueryCentralPassthroughV146(req) {
-      if (req && req.__diracCentralSecurityGuardPassedV146 && !diracCentralIsA2FActionV148(req && req.query && req.query.action)) return { ok: true, skipped: 'central_security_guard_v146' };
       return __diracCentralPreviousV132InspectHttpV146(req);
     };
     Object.defineProperty(diracBolaIdorV132InspectHttpQuery, '__diracCentralPassthroughV146', { value: true, enumerable: false });
@@ -27489,7 +27612,6 @@ try {
   const __diracCentralPreviousV133InspectHttpV146 = typeof diracBolaIdorV133InspectHttpRequest === 'function' ? diracBolaIdorV133InspectHttpRequest : null;
   if (__diracCentralPreviousV133InspectHttpV146 && !__diracCentralPreviousV133InspectHttpV146.__diracCentralPassthroughV146) {
     diracBolaIdorV133InspectHttpRequest = async function diracBolaIdorV133InspectHttpRequestCentralPassthroughV146(req) {
-      if (req && req.__diracCentralSecurityGuardPassedV146 && !diracCentralIsA2FActionV148(req && req.query && req.query.action)) return { ok: true, skipped: 'central_security_guard_v146' };
       return __diracCentralPreviousV133InspectHttpV146(req);
     };
     Object.defineProperty(diracBolaIdorV133InspectHttpRequest, '__diracCentralPassthroughV146', { value: true, enumerable: false });
