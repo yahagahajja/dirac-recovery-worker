@@ -26823,7 +26823,7 @@ function diracCentralIsNonNegativeNumberV146(value) {
 
 function diracCentralIsPasskeyServiceRoleV146(ctx, table, path, options = {}, method) {
   const action = String(ctx && ctx.action || '').toLowerCase();
-  if (!/^(dirac_mfa_passkey_start|dirac_mfa_passkey_verify|domain_mfa_passkey_start|domain_mfa_passkey_verify|dirac_mfa_passkey_status|domain_mfa_passkey_status|dirac_passkey_status|domain_passkey_status|customer_security_recovery_codes_generate|customer_security_recovery_code_verify)$/.test(action)) return false;
+  if (!/^(dirac_mfa_passkey_start|dirac_mfa_passkey_verify|domain_mfa_passkey_start|domain_mfa_passkey_verify|dirac_mfa_passkey_status|domain_mfa_passkey_status|dirac_passkey_status|domain_passkey_status|customer_security_recovery_codes_generate|customer_security_recovery_code_verify|dirac_recovery_worker_generate)$/.test(action)) return false;
   const cleanTable = String(table || '').toLowerCase();
   const cleanMethod = String(method || options.method || 'GET').toUpperCase();
   const rawPath = String(path || '').toLowerCase();
