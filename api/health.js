@@ -6278,12 +6278,9 @@ function customerSecurityRecoveryPdfWrapLinesV156(value, width) {
 
 function customerSecurityGenerateWebsiteRecoveryCodeV156() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const part = (n) => {
-    let out = '';
-    for (let i = 0; i < n; i += 1) out += alphabet[crypto.randomInt(0, alphabet.length)];
-    return out;
-  };
-  return 'DG-' + part(4) + '-' + part(4) + '-' + part(4);
+  let out = 'DG';
+  for (let i = 0; i < 6; i += 1) out += alphabet[crypto.randomInt(0, alphabet.length)];
+  return out;
 }
 
 function customerSecurityGenerateEmailPdfCodeV156() {
@@ -6299,8 +6296,20 @@ function customerSecurityExtractAccountPasswordForPdfV156(body) {
 
 function customerSecurityBuildPdfPasswordV156(accountPassword, websiteRecoveryCode, emailPdfCode) {
   // PDF Standard Security Handler only uses the first 32 bytes of the entered password.
-  // Keep the two recovery factors at the front so missing/altered website/email code cannot be ignored.
-  return String(websiteRecoveryCode || '').trim() + ':' + String(emailPdfCode || '').trim() + ':' + String(accountPassword || '').normalize('NFC');
+  // Therefore the complete user-entered PDF password must fit inside 32 bytes.
+  return String(websiteRecoveryCode || '').trim() + String(emailPdfCode || '').trim() + String(accountPassword || '').normalize('NFC');
+}
+
+function customerSecurityBuildPdfPasswordContextV156(accountPassword, websiteRecoveryCode, emailPdfCode) {
+  const pdfPassword = customerSecurityBuildPdfPasswordV156(accountPassword, websiteRecoveryCode, emailPdfCode);
+  const byteLength = Buffer.byteLength(pdfPassword, 'utf8');
+  return {
+    ok: byteLength >= 12 && byteLength <= 32,
+    pdfPassword,
+    byteLength,
+    maxBytes: 32,
+    accountPasswordMaxBytes: Math.max(0, 32 - Buffer.byteLength(String(websiteRecoveryCode || '').trim() + String(emailPdfCode || '').trim(), 'utf8'))
+  };
 }
 
 async function customerSecurityVerifyAccountPasswordForPdfV156(email, accountPassword) {
@@ -6586,7 +6595,7 @@ function customerSecurityRecoveryEmailTextV156(context = {}) {
     'Kode 2 digit email: ' + emailPdfCode,
     '',
     'Cara membuka PDF:',
-    'Password PDF = password akun Anda + kode recovery dari website + 2 digit kode email di atas.',
+    'Password PDF = kode website + 2 digit kode email + password akun Anda. Ketik berurutan tanpa spasi.',
     '',
     'Jangan kirimkan PDF, kode website, atau kode email ini kepada pihak lain.',
     'Jika Anda tidak meminta pemulihan ini, segera hubungi bantuan DiracGroup.'
@@ -6609,14 +6618,14 @@ function customerSecurityRecoveryEmailHtmlV156(context = {}) {
     + '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px;margin:18px 0">'
     + '<div style="font-size:12px;color:#1d4ed8;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Kode 2 digit email</div>'
     + '<div style="font-size:34px;letter-spacing:.22em;font-weight:800;color:#0f172a;margin-top:6px">' + emailPdfCode + '</div>'
-    + '<div style="font-size:12px;color:#475569;margin-top:6px">Gabungkan dengan password akun Anda dan kode recovery yang tampil di website.</div>'
+    + '<div style="font-size:12px;color:#475569;margin-top:6px">Gabungkan setelah kode website, lalu lanjutkan dengan password akun Anda.</div>'
     + '</div>'
     + '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">'
     + '<tr><td style="padding:10px;border-bottom:1px solid #e5e7eb;color:#64748b">Request ID</td><td style="padding:10px;border-bottom:1px solid #e5e7eb;font-weight:700;text-align:right">' + requestId + '</td></tr>'
     + '<tr><td style="padding:10px;border-bottom:1px solid #e5e7eb;color:#64748b">Berlaku sampai</td><td style="padding:10px;border-bottom:1px solid #e5e7eb;font-weight:700;text-align:right">' + expiresAt + '</td></tr>'
     + '</table>'
     + '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:14px;line-height:1.55;font-size:13px;color:#7c2d12">'
-    + '<b>Cara membuka PDF:</b><br>Password PDF = password akun Anda + kode recovery dari website + 2 digit kode email ini. Jangan bagikan kode atau file ini kepada siapa pun.'
+    + '<b>Cara membuka PDF:</b><br>Password PDF = kode website + 2 digit kode email + password akun Anda. Ketik berurutan tanpa spasi. Jangan bagikan kode atau file ini kepada siapa pun.'
     + '</div>'
     + '<p style="font-size:12px;color:#64748b;margin-top:18px;line-height:1.6">Jika Anda tidak meminta pemulihan ini, abaikan email ini dan segera hubungi bantuan DiracGroup.</p>'
     + '</div></div></div>';
@@ -6955,8 +6964,17 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     }
     const websiteRecoveryCode = customerSecurityGenerateWebsiteRecoveryCodeV156();
     const emailPdfCode = customerSecurityGenerateEmailPdfCodeV156();
+    const pdfPasswordContext = customerSecurityBuildPdfPasswordContextV156(accountPassword, websiteRecoveryCode, emailPdfCode);
+    if (!pdfPasswordContext.ok) {
+      return res.status(400).json({
+        ok: false,
+        code: 'RECOVERY_PDF_PASSWORD_TOO_LONG',
+        message: 'Password akun terlalu panjang untuk password PDF recovery. Total kode website + 2 digit email + password akun wajib maksimal 32 byte agar tidak ada karakter yang diabaikan PDF reader.',
+        max_account_password_bytes: pdfPasswordContext.accountPasswordMaxBytes
+      });
+    }
     recoveryPdfOptions = {
-      pdfPassword: customerSecurityBuildPdfPasswordV156(accountPassword, websiteRecoveryCode, emailPdfCode),
+      pdfPassword: pdfPasswordContext.pdfPassword,
       websiteRecoveryCode,
       emailPdfCode
     };
@@ -6978,8 +6996,17 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     }
     const websiteRecoveryCode = customerSecurityGenerateWebsiteRecoveryCodeV156();
     const emailPdfCode = customerSecurityGenerateEmailPdfCodeV156();
+    const pdfPasswordContext = customerSecurityBuildPdfPasswordContextV156(accountPassword, websiteRecoveryCode, emailPdfCode);
+    if (!pdfPasswordContext.ok) {
+      return res.status(400).json({
+        ok: false,
+        code: 'RECOVERY_PDF_PASSWORD_TOO_LONG',
+        message: 'Password akun terlalu panjang untuk password PDF recovery. Total kode website + 2 digit email + password akun wajib maksimal 32 byte agar tidak ada karakter yang diabaikan PDF reader.',
+        max_account_password_bytes: pdfPasswordContext.accountPasswordMaxBytes
+      });
+    }
     recoveryPdfOptions = {
-      pdfPassword: customerSecurityBuildPdfPasswordV156(accountPassword, websiteRecoveryCode, emailPdfCode),
+      pdfPassword: pdfPasswordContext.pdfPassword,
       websiteRecoveryCode,
       emailPdfCode
     };
