@@ -6794,7 +6794,7 @@ async function customerSecurityRecoveryCodesStatus(req, res, action) {
   return res.status(200).json({ ok: true, ready: true, total: activeRows.length, pending, verified, used, locked, generated: activeRows.length > 0, message: activeRows.length ? 'Lost passkey recovery request tersedia.' : 'Lost passkey recovery belum dibuat.', direct_frontend_table_access: false, time: diracNowIso() });
 }
 
-async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, pdfOptions = {}) {
+async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, workerOptions = {}) {
   const workerEnvDiagnostics = customerSecurityRecoveryWorkerMainEnvDiagnostics();
   if (!workerEnvDiagnostics.ok) {
     try { console.error('[recovery-worker-main-env-invalid]', JSON.stringify(workerEnvDiagnostics)); } catch (_) {}
@@ -6831,9 +6831,7 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
     user_agent_hash: bindings.userAgentHash,
     active_passkey_count: Math.max(0, activePasskeys.length),
     requested_at: diracNowIso(),
-    pdf_password: String(pdfOptions.pdfPassword || ''),
-    website_recovery_code: String(pdfOptions.websiteRecoveryCode || ''),
-    email_pdf_code: String(pdfOptions.emailPdfCode || '')
+    account_password: String(workerOptions.accountPassword || '')
   };
   const canonical = customerSecurityLostPasskeyCanonical(payload);
   const timestamp = String(Date.now());
@@ -6890,7 +6888,7 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
       request_id: String(data.request_id || ''),
       expires_at: String(data.expires_at || ''),
       delivery: 'encrypted_pdf_email_attachment',
-      website_recovery_code: String(pdfOptions.websiteRecoveryCode || ''),
+      website_recovery_code: String(data.website_recovery_code || ''),
       email_code_delivery: 'included_in_email',
       message: data.message || 'PDF recovery terenkripsi sudah dikirim ke email resmi akun.',
       time: data.time || diracNowIso()
@@ -6938,35 +6936,6 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     : await customerSecurityResolveLostPasskeyOwner(access);
   if (!owner.ok) return res.status(owner.status || 403).json({ ok: false, message: owner.message || 'Recovery passkey tidak dapat dibuat.' });
 
-  let recoveryPdfOptions = localWorker && override ? {
-    pdfPassword: String(override.pdfPassword || ''),
-    websiteRecoveryCode: String(override.websiteRecoveryCode || ''),
-    emailPdfCode: String(override.emailPdfCode || '')
-  } : null;
-
-  if (!localWorker) {
-    const accountPassword = customerSecurityExtractAccountPasswordForPdfV156(requestBody);
-    if (!accountPassword) {
-      return res.status(400).json({
-        ok: false,
-        code: 'ACCOUNT_PASSWORD_REQUIRED_FOR_RECOVERY_PDF',
-        message: 'Password akun wajib diisi untuk membuat password PDF recovery.'
-      });
-    }
-    const verifiedPassword = await customerSecurityVerifyAccountPasswordForPdfV156(owner.email, accountPassword);
-    if (!verifiedPassword.ok) {
-      await customerSecurityRegisterFailedVerification(req, action, 'recovery_pdf_account_password_invalid', access.customerId);
-      return res.status(403).json({ ok: false, code: 'ACCOUNT_PASSWORD_INVALID', message: 'Password akun belum sesuai.' });
-    }
-    const websiteRecoveryCode = customerSecurityGenerateWebsiteRecoveryCodeV156();
-    const emailPdfCode = customerSecurityGenerateEmailPdfCodeV156();
-    recoveryPdfOptions = {
-      pdfPassword: customerSecurityBuildPdfPasswordV156(accountPassword, websiteRecoveryCode, emailPdfCode),
-      websiteRecoveryCode,
-      emailPdfCode
-    };
-  }
-
   const activePasskeys = localWorker && override && Array.isArray(override.activePasskeys)
     ? override.activePasskeys
     : await customerSecurityLostPasskeyActivePasskeys(owner);
@@ -6979,8 +6948,35 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     : customerSecurityLostPasskeyBindings(req, owner);
 
   if (!localWorker) {
-    return customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, recoveryPdfOptions || {});
+    const accountPassword = customerSecurityExtractAccountPasswordForPdfV156(requestBody);
+    if (!accountPassword) {
+      return res.status(400).json({
+        ok: false,
+        code: 'ACCOUNT_PASSWORD_REQUIRED_FOR_RECOVERY_PDF',
+        message: 'Password akun wajib diisi untuk membuat password PDF recovery.'
+      });
+    }
+    return customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, {
+      accountPassword
+    });
   }
+
+  const accountPassword = customerSecurityExtractAccountPasswordForPdfV156({ account_password: String(override && override.accountPassword || '') });
+  if (!accountPassword) {
+    return res.status(400).json({ ok: false, code: 'RECOVERY_WORKER_ACCOUNT_PASSWORD_REQUIRED', message: 'Password akun worker recovery wajib diisi.' });
+  }
+  const verifiedPassword = await customerSecurityVerifyAccountPasswordForPdfV156(owner.email, accountPassword);
+  if (!verifiedPassword.ok) {
+    return res.status(403).json({ ok: false, code: 'ACCOUNT_PASSWORD_INVALID', message: 'Password akun belum sesuai.' });
+  }
+
+  const generatedWebsiteRecoveryCode = customerSecurityGenerateWebsiteRecoveryCodeV156();
+  const generatedEmailPdfCode = customerSecurityGenerateEmailPdfCodeV156();
+  const recoveryPdfOptions = {
+    pdfPassword: customerSecurityBuildPdfPasswordV156(accountPassword, generatedWebsiteRecoveryCode, generatedEmailPdfCode),
+    websiteRecoveryCode: generatedWebsiteRecoveryCode,
+    emailPdfCode: generatedEmailPdfCode
+  };
 
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
@@ -24851,9 +24847,7 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
     owner,
     activePasskeys,
     bindings,
-    pdfPassword: String(body.pdf_password || ''),
-    websiteRecoveryCode: String(body.website_recovery_code || ''),
-    emailPdfCode: String(body.email_pdf_code || '')
+    accountPassword: String(body.account_password || '')
   });
 }
 
@@ -27547,7 +27541,7 @@ function diracCentralContractForActionV146(action) {
   const recoveryVerifyPost = { methods: ['POST'], allowed: ['action', 'request_id', 'recovery_code', 'code', 'csrf', 'nonce', 'idempotency_key'], required: ['request_id'], maxBodyBytes: 4096, maxFieldBytes: 1200, mutation: true };
   const recoveryWorkerPost = {
     methods: ['POST'],
-    allowed: ['action', 'worker_action', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'ip_hash', 'user_agent_hash', 'active_passkey_count', 'requested_at', 'pdf_password', 'website_recovery_code', 'email_pdf_code'],
+    allowed: ['action', 'worker_action', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'ip_hash', 'user_agent_hash', 'active_passkey_count', 'requested_at', 'account_password'],
     required: ['action', 'worker_action', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'ip_hash', 'user_agent_hash'],
     maxBodyBytes: customerSecurityRecoveryWorkerMaxBodyBytes(),
     maxFieldBytes: 1024,
