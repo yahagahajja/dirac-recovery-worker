@@ -5854,8 +5854,8 @@ function customerSecurityGenerateLostPasskeyRecoveryCode() {
 
 function customerSecurityNormalizeRecoveryCodeInput(code) {
   // Recovery code alphabet intentionally excludes whitespace.
-  // This makes verification tolerant when mobile copy/paste inserts spaces/newlines.
-  return String(code || '').replace(/\s+/g, '').trim();
+  // This makes verification tolerant when PDF/mobile copy-paste inserts spaces, newlines, or invisible formatting marks.
+  return String(code || '').replace(/[\s\u00AD\u034F\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]+/g, '').trim();
 }
 
 function customerSecurityRecoveryCodeArgon2Input(code, customerId) {
@@ -6332,7 +6332,7 @@ function customerSecurityBuildEncryptedRecoveryPdfV156(input) {
     throw err;
   }
   const documentId = crypto.randomBytes(16);
-  const permission = -3904;
+  const permission = -3888;
   const ownerValue = customerSecurityRecoveryPdfComputeOV156(password, password + ':owner:' + String(input.requestId || ''));
   const fileKey = customerSecurityRecoveryPdfFileKeyV156(password, ownerValue, permission, documentId);
   const userValue = customerSecurityRecoveryPdfComputeUV156(fileKey, documentId);
