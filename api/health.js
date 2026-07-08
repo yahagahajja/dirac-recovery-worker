@@ -25879,6 +25879,40 @@ const DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157 = new Set([
   DIRAC_RECOVERY_WORKER_ACTION
 ]);
 
+
+function diracCentralIsRecoveryWorkerActionV160(action) {
+  return DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(String(action || '').trim().toLowerCase());
+}
+
+function diracCentralRecoveryWorkerSecurityReportV160(reason, ctx) {
+  const body = ctx && ctx.body && typeof ctx.body === 'object' ? ctx.body : {};
+  if (typeof diracLostPasskeyV158SecurityReport === 'function') {
+    return diracLostPasskeyV158SecurityReport(String(reason || 'central_worker_rejected'), body, {
+      central_guard: DIRAC_CENTRAL_SECURITY_GUARD_V146,
+      central_reason: String(reason || 'central_worker_rejected').slice(0, 120)
+    });
+  }
+  return {
+    type: 'dirac_recovery_worker_security_report_v160',
+    reason: String(reason || 'central_worker_rejected').slice(0, 120),
+    request_id: String((body.request_id || body.requestId || '')).slice(0, 120),
+    worker_action: String(body.worker_action || '').slice(0, 80),
+    central_guard: DIRAC_CENTRAL_SECURITY_GUARD_V146,
+    at: new Date().toISOString()
+  };
+}
+
+function diracCentralRecoveryWorkerBlockedResponseV160(res, reason, ctx) {
+  diracCentralApplyHeadersV146(res);
+  try { if (res && typeof res.setHeader === 'function') res.setHeader('Cache-Control', 'no-store'); } catch (_) {}
+  return res.status(403).json({
+    ok: false,
+    code: 'RECOVERY_WORKER_REJECTED',
+    message: 'Recovery request tidak valid atau sudah tidak berlaku.',
+    security_report_payload: diracCentralRecoveryWorkerSecurityReportV160(reason, ctx)
+  });
+}
+
 const DIRAC_CENTRAL_ACTION_ALIASES_V146 = Object.freeze({});
 
 const DIRAC_CENTRAL_ACTIVE_ACTIONS_V146 = new Set(DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157);
@@ -26133,13 +26167,17 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     diracCentralStampV146(ctx, 'identity_checked');
     diracCentralStampV146(ctx, 'memory_ban_checked');
 
-    const persistentBan = await diracCentralCheckPersistentBanV146(req, identity);
+    const earlyRawActionV160 = String(req && req.query && req.query.action || '').trim().toLowerCase();
+    const earlyRecoveryWorkerV160 = diracCentralIsRecoveryWorkerActionV160(earlyRawActionV160);
+    const persistentBan = earlyRecoveryWorkerV160
+      ? { blocked: false, serverWorkerLocalOnly: true }
+      : await diracCentralCheckPersistentBanV146(req, identity);
     if (persistentBan.blocked) {
       diracCentralSetMemoryBanV146(identity, persistentBan.blockedUntilMs, 'persistent_ban');
       return diracCentralBlockedResponseV146(res, 'PERSISTENT_BAN_ACTIVE');
     }
     diracCentralStampV146(ctx, 'persistent_ban_checked');
-    diracCentralSetNegativeCacheV146(identity);
+    if (!earlyRecoveryWorkerV160) diracCentralSetNegativeCacheV146(identity);
 
     const rawAction = String(req && req.query && req.query.action || '');
     const lowerAction = rawAction.toLowerCase();
@@ -27041,6 +27079,7 @@ async function diracCentralDistributedRateLimitGuardV146(req, ctx) {
   if (!diracCentralNeedsDistributedRateLimitV146(action)) return { ok: true };
   const local = diracCentralRateLimitV146(ctx.identity.key + ':distributed-local:' + action, 60 * 1000, diracCentralDistributedRateLimitMaxV146(action));
   if (!local.ok) return { ok: false, reason: 'distributed_rate_limit_local' };
+  if (diracCentralIsRecoveryWorkerActionV160(action)) return { ok: true, serverWorkerLocalOnly: true };
   const persistReady = Boolean(LOGIN_SECURITY_PERSIST_TABLE && typeof readPersistentSecurityJson === 'function' && typeof writePersistentSecurityJson === 'function');
   if (!persistReady) {
     return diracCentralIsProductionV146() ? { ok: false, reason: 'distributed_rate_limit_storage_required' } : { ok: true };
@@ -27125,7 +27164,7 @@ function diracCentralContractGuardV146(req, ctx) {
     if (!allowed.has(key) && !contract.allowExtra) return { ok: false, reason: 'field_not_allowed_' + key };
     if (diracCentralProtectedFieldV146(key) && !contract.allowProtectedFields) return { ok: false, reason: 'protected_field_from_frontend_' + key };
     if (String(item.value || '').length > (contract.maxFieldBytes || 3000)) return { ok: false, reason: 'field_too_long_' + key };
-    const format = diracCentralValidateFieldFormatV146(key, item.value);
+    const format = diracCentralValidateContractFieldFormatV160(ctx.action, key, item.value);
     if (!format.ok) return { ok: false, reason: format.reason };
   }
   if (ctx.method === 'GET' && contract.mutation) return { ok: false, reason: 'mutation_get_rejected' };
@@ -28045,6 +28084,9 @@ async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason
     source: DIRAC_CENTRAL_SECURITY_GUARD_V146,
     risk: 'critical'
   };
+  if (diracCentralIsRecoveryWorkerActionV160(action)) {
+    return diracCentralRecoveryWorkerBlockedResponseV160(res, threat.kind, ctx);
+  }
   await diracCentralWritePersistentBanV146(req, res, action, method, threat).catch(() => null);
   const identityKey = String(ctx && ctx.identity && ctx.identity.key || '').trim();
   if (identityKey && typeof writePersistentSecurityJson === 'function') {
@@ -28191,6 +28233,24 @@ function diracCentralFlattenObjectV146(value, depth, prefix, max) {
   };
   walk(value, depth || 0, prefix || '');
   return out;
+}
+
+
+// PATCH SEMPIT v160:
+// Recovery worker Server 2 menerima customer_id/auth_user_id internal dari Server 1.
+// Format UUID lama tetap berlaku untuk semua action lain. Khusus signed worker payload,
+// ID internal hanya boleh token ASCII aman dan tetap dilindungi HMAC/caller/timestamp/nonce
+// oleh Central Server-to-Server Guard sebelum business handler berjalan.
+function diracCentralValidateContractFieldFormatV160(action, key, value) {
+  const cleanAction = String(action || '').trim().toLowerCase();
+  const cleanKey = String(key || '').trim().toLowerCase();
+  const text = String(value === undefined || value === null ? '' : value).trim();
+  if (cleanAction === DIRAC_RECOVERY_WORKER_ACTION && /^(customer_id|auth_user_id|user_id)$/.test(cleanKey)) {
+    if (!text) return { ok: true };
+    if (/^[A-Za-z0-9_.:@-]{1,160}$/.test(text)) return { ok: true };
+    return { ok: false, reason: cleanKey + '_worker_token_format_invalid' };
+  }
+  return diracCentralValidateFieldFormatV146(key, value);
 }
 
 function diracCentralValidateFieldFormatV146(key, value) {
