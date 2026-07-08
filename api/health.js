@@ -5854,8 +5854,12 @@ function customerSecurityGenerateLostPasskeyRecoveryCode() {
 
 function customerSecurityNormalizeRecoveryCodeInput(code) {
   // Recovery code alphabet intentionally excludes whitespace.
-  // This makes verification tolerant when PDF/mobile copy-paste inserts spaces, newlines, or invisible formatting marks.
-  return String(code || '').replace(/[\s\u00AD\u034F\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]+/g, '').trim();
+  // PDF/mobile copy can turn the ASCII hyphen from the encrypted PDF into look-alike dash glyphs.
+  // Normalize only those dash glyphs back to '-' before stripping whitespace/invisible formatting marks.
+  return String(code || '')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-')
+    .replace(/[\s\u00AD\u034F\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]+/g, '')
+    .trim();
 }
 
 function customerSecurityRecoveryCodeArgon2Input(code, customerId) {
