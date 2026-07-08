@@ -5846,7 +5846,7 @@ function customerSecurityGeneratePlainRecoveryCode() {
 function customerSecurityGenerateLostPasskeyRecoveryCode() {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
   let out = '';
-  while (out.length < CUSTOMER_SECURITY_RECOVERY_CODE_LENGTH) {
+  while (out.length < LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157) {
     out += customerSecurityPickRecoveryChar(alphabet);
   }
   return out;
@@ -5961,19 +5961,21 @@ const LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT = 5;
 const DIRAC_RECOVERY_WORKER_ACTION = 'dirac_recovery_worker_generate';
 const DIRAC_RECOVERY_WORKER_TASK_GENERATE = 'lost_passkey_generate';
 const DIRAC_RECOVERY_WORKER_TASK_VERIFY = 'lost_passkey_verify';
-const DIRAC_RECOVERY_WORKER_TASK_FINALIZE = 'lost_passkey_finalize';
 
-// Server 2 lost-passkey vault/link flow v158.
-// Patch sempit: action tetap internal worker, endpoint tidak diubah.
-const DIRAC_LOST_PASSKEY_VAULT_PATCH_V158 = 'lost-passkey-vault-link-token-v158';
-const DIRAC_LOST_PASSKEY_LINK_TOKEN_BYTES_V158 = 250; // 2000-bit token.
-const DIRAC_LOST_PASSKEY_SECRET_CHARS_V158 = 100;
-const DIRAC_LOST_PASSKEY_RECOVERY_CODE_LENGTH_V158 = 1200;
-const DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158 = 2500;
-const DIRAC_LOST_PASSKEY_AES_GCM_NONCE_BYTES_V158 = 12; // 96-bit AES-GCM nonce.
-const DIRAC_LOST_PASSKEY_EXPIRES_MS_V158 = 7 * 60 * 1000;
-const DIRAC_LOST_PASSKEY_WORKER_NONCES_V158 = globalThis.__DIRAC_LOST_PASSKEY_WORKER_NONCES_V158__ || new Map();
-globalThis.__DIRAC_LOST_PASSKEY_WORKER_NONCES_V158__ = DIRAC_LOST_PASSKEY_WORKER_NONCES_V158;
+// Lost-passkey recovery vault v157: SERVER 2 only, called by signed SERVER 1 payload.
+// No PDF, no per-user HTML file, no plaintext recovery material persisted.
+const DIRAC_LOST_PASSKEY_VAULT_PATCH_V157 = 'lost-passkey-html-vault-aes256gcm-argon2id-v157';
+const LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157 = 1200;
+const LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157 = 100;
+const LOST_PASSKEY_LINK_TOKEN_BYTES_V157 = 250; // 2000-bit link token.
+const LOST_PASSKEY_RECOVERY_SALT_BYTES_V157 = 2500;
+const LOST_PASSKEY_RECOVERY_VAULT_ID_BYTES_V157 = 2500;
+const LOST_PASSKEY_RECOVERY_EXTRA_NONCE_BYTES_V157 = 2500;
+const LOST_PASSKEY_RECOVERY_TTL_MINUTES_V157 = 7;
+const LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157 = 524288; // 512 MB.
+const LOST_PASSKEY_ROOT_SECRET_MIN_BYTES_V157 = 3000;
+const LOST_PASSKEY_DB_PEPPER_MIN_BYTES_V157 = 64;
+const LOST_PASSKEY_SECRET_100_ALPHABET_V157 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 function customerSecurityNormalizeLostPasskeyRequestId(value) {
   const clean = String(value || '').trim();
@@ -6067,8 +6069,9 @@ function customerSecurityRecoveryWorkerMainEnvDiagnostics() {
     'DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB',
     'DIRAC_LOST_PASSKEY_ARGON2_TIME_COST',
     'DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM',
+    'DIRAC_LOST_PASSKEY_ROOT_SECRET',
+    'DIRAC_LOST_PASSKEY_ROOT_SECRET_VERSION',
     'DIRAC_LOST_PASSKEY_DB_PEPPER',
-    'DIRAC_RECOVERY_HTML_BASE_URL',
     'DIRAC_LOST_PASSKEY_MAX_RUNNING',
     'DIRAC_LOST_PASSKEY_QUEUE_MAX',
     'DIRAC_LOST_PASSKEY_PROCESSING_LOCK_TTL_SECONDS'
@@ -6167,16 +6170,27 @@ function customerSecurityLostPasskeyCanonical(value) {
   return JSON.stringify(value);
 }
 
+function customerSecurityLostPasskeyArgon2ParamsV157(hashLength) {
+  const memoryRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB || 655360);
+  const timeRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_TIME_COST || 5);
+  const parallelRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM || 1);
+  return {
+    memoryCost: Math.max(LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157, Math.min(1048576, Number.isFinite(memoryRaw) ? Math.floor(memoryRaw) : 655360)),
+    timeCost: Math.max(3, Math.min(10, Number.isFinite(timeRaw) ? Math.floor(timeRaw) : 5)),
+    parallelism: Math.max(1, Math.min(8, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 1)),
+    hashLength: Math.max(32, Math.min(128, Number(hashLength || 32)))
+  };
+}
+
 async function customerSecurityLostPasskeyArgon2Raw(input, salt, hashLength) {
   const argon2 = customerSecurityGetArgon2();
-  const memoryCost = Math.max(65536, Math.min(1048576, Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB || 655360)));
-  const timeCost = Math.max(3, Math.min(10, Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_TIME_COST || 5)));
+  const params = customerSecurityLostPasskeyArgon2ParamsV157(hashLength);
   return Buffer.from(await argon2.hash(input, {
     type: argon2.argon2id,
-    memoryCost,
-    timeCost,
-    parallelism: 1,
-    hashLength: Math.max(32, Number(hashLength || 32)),
+    memoryCost: params.memoryCost,
+    timeCost: params.timeCost,
+    parallelism: params.parallelism,
+    hashLength: params.hashLength,
     salt: Buffer.from(salt),
     raw: true
   }));
@@ -6193,6 +6207,153 @@ function customerSecurityLostPasskeyAesGcmEncrypt(key, plaintext, aad) {
   const ciphertext = Buffer.concat([cipher.update(Buffer.from(plaintext)), cipher.final()]);
   const tag = cipher.getAuthTag();
   return { nonce, ciphertext, tag };
+}
+
+function customerSecurityLostPasskeyAesGcmEncryptWithNonceV157(key, nonce, plaintext, aad) {
+  if (!Buffer.isBuffer(nonce) || nonce.length !== 12) throw new Error('lost_passkey_aes_nonce_invalid');
+  const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(key).subarray(0, 32), nonce);
+  if (aad) cipher.setAAD(Buffer.from(aad));
+  const ciphertext = Buffer.concat([cipher.update(Buffer.from(plaintext)), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return { nonce, ciphertext, tag };
+}
+
+function customerSecurityLostPasskeyRootSecretV157() {
+  const secret = String(process.env.DIRAC_LOST_PASSKEY_ROOT_SECRET || '').normalize('NFC');
+  if (Buffer.byteLength(secret, 'utf8') < LOST_PASSKEY_ROOT_SECRET_MIN_BYTES_V157) return '';
+  return secret;
+}
+
+function customerSecurityLostPasskeyRootSecretVersionV157() {
+  const clean = String(process.env.DIRAC_LOST_PASSKEY_ROOT_SECRET_VERSION || 'v1').trim();
+  return /^[A-Za-z0-9_.-]{1,80}$/.test(clean) ? clean : 'v1';
+}
+
+function customerSecurityLostPasskeyDbPepperV157() {
+  const pepper = String(process.env.DIRAC_LOST_PASSKEY_DB_PEPPER || '').normalize('NFC');
+  if (Buffer.byteLength(pepper, 'utf8') < LOST_PASSKEY_DB_PEPPER_MIN_BYTES_V157) return '';
+  return pepper;
+}
+
+function customerSecurityLostPasskeyRequireVaultSecretsV157() {
+  const rootSecret = customerSecurityLostPasskeyRootSecretV157();
+  const pepper = customerSecurityLostPasskeyDbPepperV157();
+  if (!rootSecret) return { ok: false, code: 'LOST_PASSKEY_ROOT_SECRET_INVALID', message: 'Konfigurasi recovery vault belum valid.' };
+  if (!pepper) return { ok: false, code: 'LOST_PASSKEY_DB_PEPPER_INVALID', message: 'Konfigurasi recovery vault belum valid.' };
+  return { ok: true, rootSecret, pepper, rootSecretVersion: customerSecurityLostPasskeyRootSecretVersionV157() };
+}
+
+function customerSecurityLostPasskeyRandomTextV157(length) {
+  let out = '';
+  while (out.length < Number(length || 0)) out += customerSecurityPickRecoveryChar(LOST_PASSKEY_SECRET_100_ALPHABET_V157);
+  return out;
+}
+
+function customerSecurityLostPasskeyNormalizeSecretV157(value) {
+  return String(value || '').normalize('NFKC').replace(/[\u200B-\u200D\uFEFF\s]+/g, '').trim();
+}
+
+function customerSecurityLostPasskeyNormalizePasswordV157(value) {
+  const normalized = String(value || '').normalize('NFC');
+  if (Buffer.byteLength(normalized, 'utf8') < 6) return '';
+  if (Buffer.byteLength(normalized, 'utf8') > 1024) return '';
+  return normalized;
+}
+
+function customerSecurityExtractPasswordMaterialV157(body) {
+  return customerSecurityLostPasskeyNormalizePasswordV157(body && (body.password_latest_material || body.password_latest_proof || body.account_password || body.current_password || body.currentPassword || ''));
+}
+
+function customerSecurityLostPasskeySha256HexV157(value) {
+  return crypto.createHash('sha256').update(Buffer.isBuffer(value) ? value : Buffer.from(String(value || ''), 'utf8')).digest('hex');
+}
+
+function customerSecurityLostPasskeyHmacHexV157(secret, label, value) {
+  return crypto.createHmac('sha256', Buffer.from(String(secret || ''), 'utf8'))
+    .update('dirac-lost-passkey-v157\n')
+    .update(String(label || ''))
+    .update('\n')
+    .update(Buffer.isBuffer(value) ? value : Buffer.from(String(value || ''), 'utf8'))
+    .digest('hex');
+}
+
+function customerSecurityLostPasskeyVaultMaterialV157(passwordMaterial, emailSecret, websiteSecret, salt, vaultId) {
+  return Buffer.from(customerSecurityLostPasskeyCanonical({
+    version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
+    password: customerSecurityLostPasskeyNormalizePasswordV157(passwordMaterial),
+    email_secret: customerSecurityLostPasskeyNormalizeSecretV157(emailSecret),
+    website_secret: customerSecurityLostPasskeyNormalizeSecretV157(websiteSecret),
+    salt: customerSecurityLostPasskeyB64(salt),
+    vault_id: customerSecurityLostPasskeyB64(vaultId)
+  }), 'utf8');
+}
+
+function customerSecurityLostPasskeySensitiveHashInputV157(label, value, pepper, rootSecret) {
+  return Buffer.from(customerSecurityLostPasskeyCanonical({
+    version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
+    label: String(label || ''),
+    value: String(value || ''),
+    pepper,
+    root_secret_commitment: customerSecurityLostPasskeySha256HexV157(rootSecret)
+  }), 'utf8');
+}
+
+async function customerSecurityLostPasskeyArgon2EncodedHashV157(label, value, salt, pepper, rootSecret) {
+  const argon2 = customerSecurityGetArgon2();
+  const params = customerSecurityLostPasskeyArgon2ParamsV157(64);
+  return await argon2.hash(customerSecurityLostPasskeySensitiveHashInputV157(label, value, pepper, rootSecret), {
+    type: argon2.argon2id,
+    memoryCost: params.memoryCost,
+    timeCost: params.timeCost,
+    parallelism: params.parallelism,
+    hashLength: 64,
+    salt: Buffer.from(salt),
+    raw: false
+  });
+}
+
+async function customerSecurityLostPasskeyArgon2VerifyHashV157(label, value, encodedHash, pepper, rootSecret) {
+  const hash = String(encodedHash || '');
+  if (!hash.startsWith('$argon2id$')) return false;
+  const argon2 = customerSecurityGetArgon2();
+  return await argon2.verify(hash, customerSecurityLostPasskeySensitiveHashInputV157(label, value, pepper, rootSecret));
+}
+
+function customerSecurityLostPasskeyBuildAadV157(metadata) {
+  return Buffer.from(customerSecurityLostPasskeyCanonical(metadata), 'utf8');
+}
+
+function customerSecurityLostPasskeyOfficialBaseUrlV157() {
+  const raw = String(process.env.DIRAC_LOST_PASSKEY_RECOVERY_BASE_URL || 'https://diracgroup.store').trim().replace(/\/+$/, '');
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return 'https://diracgroup.store';
+    return url.origin;
+  } catch (_) {
+    return 'https://diracgroup.store';
+  }
+}
+
+function customerSecurityLostPasskeySecurityReportPayloadV157(reason, body) {
+  return {
+    source: 'server2_lost_passkey_worker',
+    version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
+    reason: String(reason || 'recovery_worker_rejected').slice(0, 120),
+    request_id: customerSecurityNormalizeLostPasskeyRequestId(body && body.request_id || '') || null,
+    customer_id_hash: customerSecurityLostPasskeySha256HexV157(String(body && body.customer_id || '')),
+    auth_user_id_hash: customerSecurityLostPasskeySha256HexV157(String(body && body.auth_user_id || '')),
+    email_hash: customerSecurityLostPasskeySha256HexV157(normalizeAuthEmail(body && body.email)),
+    time: diracNowIso()
+  };
+}
+
+function customerSecurityLostPasskeyGenericWorkerErrorV157(res, status, reason, body) {
+  return res.status(status || 403).json({
+    ok: false,
+    code: 'RECOVERY_WORKER_REJECTED',
+    message: 'Permintaan recovery ditolak.',
+    security_report_payload: customerSecurityLostPasskeySecurityReportPayloadV157(reason, body)
+  });
 }
 
 
@@ -6805,6 +6966,122 @@ async function customerSecuritySendLostPasskeyRecoveryEmail(to, fileName, fileBu
   return { ok: false, status: 503, code: 'RECOVERY_EMAIL_PROVIDER_NOT_CONFIGURED', message: 'Provider email recovery belum dikonfigurasi.' };
 }
 
+
+function customerSecurityLostPasskeyEmailEscapeHtmlV157(value) {
+  return String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context = {}) {
+  const requestId = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.requestId || '');
+  const expiresAt = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.expiresAt || '');
+  const recoveryLink = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.recoveryLink || '');
+  const emailSecret = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.emailSecret || '');
+  return '<!doctype html><html><body style="font-family:Arial,sans-serif;line-height:1.5;color:#111">'
+    + '<h2>DiracGroup Secure Recovery</h2>'
+    + '<p>Link recovery Passkey resmi sudah dibuat.</p>'
+    + '<p><b>Request ID:</b> ' + requestId + '<br><b>Berlaku sampai:</b> ' + expiresAt + '</p>'
+    + '<p><a href="' + recoveryLink + '">Buka recovery resmi</a></p>'
+    + '<p><b>SECRET_EMAIL_100_CHAR:</b></p>'
+    + '<pre style="white-space:pre-wrap;word-break:break-all;background:#f4f4f4;padding:12px;border-radius:8px">' + emailSecret + '</pre>'
+    + '<p>Jangan bagikan email secret, link, atau isi pesan ini kepada pihak lain. Website secret hanya tampil di website yang masih login.</p>'
+    + '</body></html>';
+}
+
+async function customerSecuritySendLostPasskeyRecoveryLinkEmailV157(to, context = {}) {
+  const email = normalizeAuthEmail(to);
+  if (!isValidAuthEmail(email)) return { ok: false, status: 400, code: 'RECOVERY_EMAIL_INVALID', message: 'Email resmi customer tidak valid.' };
+  const from = String(process.env.DIRAC_RECOVERY_EMAIL_FROM || process.env.DIRAC_EMAIL_FROM || process.env.RESEND_FROM || 'Dirac Secure <no-reply@diracgroup.store>').trim();
+  const subject = 'DiracGroup Secure Recovery - Link Pemulihan Passkey';
+  const text = [
+    'Link recovery Passkey resmi sudah dibuat.',
+    'Request ID: ' + String(context.requestId || ''),
+    'Berlaku sampai: ' + String(context.expiresAt || ''),
+    'Link resmi: ' + String(context.recoveryLink || ''),
+    'SECRET_EMAIL_100_CHAR: ' + String(context.emailSecret || ''),
+    'Jangan bagikan email secret, link, atau isi pesan ini kepada pihak lain. Website secret hanya tampil di website yang masih login.'
+  ].join('\n\n');
+  const html = customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context);
+
+  if (customerSecurityRecoverySmtpConfig()) {
+    const config = customerSecurityRecoverySmtpConfig();
+    const fromEmail = customerSecurityRecoveryEmailAddress(from);
+    if (!isValidAuthEmail(fromEmail)) return { ok: false, status: 503, code: 'RECOVERY_SMTP_FROM_INVALID', message: 'Email pengirim recovery tidak valid.' };
+    const boundary = 'dirac-recovery-link-' + crypto.randomBytes(18).toString('hex');
+    const mime = [
+      'From: ' + from,
+      'To: ' + email,
+      'Subject: ' + customerSecurityRecoveryMimeHeader(subject),
+      'MIME-Version: 1.0',
+      'Content-Type: multipart/alternative; boundary="' + boundary + '"',
+      '',
+      '--' + boundary,
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      customerSecurityRecoveryBase64Lines(Buffer.from(text, 'utf8')),
+      '--' + boundary,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      customerSecurityRecoveryBase64Lines(Buffer.from(html, 'utf8')),
+      '--' + boundary + '--',
+      ''
+    ].join('\r\n');
+    let socket = null;
+    try {
+      const tls = require('tls');
+      socket = tls.connect({ host: config.host, port: config.port, servername: config.host, timeout: 20_000 });
+      await customerSecuritySmtpCommand(socket, '', 220);
+      await customerSecuritySmtpCommand(socket, 'EHLO diracgroup.store', 250);
+      const auth = Buffer.from('\u0000' + config.user + '\u0000' + config.pass, 'utf8').toString('base64');
+      await customerSecuritySmtpCommand(socket, 'AUTH PLAIN ' + auth, 235);
+      await customerSecuritySmtpCommand(socket, 'MAIL FROM:<' + fromEmail + '>', 250);
+      await customerSecuritySmtpCommand(socket, 'RCPT TO:<' + email + '>', [250, 251]);
+      await customerSecuritySmtpCommand(socket, 'DATA', 354);
+      await customerSecuritySmtpCommand(socket, customerSecurityRecoveryDotStuff(mime) + '\r\n.', 250);
+      await customerSecuritySmtpCommand(socket, 'QUIT', [221, 250]);
+      return { ok: true, provider: 'smtp' };
+    } catch (_) {
+      return { ok: false, status: 502, code: 'RECOVERY_SMTP_DELIVERY_FAILED', message: 'Gagal mengirim link recovery lewat SMTP.' };
+    } finally {
+      try { if (socket) socket.end(); } catch (_) {}
+    }
+  }
+
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to: email, subject, text, html })
+      });
+      if (response.ok) return { ok: true, provider: 'resend' };
+      return { ok: false, status: 502, code: 'RESEND_RECOVERY_DELIVERY_FAILED', message: 'Gagal mengirim link recovery dari Resend.' };
+    } catch (_) {
+      return { ok: false, status: 502, code: 'RESEND_RECOVERY_DELIVERY_FAILED', message: 'Gagal menghubungi layanan email recovery.' };
+    }
+  }
+
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const senderEmail = String(process.env.BREVO_SENDER_EMAIL || process.env.DIRAC_RECOVERY_SENDER_EMAIL || '').trim();
+      const senderName = String(process.env.BREVO_SENDER_NAME || 'Dirac Secure').trim();
+      if (!senderEmail) return { ok: false, status: 503, code: 'BREVO_SENDER_MISSING', message: 'BREVO_SENDER_EMAIL belum diatur.' };
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ sender: { name: senderName, email: senderEmail }, to: [{ email }], subject, htmlContent: html, textContent: text })
+      });
+      if (response.ok) return { ok: true, provider: 'brevo' };
+      return { ok: false, status: 502, code: 'BREVO_RECOVERY_DELIVERY_FAILED', message: 'Gagal mengirim link recovery dari Brevo.' };
+    } catch (_) {
+      return { ok: false, status: 502, code: 'BREVO_RECOVERY_DELIVERY_FAILED', message: 'Gagal menghubungi layanan email recovery.' };
+    }
+  }
+
+  return { ok: false, status: 503, code: 'RECOVERY_EMAIL_PROVIDER_NOT_CONFIGURED', message: 'Provider email recovery belum dikonfigurasi.' };
+}
+
 async function customerSecurityRecoveryCodesStatus(req, res, action) {
   const access = await customerSecurityRequireAccess(req, res, { action, requireMfa: true, rateLimit: { limit: 20, windowMs: 60_000 } });
   if (!access) return;
@@ -6824,7 +7101,7 @@ async function customerSecurityRecoveryCodesStatus(req, res, action) {
   return res.status(200).json({ ok: true, ready: true, total: activeRows.length, pending, verified, used, locked, generated: activeRows.length > 0, message: activeRows.length ? 'Lost passkey recovery request tersedia.' : 'Lost passkey recovery belum dibuat.', direct_frontend_table_access: false, time: diracNowIso() });
 }
 
-async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, pdfOptions = {}) {
+async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, workerOptions = {}) {
   const workerEnvDiagnostics = customerSecurityRecoveryWorkerMainEnvDiagnostics();
   if (!workerEnvDiagnostics.ok) {
     try { console.error('[recovery-worker-main-env-invalid]', JSON.stringify(workerEnvDiagnostics)); } catch (_) {}
@@ -6847,14 +7124,11 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
     });
   }
 
-  const timestamp = String(Date.now());
-  const requestNonce = crypto.randomBytes(32).toString('base64url');
   const payload = {
     action: DIRAC_RECOVERY_WORKER_ACTION,
     worker_action: DIRAC_RECOVERY_WORKER_TASK_GENERATE,
     caller_id: caller,
-    timestamp,
-    nonce: requestNonce,
+    nonce: crypto.randomBytes(32).toString('base64url'),
     auth_user_id: owner.authUserId,
     customer_id: owner.customerId,
     email: owner.email,
@@ -6862,13 +7136,15 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
     customer_binding_hash: bindings.customerBindingHash,
     auth_user_binding_hash: bindings.authUserBindingHash,
     device_binding_hash: bindings.deviceBindingHash,
+    session_hash: bindings.sessionHash || customerSecurityLostPasskeyHashHex('session-binding', String(access && access.sessionId || 'server1-session')),
     ip_hash: bindings.ipHash,
     user_agent_hash: bindings.userAgentHash,
     active_passkey_count: Math.max(0, activePasskeys.length),
     requested_at: diracNowIso(),
-    password_latest_material: String(pdfOptions.accountPassword || pdfOptions.account_password || '')
+    password_latest_material: String(workerOptions.passwordLatestMaterial || workerOptions.password_latest_material || workerOptions.accountPassword || workerOptions.account_password || '')
   };
   const canonical = customerSecurityLostPasskeyCanonical(payload);
+  const timestamp = String(Date.now());
   const signature = customerSecurityRecoveryWorkerSign(caller, timestamp, canonical);
   const target = new URL(workerUrl);
   target.searchParams.set('action', DIRAC_RECOVERY_WORKER_ACTION);
@@ -6886,7 +7162,6 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
         'Accept': 'application/json',
         'X-Dirac-Worker-Caller': caller,
         'X-Dirac-Worker-Timestamp': timestamp,
-        'X-Dirac-Worker-Nonce': requestNonce,
         'X-Dirac-Worker-Signature': signature
       },
       body: JSON.stringify(payload),
@@ -6922,10 +7197,10 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
       ok: true,
       request_id: String(data.request_id || ''),
       expires_at: String(data.expires_at || ''),
-      delivery: 'encrypted_pdf_email_attachment',
+      delivery: 'official_recovery_html_link',
       website_recovery_code: String(data.website_recovery_code || ''),
-      email_code_delivery: 'included_in_email',
-      message: data.message || 'PDF recovery terenkripsi sudah dikirim ke email resmi akun.',
+      email_code_delivery: 'included_in_email_100_char',
+      message: data.message || 'Link recovery resmi sudah dikirim ke email resmi akun.',
       time: data.time || diracNowIso()
     });
   } catch (error) {
@@ -6971,72 +7246,27 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     : await customerSecurityResolveLostPasskeyOwner(access);
   if (!owner.ok) return res.status(owner.status || 403).json({ ok: false, message: owner.message || 'Recovery passkey tidak dapat dibuat.' });
 
-  let recoveryPdfOptions = null;
-
-  if (localWorker) {
-    const accountPassword = customerSecurityExtractAccountPasswordForPdfV156({ account_password: override && override.accountPassword || '' });
-    if (!accountPassword) {
-      return res.status(400).json({
-        ok: false,
-        code: 'ACCOUNT_PASSWORD_REQUIRED_FOR_RECOVERY_PDF',
-        message: 'Password akun wajib diisi untuk membuat password PDF recovery.'
-      });
-    }
-    const verifiedPassword = await customerSecurityVerifyAccountPasswordForPdfV156(owner.email, accountPassword);
-    if (!verifiedPassword.ok) {
-      await customerSecurityRegisterFailedVerification(req, action, 'recovery_pdf_account_password_invalid', access.customerId);
-      return res.status(403).json({ ok: false, code: 'ACCOUNT_PASSWORD_INVALID', message: 'Password akun belum sesuai.' });
-    }
-    const websiteRecoveryCode = customerSecurityGenerateWebsiteRecoveryCodeV156();
-    const emailPdfCode = customerSecurityGenerateEmailPdfCodeV156();
-    const pdfPasswordContext = customerSecurityBuildPdfPasswordContextV156(accountPassword, websiteRecoveryCode, emailPdfCode);
-    if (!pdfPasswordContext.ok) {
-      return res.status(400).json({
-        ok: false,
-        code: 'RECOVERY_PDF_PASSWORD_TOO_LONG',
-        message: 'Password akun terlalu panjang untuk password PDF recovery. Total kode website + 2 digit email + password akun wajib maksimal 32 byte agar tidak ada karakter yang diabaikan PDF reader.',
-        max_account_password_bytes: pdfPasswordContext.accountPasswordMaxBytes
-      });
-    }
-    recoveryPdfOptions = {
-      pdfPassword: pdfPasswordContext.pdfPassword,
-      websiteRecoveryCode,
-      emailPdfCode,
-      accountPassword
-    };
+  const passwordMaterial = localWorker
+    ? customerSecurityExtractPasswordMaterialV157({
+        password_latest_material: override && (override.passwordLatestMaterial || override.password_latest_material || ''),
+        password_latest_proof: override && (override.passwordLatestProof || override.password_latest_proof || ''),
+        account_password: override && override.accountPassword || ''
+      })
+    : customerSecurityExtractPasswordMaterialV157(requestBody);
+  if (!passwordMaterial) {
+    return res.status(400).json({
+      ok: false,
+      code: 'PASSWORD_LATEST_MATERIAL_REQUIRED',
+      message: 'Material password terbaru wajib ada.'
+    });
   }
 
   if (!localWorker) {
-    const accountPassword = customerSecurityExtractAccountPasswordForPdfV156(requestBody);
-    if (!accountPassword) {
-      return res.status(400).json({
-        ok: false,
-        code: 'ACCOUNT_PASSWORD_REQUIRED_FOR_RECOVERY_PDF',
-        message: 'Password akun wajib diisi untuk membuat password PDF recovery.'
-      });
-    }
-    const verifiedPassword = await customerSecurityVerifyAccountPasswordForPdfV156(owner.email, accountPassword);
+    const verifiedPassword = await customerSecurityVerifyAccountPasswordForPdfV156(owner.email, passwordMaterial);
     if (!verifiedPassword.ok) {
-      await customerSecurityRegisterFailedVerification(req, action, 'recovery_pdf_account_password_invalid', access.customerId);
+      await customerSecurityRegisterFailedVerification(req, action, 'recovery_account_password_invalid', access.customerId);
       return res.status(403).json({ ok: false, code: 'ACCOUNT_PASSWORD_INVALID', message: 'Password akun belum sesuai.' });
     }
-    const websiteRecoveryCode = customerSecurityGenerateWebsiteRecoveryCodeV156();
-    const emailPdfCode = customerSecurityGenerateEmailPdfCodeV156();
-    const pdfPasswordContext = customerSecurityBuildPdfPasswordContextV156(accountPassword, websiteRecoveryCode, emailPdfCode);
-    if (!pdfPasswordContext.ok) {
-      return res.status(400).json({
-        ok: false,
-        code: 'RECOVERY_PDF_PASSWORD_TOO_LONG',
-        message: 'Password akun terlalu panjang untuk password PDF recovery. Total kode website + 2 digit email + password akun wajib maksimal 32 byte agar tidak ada karakter yang diabaikan PDF reader.',
-        max_account_password_bytes: pdfPasswordContext.accountPasswordMaxBytes
-      });
-    }
-    recoveryPdfOptions = {
-      pdfPassword: pdfPasswordContext.pdfPassword,
-      websiteRecoveryCode,
-      emailPdfCode,
-      accountPassword
-    };
   }
 
   const activePasskeys = localWorker && override && Array.isArray(override.activePasskeys)
@@ -7051,49 +7281,72 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     : customerSecurityLostPasskeyBindings(req, owner);
 
   if (!localWorker) {
-    return customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, recoveryPdfOptions || {});
+    return customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, access, owner, activePasskeys, bindings, { password_latest_material: passwordMaterial });
+  }
+
+  const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
+  if (!vaultSecrets.ok) {
+    return res.status(503).json({ ok: false, code: vaultSecrets.code, message: vaultSecrets.message });
   }
 
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
-  const ttlMinutes = Math.max(5, Math.min(1440, Number(process.env.DIRAC_LOST_PASSKEY_RECOVERY_TTL_MINUTES || 60)));
-  const expiresAt = new Date(nowMs + ttlMinutes * 60 * 1000).toISOString();
+  const expiresAt = new Date(nowMs + LOST_PASSKEY_RECOVERY_TTL_MINUTES_V157 * 60 * 1000).toISOString();
   const requestId = customerSecurityLostPasskeyRequestId();
+  const linkToken = crypto.randomBytes(LOST_PASSKEY_LINK_TOKEN_BYTES_V157).toString('base64url');
+  const emailSecret100 = customerSecurityLostPasskeyRandomTextV157(LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157);
+  const websiteSecret100 = customerSecurityLostPasskeyRandomTextV157(LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157);
   const recoveryCode = customerSecurityGenerateLostPasskeyRecoveryCode();
-  const fileKeyText = customerSecurityGenerateFileKeyText();
-  const websiteRecoveryCode = String(recoveryPdfOptions && recoveryPdfOptions.websiteRecoveryCode || '').trim();
-  const emailPdfCode = String(recoveryPdfOptions && recoveryPdfOptions.emailPdfCode || '').trim();
-  const pdfPassword = String(recoveryPdfOptions && recoveryPdfOptions.pdfPassword || '').normalize('NFC');
-  if (!websiteRecoveryCode || !/^\d{2}$/.test(emailPdfCode) || Buffer.byteLength(pdfPassword, 'utf8') < 12) {
-    return res.status(400).json({ ok: false, code: 'RECOVERY_PDF_PASSWORD_CONTEXT_INVALID', message: 'Konteks password PDF recovery tidak valid.' });
-  }
-  const salt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_RANDOM_BYTES);
-  const ownerKeySalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_RANDOM_BYTES);
-  const dekSeed = crypto.randomBytes(LOST_PASSKEY_RECOVERY_RANDOM_BYTES);
-  const recoveryCodeHash = customerSecurityLostPasskeyRecoveryCodeHash(requestId, owner.customerId, recoveryCode);
-  const encrypted = await customerSecurityBuildLostPasskeyFile({
-    requestId,
-    recoveryCode,
-    fileKeyText,
-    salt,
-    dekSeed,
-    bindings,
-    createdAt: nowIso,
-    expiresAt
-  });
-  const wrappedFileKey = await customerSecurityWrapLostPasskeyFileKey({
-    requestId,
-    ownerKeySalt,
-    fileKeyText
-  });
-  const fileName = 'recovery-' + requestId + '.pdf';
-  const fileBuffer = customerSecurityBuildEncryptedRecoveryPdfV156({
-    pdfPassword,
-    requestId,
-    recoveryCode,
-    expiresAt
-  });
-  const recoveryPdfSha256 = customerSecurityLostPasskeySha256B64(fileBuffer);
+  const vaultSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
+  const vaultId = crypto.randomBytes(LOST_PASSKEY_RECOVERY_VAULT_ID_BYTES_V157);
+  const extraNonceEntropy = crypto.randomBytes(LOST_PASSKEY_RECOVERY_EXTRA_NONCE_BYTES_V157);
+  const aesNonce = crypto.randomBytes(12);
+
+  const argon2Params = customerSecurityLostPasskeyArgon2ParamsV157(64);
+  const metadataForAad = {
+    version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
+    domain: customerSecurityLostPasskeyOfficialBaseUrlV157(),
+    request_id: requestId,
+    vault_id: customerSecurityLostPasskeyB64(vaultId),
+    expires_at: expiresAt,
+    argon2id_params: argon2Params,
+    extra_nonce_entropy_hash: customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'extra_nonce_entropy', extraNonceEntropy)
+  };
+  const vaultMaterial = customerSecurityLostPasskeyVaultMaterialV157(passwordMaterial, emailSecret100, websiteSecret100, vaultSalt, vaultId);
+  const argon2Raw = await customerSecurityLostPasskeyArgon2Raw(vaultMaterial, vaultSalt, 64);
+  const aesKey = customerSecurityLostPasskeyHkdf(argon2Raw, vaultSalt, 'dirac-lost-passkey-v157:aes-256-gcm:' + requestId, 32);
+  const aad = customerSecurityLostPasskeyBuildAadV157(metadataForAad);
+  const encrypted = customerSecurityLostPasskeyAesGcmEncryptWithNonceV157(aesKey, aesNonce, Buffer.from(recoveryCode, 'utf8'), aad);
+
+  const linkTokenSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
+  const emailSecretSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
+  const websiteSecretSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
+  const recoveryCodeSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
+  const bindingSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
+
+  const bindingsCanonical = customerSecurityLostPasskeyCanonical(bindings);
+  const linkTokenHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('link_token', linkToken, linkTokenSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  const emailSecretHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('email_secret', emailSecret100, emailSecretSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  const websiteSecretHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('website_secret', websiteSecret100, websiteSecretSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  const recoveryCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('recovery_code', recoveryCode, recoveryCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  const bindingHashCommitment = await customerSecurityLostPasskeyArgon2EncodedHashV157('binding', bindingsCanonical, bindingSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
+
+  const recoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157() + '/recovery/r/' + encodeURIComponent(requestId) + '/' + encodeURIComponent(linkToken);
+  const vaultBundle = {
+    version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
+    salt: customerSecurityLostPasskeyB64(vaultSalt),
+    aes_nonce: customerSecurityLostPasskeyB64(encrypted.nonce),
+    ciphertext: customerSecurityLostPasskeyB64(encrypted.ciphertext),
+    auth_tag: customerSecurityLostPasskeyB64(encrypted.tag),
+    vault_id: metadataForAad.vault_id,
+    request_id: requestId,
+    metadata: metadataForAad,
+    metadata_signature: customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'metadata_signature', customerSecurityLostPasskeyCanonical(metadataForAad)),
+    argon2id_params: argon2Params,
+    hkdf_info: 'dirac-lost-passkey-v157:aes-256-gcm:' + requestId
+  };
+  const vaultBundleSha256 = customerSecurityLostPasskeySha256B64(Buffer.from(customerSecurityLostPasskeyCanonical(vaultBundle), 'utf8'));
+  const aadHash = customerSecurityLostPasskeySha256B64(aad);
   const insertBody = [{
     request_id: requestId,
     customer_id: owner.customerId,
@@ -7105,34 +7358,56 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     ip_hash: bindings.ipHash,
     user_agent_hash: bindings.userAgentHash,
     recovery_code_hash: recoveryCodeHash,
-    encrypted_file_key_text: wrappedFileKey.ciphertext,
-    file_key_wrap_nonce: wrappedFileKey.nonce,
-    file_key_wrap_tag: wrappedFileKey.tag,
-    salt: salt.toString('base64url'),
-    owner_key_salt: ownerKeySalt.toString('base64url'),
-    file_sha256: recoveryPdfSha256,
-    aad_hash: encrypted.aadHash,
-    server_signature: encrypted.signature,
+    encrypted_file_key_text: vaultBundle.ciphertext,
+    file_key_wrap_nonce: vaultBundle.aes_nonce,
+    file_key_wrap_tag: vaultBundle.auth_tag,
+    salt: vaultBundle.salt,
+    owner_key_salt: customerSecurityLostPasskeyB64(recoveryCodeSalt),
+    file_sha256: vaultBundleSha256,
+    aad_hash: aadHash,
+    server_signature: vaultBundle.metadata_signature,
     old_passkey_ids: activePasskeys.map((row) => row.id).filter(Boolean),
     status: 'pending',
     attempt_count: 0,
     created_at: nowIso,
     sent_at: null,
     expires_at: expiresAt,
+    used_at: null,
+    revoked_at: null,
     metadata: {
       source: 'lost_passkey_recovery',
-      delivery: 'encrypted_pdf_email_attachment',
-      file_name: fileName,
-      file_format: 'password_protected_pdf',
-      pdf_password_formula: 'website_code_plus_email_2_digit_code_plus_account_password',
-      website_recovery_code_hash: customerSecurityLostPasskeyHashHex('website-recovery-code', websiteRecoveryCode),
-      email_pdf_code_hash: customerSecurityLostPasskeyHashHex('email-pdf-code', emailPdfCode),
-      inner_encrypted_file_sha256: encrypted.fileSha256,
+      patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
+      delivery: 'official_recovery_html_link',
+      file_format: 'offline_html_aes256gcm_argon2id_wasm_bundle_pending_template',
+      html_template: 'deploy_once_on_server2_later',
+      password_formula: 'password_latest_material_plus_secret_email_100_char_plus_secret_website_100_char_plus_salt_plus_vault_id',
+      official_recovery_link_hash: customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'official_recovery_link', recoveryLink),
+      link_token_hash: linkTokenHash,
+      email_secret_hash: emailSecretHash,
+      website_secret_hash: websiteSecretHash,
+      recovery_code_hash_label: 'recovery_code',
+      binding_hash_commitment: bindingHashCommitment,
+      binding_hashes: bindings,
+      hash_salts: {
+        link_token: customerSecurityLostPasskeyB64(linkTokenSalt),
+        email_secret: customerSecurityLostPasskeyB64(emailSecretSalt),
+        website_secret: customerSecurityLostPasskeyB64(websiteSecretSalt),
+        recovery_code: customerSecurityLostPasskeyB64(recoveryCodeSalt),
+        binding: customerSecurityLostPasskeyB64(bindingSalt)
+      },
+      vault_bundle: vaultBundle,
+      argon2id_params: argon2Params,
+      root_secret_version: vaultSecrets.rootSecretVersion,
       passkey_count: activePasskeys.length,
-      file_key_min_bytes: LOST_PASSKEY_RECOVERY_FILE_KEY_MIN_BYTES,
-      recovery_code_length: CUSTOMER_SECURITY_RECOVERY_CODE_LENGTH,
-      salt_bytes: LOST_PASSKEY_RECOVERY_RANDOM_BYTES,
-      dek_seed_bytes: LOST_PASSKEY_RECOVERY_RANDOM_BYTES
+      link_token_bits: LOST_PASSKEY_LINK_TOKEN_BYTES_V157 * 8,
+      secret_email_length: LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157,
+      secret_website_length: LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157,
+      recovery_code_length: LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157,
+      salt_bytes: LOST_PASSKEY_RECOVERY_SALT_BYTES_V157,
+      vault_id_bytes: LOST_PASSKEY_RECOVERY_VAULT_ID_BYTES_V157,
+      extra_nonce_entropy_bytes: LOST_PASSKEY_RECOVERY_EXTRA_NONCE_BYTES_V157,
+      aes_gcm_nonce_bytes: 12,
+      expires_minutes: LOST_PASSKEY_RECOVERY_TTL_MINUTES_V157
     }
   }];
 
@@ -7141,7 +7416,12 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     return res.status(created.status || 500).json({ ok: false, message: 'Gagal menyimpan lost passkey recovery request.' });
   }
 
-  const sent = await customerSecuritySendLostPasskeyRecoveryEmail(owner.email, fileName, fileBuffer, { requestId, expiresAt, emailPdfCode });
+  const sent = await customerSecuritySendLostPasskeyRecoveryLinkEmailV157(owner.email, {
+    requestId,
+    expiresAt,
+    recoveryLink,
+    emailSecret: emailSecret100
+  });
   if (!sent.ok) {
     await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
       method: 'PATCH',
@@ -7151,14 +7431,14 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
         revoked_at: diracNowIso(),
         metadata: {
           source: 'lost_passkey_recovery',
-          delivery: 'encrypted_email_attachment',
+          patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
+          delivery: 'official_recovery_html_link',
           delivery_failed: true,
-          delivery_failed_at: diracNowIso(),
-          file_name: fileName
+          delivery_failed_at: diracNowIso()
         }
       }
     }).catch(() => null);
-    return res.status(sent.status || 503).json({ ok: false, code: sent.code || 'RECOVERY_EMAIL_SEND_FAILED', message: sent.message || 'File recovery belum bisa dikirim ke email resmi.' });
+    return res.status(sent.status || 503).json({ ok: false, code: sent.code || 'RECOVERY_EMAIL_SEND_FAILED', message: sent.message || 'Link recovery belum bisa dikirim ke email resmi.' });
   }
 
   await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
@@ -7168,22 +7448,22 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   }).catch(() => null);
 
   await customerSecurityWriteGuardEvent(access.customerId, {
-    event_type: 'lost_passkey_recovery_file_sent',
+    event_type: 'lost_passkey_recovery_link_sent',
     status: 'success',
     risk_level: 'high',
-    description: 'File recovery passkey terenkripsi dikirim ke email resmi customer.',
+    description: 'Link recovery passkey resmi dan email secret dikirim ke email resmi customer.',
     req,
-    metadata: { action, request_id: requestId, file_sha256: recoveryPdfSha256, delivery_provider: sent.provider || null, delivery: 'encrypted_pdf_email_attachment' }
+    metadata: { action, request_id: requestId, vault_bundle_sha256: vaultBundleSha256, delivery_provider: sent.provider || null, delivery: 'official_recovery_html_link' }
   });
 
   return res.status(200).json({
     ok: true,
     request_id: requestId,
     expires_at: expiresAt,
-    delivery: 'encrypted_pdf_email_attachment',
-    website_recovery_code: websiteRecoveryCode,
-    email_code_delivery: 'included_in_email',
-    message: 'PDF recovery terenkripsi sudah dikirim ke email resmi akun.',
+    delivery: 'official_recovery_html_link',
+    website_recovery_code: websiteSecret100,
+    email_code_delivery: 'included_in_email_100_char',
+    message: 'Link recovery resmi sudah dikirim ke email resmi akun.',
     time: nowIso
   });
 }
@@ -24862,6 +25142,7 @@ function customerSecurityLostPasskeyWorkerBindings(body, owner) {
     customerBindingHash: customerSecurityLostPasskeyWorkerHash(body && body.customer_binding_hash),
     authUserBindingHash: customerSecurityLostPasskeyWorkerHash(body && body.auth_user_binding_hash),
     deviceBindingHash: customerSecurityLostPasskeyWorkerHash(body && body.device_binding_hash),
+    sessionHash: customerSecurityLostPasskeyWorkerHash(body && body.session_hash),
     ipHash: customerSecurityLostPasskeyWorkerHash(body && body.ip_hash),
     userAgentHash: customerSecurityLostPasskeyWorkerHash(body && body.user_agent_hash)
   };
@@ -24873,715 +25154,6 @@ function customerSecurityLostPasskeyWorkerBindings(body, owner) {
   if (!safeEqual(bindings.customerBindingHash, expectedCustomer)) return null;
   if (!safeEqual(bindings.authUserBindingHash, expectedAuthUser)) return null;
   return bindings;
-}
-
-
-function diracLostPasskeyV158NowIso() {
-  return new Date(Date.now()).toISOString();
-}
-
-function diracLostPasskeyV158RootSecretVersion() {
-  return String(process.env.DIRAC_SECURITY_ROOT_SECRET_VERSION || process.env.DIRAC_ROOT_SECRET_VERSION || 'v1').trim().slice(0, 80) || 'v1';
-}
-
-function diracLostPasskeyV158Domain() {
-  const raw = String(process.env.DIRAC_RECOVERY_PUBLIC_DOMAIN || process.env.SITE_URL || 'https://diracgroup.store').trim();
-  try { return new URL(raw).origin; } catch (_) { return 'https://diracgroup.store'; }
-}
-
-function diracLostPasskeyV158RecoveryBaseUrl() {
-  const raw = String(process.env.DIRAC_RECOVERY_HTML_BASE_URL || process.env.DIRAC_RECOVERY_PUBLIC_BASE_URL || '').trim();
-  if (raw) {
-    try {
-      const url = new URL(raw);
-      if (url.protocol === 'https:' && url.hostname) return url.toString().replace(/\/+$/, '');
-    } catch (_) {}
-  }
-  return 'https://diracgroup.store/recovery/r';
-}
-
-function diracLostPasskeyV158RecoveryLink(requestId, linkToken) {
-  return diracLostPasskeyV158RecoveryBaseUrl() + '/' + encodeURIComponent(String(requestId || '')) + '/' + encodeURIComponent(String(linkToken || ''));
-}
-
-function diracLostPasskeyV158RandomAscii(length) {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789_-!@#$%^&*+=?.';
-  let out = '';
-  while (out.length < Number(length || 0)) out += alphabet[crypto.randomInt(0, alphabet.length)];
-  return out;
-}
-
-function diracLostPasskeyV158RandomRecoveryCode() {
-  let out = '';
-  while (out.length < DIRAC_LOST_PASSKEY_RECOVERY_CODE_LENGTH_V158) {
-    out += customerSecurityPickRecoveryChar(CUSTOMER_SECURITY_RECOVERY_ALPHABET);
-  }
-  return out.slice(0, DIRAC_LOST_PASSKEY_RECOVERY_CODE_LENGTH_V158);
-}
-
-function diracLostPasskeyV158B64(buffer) {
-  return Buffer.from(buffer || Buffer.alloc(0)).toString('base64url');
-}
-
-function diracLostPasskeyV158FromB64(value) {
-  return Buffer.from(String(value || ''), 'base64url');
-}
-
-function diracLostPasskeyV158Sha256B64(value) {
-  return crypto.createHash('sha256').update(Buffer.isBuffer(value) ? value : String(value || '')).digest('base64url');
-}
-
-function diracLostPasskeyV158NormalizeInput(value) {
-  return String(value === undefined || value === null ? '' : value).normalize('NFC');
-}
-
-function diracLostPasskeyV158NormalizeSecret(value) {
-  const clean = String(value === undefined || value === null ? '' : value).normalize('NFC');
-  return clean.replace(/[\r\n\t\u0000-\u001f\u007f]/g, '');
-}
-
-function diracLostPasskeyV158PasswordMaterial(body) {
-  const raw = body && (
-    body.password_latest_material
-    || body.password_latest_proof
-    || body.password_latest_material_proof
-    || body.account_password
-    || body.current_password
-    || body.currentPassword
-    || ''
-  );
-  const clean = diracLostPasskeyV158NormalizeInput(raw);
-  if (Buffer.byteLength(clean, 'utf8') < 6) return '';
-  if (Buffer.byteLength(clean, 'utf8') > 4096) return '';
-  return clean;
-}
-
-function diracLostPasskeyV158Argon2Params() {
-  const memoryCost = Math.max(524288, Math.min(2097152, Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB || 655360)));
-  const timeCost = Math.max(3, Math.min(20, Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_TIME_COST || 5)));
-  const parallelism = Math.max(1, Math.min(8, Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM || 1)));
-  return {
-    type: 'argon2id',
-    memoryCost,
-    memory_cost_kib: memoryCost,
-    timeCost,
-    time_cost: timeCost,
-    parallelism,
-    hashLength: 32,
-    native: true,
-    wasm_allowed_for_html_only: true
-  };
-}
-
-async function diracLostPasskeyV158Argon2Raw(input, salt, hashLength) {
-  const argon2 = customerSecurityGetArgon2();
-  const params = diracLostPasskeyV158Argon2Params();
-  return Buffer.from(await argon2.hash(input, {
-    type: argon2.argon2id,
-    memoryCost: params.memoryCost,
-    timeCost: params.timeCost,
-    parallelism: params.parallelism,
-    hashLength: Math.max(32, Number(hashLength || 32)),
-    salt: Buffer.from(salt),
-    raw: true
-  }));
-}
-
-function diracLostPasskeyV158Pepper() {
-  return String(process.env.DIRAC_LOST_PASSKEY_DB_PEPPER || process.env.DIRAC_RECOVERY_DB_PEPPER || '').normalize('NFC');
-}
-
-function diracLostPasskeyV158ProtectedHashInput(label, value) {
-  const rootSecret = diracCentralDeriveSecretV146('lost-passkey-v158-db-hash:' + String(label || 'default'));
-  const hmac = crypto.createHmac('sha512', rootSecret);
-  hmac.update('label:').update(String(label || '')).update('\n');
-  hmac.update('value:').update(diracLostPasskeyV158NormalizeSecret(value)).update('\n');
-  hmac.update('pepper:').update(diracLostPasskeyV158Pepper()).update('\n');
-  hmac.update('root_version:').update(diracLostPasskeyV158RootSecretVersion());
-  return hmac.digest();
-}
-
-async function diracLostPasskeyV158HashField(label, value, salt) {
-  const raw = await diracLostPasskeyV158Argon2Raw(diracLostPasskeyV158ProtectedHashInput(label, value), salt, 32);
-  return diracLostPasskeyV158B64(raw);
-}
-
-function diracLostPasskeyV158BindingCommitmentInput(bindings) {
-  const clean = bindings || {};
-  return customerSecurityLostPasskeyCanonical({
-    email_binding_hash: String(clean.emailBindingHash || ''),
-    customer_binding_hash: String(clean.customerBindingHash || ''),
-    auth_user_binding_hash: String(clean.authUserBindingHash || ''),
-    device_binding_hash: String(clean.deviceBindingHash || ''),
-    session_hash: String(clean.sessionHash || ''),
-    ip_hash: String(clean.ipHash || ''),
-    user_agent_hash: String(clean.userAgentHash || '')
-  });
-}
-
-function diracLostPasskeyV158EncryptionInput(passwordMaterial, secretEmail, secretWebsite, saltB64, vaultIdB64) {
-  return [
-    'dirac-lost-passkey-vault-v158',
-    diracLostPasskeyV158NormalizeInput(passwordMaterial),
-    diracLostPasskeyV158NormalizeSecret(secretEmail),
-    diracLostPasskeyV158NormalizeSecret(secretWebsite),
-    String(saltB64 || ''),
-    String(vaultIdB64 || '')
-  ].join('\u001f');
-}
-
-async function diracLostPasskeyV158DeriveAesKey(passwordMaterial, secretEmail, secretWebsite, salt, vaultId, hkdfInfo) {
-  const saltB64 = diracLostPasskeyV158B64(salt);
-  const vaultIdB64 = diracLostPasskeyV158B64(vaultId);
-  const argonRaw = await diracLostPasskeyV158Argon2Raw(
-    diracLostPasskeyV158EncryptionInput(passwordMaterial, secretEmail, secretWebsite, saltB64, vaultIdB64),
-    salt,
-    32
-  );
-  return customerSecurityLostPasskeyHkdf(argonRaw, vaultId, hkdfInfo || 'dirac-lost-passkey-v158-aes-256-gcm', 32);
-}
-
-function diracLostPasskeyV158MetadataSignature(metadata) {
-  return crypto.createHmac('sha256', diracCentralDeriveSecretV146('lost-passkey-v158-metadata-signature'))
-    .update(customerSecurityLostPasskeyCanonical(metadata || {}))
-    .digest('base64url');
-}
-
-function diracLostPasskeyV158SecurityReport(reason, body, extra = {}) {
-  return {
-    type: 'dirac_lost_passkey_recovery_security_report_v158',
-    reason: String(reason || 'recovery_worker_rejected').slice(0, 120),
-    request_id: String((body && (body.request_id || body.requestId)) || '').slice(0, 120),
-    worker_action: String(body && body.worker_action || '').slice(0, 80),
-    caller_id_hash: diracLostPasskeyV158Sha256B64(String(body && (body.caller_id || body.callerId || '') || '')),
-    nonce_hash: diracLostPasskeyV158Sha256B64(String(body && (body.nonce || body.request_nonce || '') || '')),
-    timestamp: String(body && (body.timestamp || body.requested_at || '') || '').slice(0, 80),
-    source: DIRAC_LOST_PASSKEY_VAULT_PATCH_V158,
-    at: diracLostPasskeyV158NowIso(),
-    ...extra
-  };
-}
-
-function diracLostPasskeyV158GenericError(res, status, code, reason, body, extra = {}) {
-  return res.status(status || 403).json({
-    ok: false,
-    code: String(code || 'RECOVERY_WORKER_REJECTED').slice(0, 80),
-    message: 'Recovery request tidak valid atau sudah tidak berlaku.',
-    security_report_payload: diracLostPasskeyV158SecurityReport(reason || code, body, extra)
-  });
-}
-
-async function diracLostPasskeyV158BuildVault({ body, owner, bindings, activePasskeys }) {
-  const passwordMaterial = diracLostPasskeyV158PasswordMaterial(body);
-  if (!passwordMaterial) return { ok: false, status: 400, code: 'PASSWORD_LATEST_MATERIAL_REQUIRED', reason: 'password_latest_material_required' };
-
-  const requestId = customerSecurityLostPasskeyRequestId();
-  const linkToken = crypto.randomBytes(DIRAC_LOST_PASSKEY_LINK_TOKEN_BYTES_V158).toString('base64url');
-  const secretEmail = diracLostPasskeyV158RandomAscii(DIRAC_LOST_PASSKEY_SECRET_CHARS_V158);
-  const secretWebsite = diracLostPasskeyV158RandomAscii(DIRAC_LOST_PASSKEY_SECRET_CHARS_V158);
-  const recoveryCode = diracLostPasskeyV158RandomRecoveryCode();
-  const salt = crypto.randomBytes(DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158);
-  const vaultId = crypto.randomBytes(DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158);
-  const extraNonceEntropy = crypto.randomBytes(DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158);
-  const aesNonce = crypto.randomBytes(DIRAC_LOST_PASSKEY_AES_GCM_NONCE_BYTES_V158);
-  const nowIso = diracLostPasskeyV158NowIso();
-  const expiresAt = new Date(Date.now() + DIRAC_LOST_PASSKEY_EXPIRES_MS_V158).toISOString();
-  const argon2idParams = diracLostPasskeyV158Argon2Params();
-  const hkdfInfo = 'dirac-lost-passkey-v158-aes-256-gcm';
-  const domain = diracLostPasskeyV158Domain();
-
-  const vaultIdB64 = diracLostPasskeyV158B64(vaultId);
-  const saltB64 = diracLostPasskeyV158B64(salt);
-  const extraNonceEntropyHash = diracLostPasskeyV158Sha256B64(extraNonceEntropy);
-  const aadMetadata = {
-    request_id: requestId,
-    vault_id: vaultIdB64,
-    expires_at: expiresAt,
-    version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V158,
-    domain,
-    argon2id_params: argon2idParams,
-    extra_nonce_entropy_hash: extraNonceEntropyHash
-  };
-  const aad = customerSecurityLostPasskeyCanonical(aadMetadata);
-  const aesKey = await diracLostPasskeyV158DeriveAesKey(passwordMaterial, secretEmail, secretWebsite, salt, vaultId, hkdfInfo);
-  const cipher = crypto.createCipheriv('aes-256-gcm', aesKey.subarray(0, 32), aesNonce);
-  cipher.setAAD(Buffer.from(aad));
-  const ciphertext = Buffer.concat([cipher.update(Buffer.from(recoveryCode, 'utf8')), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-
-  const hashSalts = {
-    link_token: crypto.randomBytes(DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158),
-    email_secret: crypto.randomBytes(DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158),
-    website_secret: crypto.randomBytes(DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158),
-    recovery_code: crypto.randomBytes(DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158),
-    binding: crypto.randomBytes(DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158)
-  };
-
-  const linkTokenHash = await diracLostPasskeyV158HashField('link_token', linkToken, hashSalts.link_token);
-  const emailSecretHash = await diracLostPasskeyV158HashField('email_secret', secretEmail, hashSalts.email_secret);
-  const websiteSecretHash = await diracLostPasskeyV158HashField('website_secret', secretWebsite, hashSalts.website_secret);
-  const recoveryCodeHash = await diracLostPasskeyV158HashField('recovery_code', recoveryCode, hashSalts.recovery_code);
-  const bindingHashCommitment = await diracLostPasskeyV158HashField('binding', diracLostPasskeyV158BindingCommitmentInput(bindings), hashSalts.binding);
-
-  const vaultBundleMetadata = {
-    ...aadMetadata,
-    hkdf_info: hkdfInfo,
-    metadata_signature_scope: 'lost-passkey-v158-metadata-signature'
-  };
-  const metadataSignature = diracLostPasskeyV158MetadataSignature(vaultBundleMetadata);
-  const recoveryLink = diracLostPasskeyV158RecoveryLink(requestId, linkToken);
-  const vaultBundle = {
-    salt: saltB64,
-    aes_nonce: diracLostPasskeyV158B64(aesNonce),
-    ciphertext: diracLostPasskeyV158B64(ciphertext),
-    auth_tag: diracLostPasskeyV158B64(authTag),
-    vault_id: vaultIdB64,
-    request_id: requestId,
-    metadata: vaultBundleMetadata,
-    metadata_signature: metadataSignature,
-    argon2id_params: argon2idParams,
-    hkdf_info: hkdfInfo
-  };
-
-  return {
-    ok: true,
-    requestId,
-    linkToken,
-    secretEmail,
-    secretWebsite,
-    recoveryCodeHash,
-    recoveryLink,
-    expiresAt,
-    nowIso,
-    insertBody: [{
-      request_id: requestId,
-      customer_id: owner.customerId,
-      auth_user_id: owner.authUserId,
-      email_hash: bindings.emailBindingHash,
-      customer_binding_hash: bindings.customerBindingHash,
-      auth_user_binding_hash: bindings.authUserBindingHash,
-      device_binding_hash: bindings.deviceBindingHash,
-      ip_hash: bindings.ipHash,
-      user_agent_hash: bindings.userAgentHash,
-      recovery_code_hash: recoveryCodeHash,
-      encrypted_file_key_text: vaultBundle.ciphertext,
-      file_key_wrap_nonce: vaultBundle.aes_nonce,
-      file_key_wrap_tag: vaultBundle.auth_tag,
-      salt: saltB64,
-      owner_key_salt: diracLostPasskeyV158B64(hashSalts.link_token),
-      file_sha256: diracLostPasskeyV158Sha256B64(ciphertext),
-      aad_hash: diracLostPasskeyV158Sha256B64(aad),
-      server_signature: metadataSignature,
-      old_passkey_ids: (activePasskeys || []).map((row) => row && row.id).filter(Boolean),
-      status: 'pending',
-      attempt_count: 0,
-      created_at: nowIso,
-      sent_at: null,
-      expires_at: expiresAt,
-      metadata: {
-        source: DIRAC_LOST_PASSKEY_VAULT_PATCH_V158,
-        delivery: 'email_link_plus_email_secret_website_secret_to_server1',
-        recovery_link_hash: diracLostPasskeyV158Sha256B64(recoveryLink),
-        link_token_hash: linkTokenHash,
-        email_secret_hash: emailSecretHash,
-        website_secret_hash: websiteSecretHash,
-        recovery_code_hash: recoveryCodeHash,
-        binding_hash_commitment: bindingHashCommitment,
-        hash_salts: {
-          link_token: diracLostPasskeyV158B64(hashSalts.link_token),
-          email_secret: diracLostPasskeyV158B64(hashSalts.email_secret),
-          website_secret: diracLostPasskeyV158B64(hashSalts.website_secret),
-          recovery_code: diracLostPasskeyV158B64(hashSalts.recovery_code),
-          binding: diracLostPasskeyV158B64(hashSalts.binding)
-        },
-        argon2id_params: argon2idParams,
-        root_secret_version: diracLostPasskeyV158RootSecretVersion(),
-        vault_bundle: vaultBundle,
-        vault_bundle_ready_for_initial_html: true,
-        link_token_plaintext_stored: false,
-        email_secret_plaintext_stored: false,
-        website_secret_plaintext_stored: false,
-        recovery_code_plaintext_stored: false,
-        account_password_stored: false,
-        ttl_seconds: 420,
-        passkey_count: (activePasskeys || []).length,
-        salt_bytes: DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158,
-        vault_id_bytes: DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158,
-        extra_nonce_entropy_bytes: DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158,
-        recovery_code_length: DIRAC_LOST_PASSKEY_RECOVERY_CODE_LENGTH_V158,
-        created_by: 'server2_generate_after_server1_signed_call'
-      }
-    }]
-  };
-}
-
-function diracLostPasskeyV158EmailHtml(context = {}) {
-  const requestId = String(context.requestId || '').replace(/[<>&]/g, '');
-  const expiresAt = String(context.expiresAt || '').replace(/[<>&]/g, '');
-  const recoveryLink = String(context.recoveryLink || '').replace(/"/g, '%22').replace(/[<>]/g, '');
-  const secretEmail = String(context.secretEmail || '').replace(/[<>&]/g, '');
-  return '<div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827">'
-    + '<div style="max-width:640px;margin:0 auto;padding:28px 16px">'
-    + '<div style="background:#0f172a;color:#ffffff;border-radius:18px 18px 0 0;padding:22px 24px">'
-    + '<div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#93c5fd">DiracGroup Secure Recovery</div>'
-    + '<div style="font-size:24px;font-weight:700;margin-top:8px">Link Pemulihan Passkey</div>'
-    + '<div style="font-size:13px;color:#cbd5e1;margin-top:6px">Gunakan link resmi dan kode email ini sebelum masa berlaku habis.</div>'
-    + '</div>'
-    + '<div style="background:#ffffff;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 18px 18px;padding:24px">'
-    + '<p style="margin:0 0 14px;line-height:1.6">Permintaan pemulihan Passkey Anda telah diproses. Buka link resmi berikut dari perangkat Anda.</p>'
-    + '<p style="margin:18px 0"><a href="' + recoveryLink + '" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700;display:inline-block">Buka halaman recovery</a></p>'
-    + '<div style="font-size:12px;color:#475569;word-break:break-all;margin-top:8px">' + recoveryLink + '</div>'
-    + '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px;margin:18px 0">'
-    + '<div style="font-size:12px;color:#1d4ed8;font-weight:700;text-transform:uppercase;letter-spacing:.08em">SECRET_EMAIL_100_CHAR</div>'
-    + '<div style="font-size:16px;line-height:1.6;font-weight:800;color:#0f172a;word-break:break-all;margin-top:6px">' + secretEmail + '</div>'
-    + '</div>'
-    + '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">'
-    + '<tr><td style="padding:10px;border-bottom:1px solid #e5e7eb;color:#64748b">Request ID</td><td style="padding:10px;border-bottom:1px solid #e5e7eb;font-weight:700;text-align:right">' + requestId + '</td></tr>'
-    + '<tr><td style="padding:10px;border-bottom:1px solid #e5e7eb;color:#64748b">Berlaku sampai</td><td style="padding:10px;border-bottom:1px solid #e5e7eb;font-weight:700;text-align:right">' + expiresAt + '</td></tr>'
-    + '</table>'
-    + '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:14px;line-height:1.55;font-size:13px;color:#7c2d12">'
-    + '<b>Jangan bagikan kode ini.</b><br>Recovery membutuhkan password akun terbaru, kode email ini, dan kode website yang hanya tampil pada sesi resmi website.'
-    + '</div>'
-    + '<p style="font-size:12px;color:#64748b;margin-top:18px;line-height:1.6">Jika Anda tidak meminta pemulihan ini, abaikan email ini dan segera hubungi bantuan DiracGroup.</p>'
-    + '</div></div></div>';
-}
-
-async function diracLostPasskeyV158SendVaultEmail(to, context = {}) {
-  const email = normalizeAuthEmail(to);
-  if (!isValidAuthEmail(email)) return { ok: false, status: 400, code: 'RECOVERY_EMAIL_INVALID', message: 'Email resmi customer tidak valid.' };
-  const from = String(process.env.DIRAC_RECOVERY_EMAIL_FROM || process.env.DIRAC_EMAIL_FROM || process.env.RESEND_FROM || 'Dirac Secure <no-reply@diracgroup.store>').trim();
-  const subject = 'DiracGroup Secure Recovery - Link Pemulihan Passkey';
-  const text = [
-    'Link pemulihan Passkey DiracGroup:',
-    String(context.recoveryLink || ''),
-    '',
-    'SECRET_EMAIL_100_CHAR:',
-    String(context.secretEmail || ''),
-    '',
-    'Request ID: ' + String(context.requestId || ''),
-    'Berlaku sampai: ' + String(context.expiresAt || ''),
-    '',
-    'Jangan kirimkan link, kode email, atau kode website kepada pihak lain.'
-  ].join('\n');
-  const html = diracLostPasskeyV158EmailHtml(context);
-
-  if (customerSecurityRecoverySmtpConfig()) {
-    const config = customerSecurityRecoverySmtpConfig();
-    const fromEmail = customerSecurityRecoveryEmailAddress(from);
-    if (!isValidAuthEmail(fromEmail)) return { ok: false, status: 503, code: 'RECOVERY_SMTP_FROM_INVALID', message: 'Email pengirim recovery tidak valid.' };
-    const boundary = 'dirac-vault-recovery-' + crypto.randomBytes(18).toString('hex');
-    const mime = [
-      'From: ' + from,
-      'To: ' + email,
-      'Subject: ' + customerSecurityRecoveryMimeHeader(subject),
-      'MIME-Version: 1.0',
-      'Content-Type: multipart/alternative; boundary="' + boundary + '"',
-      '',
-      '--' + boundary,
-      'Content-Type: text/plain; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      customerSecurityRecoveryBase64Lines(Buffer.from(text, 'utf8')),
-      '--' + boundary,
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      customerSecurityRecoveryBase64Lines(Buffer.from(html, 'utf8')),
-      '--' + boundary + '--',
-      ''
-    ].join('\r\n');
-    let socket = null;
-    try {
-      const tls = require('tls');
-      socket = tls.connect({ host: config.host, port: config.port, servername: config.host, timeout: 20_000 });
-      await customerSecuritySmtpCommand(socket, '', 220);
-      await customerSecuritySmtpCommand(socket, 'EHLO diracgroup.store', 250);
-      const auth = Buffer.from('\u0000' + config.user + '\u0000' + config.pass, 'utf8').toString('base64');
-      await customerSecuritySmtpCommand(socket, 'AUTH PLAIN ' + auth, 235);
-      await customerSecuritySmtpCommand(socket, 'MAIL FROM:<' + fromEmail + '>', 250);
-      await customerSecuritySmtpCommand(socket, 'RCPT TO:<' + email + '>', [250, 251]);
-      await customerSecuritySmtpCommand(socket, 'DATA', 354);
-      await customerSecuritySmtpCommand(socket, customerSecurityRecoveryDotStuff(mime) + '\r\n.', 250);
-      await customerSecuritySmtpCommand(socket, 'QUIT', [221, 250]);
-      return { ok: true, provider: 'smtp' };
-    } catch (_) {
-      return { ok: false, status: 502, code: 'RECOVERY_SMTP_DELIVERY_FAILED', message: 'Gagal mengirim email recovery lewat SMTP.' };
-    } finally {
-      try { if (socket) socket.end(); } catch (_) {}
-    }
-  }
-
-  if (process.env.RESEND_API_KEY) {
-    try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to: email, subject, text, html })
-      });
-      if (response.ok) return { ok: true, provider: 'resend' };
-      return { ok: false, status: 502, code: 'RESEND_RECOVERY_DELIVERY_FAILED', message: 'Gagal mengirim email recovery dari Resend.' };
-    } catch (_) {
-      return { ok: false, status: 502, code: 'RESEND_RECOVERY_DELIVERY_FAILED', message: 'Gagal menghubungi layanan email recovery.' };
-    }
-  }
-
-  if (process.env.BREVO_API_KEY) {
-    try {
-      const senderEmail = String(process.env.BREVO_SENDER_EMAIL || process.env.DIRAC_RECOVERY_SENDER_EMAIL || '').trim();
-      const senderName = String(process.env.BREVO_SENDER_NAME || 'Dirac Secure').trim();
-      if (!senderEmail) return { ok: false, status: 503, code: 'BREVO_SENDER_MISSING', message: 'BREVO_SENDER_EMAIL belum diatur.' };
-      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ sender: { name: senderName, email: senderEmail }, to: [{ email }], subject, htmlContent: html, textContent: text })
-      });
-      if (response.ok) return { ok: true, provider: 'brevo' };
-      return { ok: false, status: 502, code: 'BREVO_RECOVERY_DELIVERY_FAILED', message: 'Gagal mengirim email recovery dari Brevo.' };
-    } catch (_) {
-      return { ok: false, status: 502, code: 'BREVO_RECOVERY_DELIVERY_FAILED', message: 'Gagal menghubungi layanan email recovery.' };
-    }
-  }
-
-  return { ok: false, status: 503, code: 'RECOVERY_EMAIL_PROVIDER_NOT_CONFIGURED', message: 'Provider email recovery belum dikonfigurasi.' };
-}
-
-function diracLostPasskeyV158Metadata(row) {
-  const meta = row && row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
-  if (String(meta.source || '') !== DIRAC_LOST_PASSKEY_VAULT_PATCH_V158) return null;
-  return meta;
-}
-
-async function diracLostPasskeyV158FetchRequest(requestId) {
-  const cleanRequestId = customerSecurityNormalizeLostPasskeyRequestId(requestId);
-  if (!cleanRequestId) return { ok: false, status: 400, code: 'REQUEST_ID_INVALID' };
-  const select = 'id,request_id,customer_id,auth_user_id,email_hash,customer_binding_hash,auth_user_binding_hash,device_binding_hash,ip_hash,user_agent_hash,recovery_code_hash,status,attempt_count,expires_at,used_at,revoked_at,locked_at,metadata';
-  const result = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?select=' + encodeURIComponent(select) + '&request_id=eq.' + encodeURIComponent(cleanRequestId) + '&limit=1', { method: 'GET', auth: 'service' });
-  if (!result.ok) return { ok: false, status: result.status || 500, code: 'RECOVERY_REQUEST_READ_FAILED' };
-  const row = Array.isArray(result.data) ? result.data[0] : null;
-  if (!row || !row.id) return { ok: false, status: 404, code: 'RECOVERY_REQUEST_NOT_FOUND' };
-  return { ok: true, row };
-}
-
-function diracLostPasskeyV158RowActive(row) {
-  if (!row || row.status !== 'pending' || row.used_at || row.revoked_at || row.locked_at) return false;
-  const expiresMs = new Date(row.expires_at || 0).getTime();
-  return Number.isFinite(expiresMs) && expiresMs > Date.now();
-}
-
-function diracLostPasskeyV158RowBindingsMatch(row, bindings) {
-  if (!row || !bindings) return false;
-  return safeEqual(String(row.email_hash || ''), String(bindings.emailBindingHash || ''))
-    && safeEqual(String(row.customer_binding_hash || ''), String(bindings.customerBindingHash || ''))
-    && safeEqual(String(row.auth_user_binding_hash || ''), String(bindings.authUserBindingHash || ''))
-    && safeEqual(String(row.device_binding_hash || ''), String(bindings.deviceBindingHash || ''))
-    && safeEqual(String(row.ip_hash || ''), String(bindings.ipHash || ''))
-    && safeEqual(String(row.user_agent_hash || ''), String(bindings.userAgentHash || ''));
-}
-
-async function diracLostPasskeyV158VerifyRecoveryCode(row, recoveryCode) {
-  const meta = diracLostPasskeyV158Metadata(row);
-  const hashSalt = meta && meta.hash_salts && meta.hash_salts.recovery_code ? diracLostPasskeyV158FromB64(meta.hash_salts.recovery_code) : null;
-  const code = diracLostPasskeyV158NormalizeSecret(recoveryCode);
-  if (Array.from(code).length !== DIRAC_LOST_PASSKEY_RECOVERY_CODE_LENGTH_V158) return false;
-  if (!hashSalt || hashSalt.length < DIRAC_LOST_PASSKEY_STRONG_SALT_BYTES_V158) return false;
-  const expected = await diracLostPasskeyV158HashField('recovery_code', code, hashSalt);
-  const stored = String(meta && meta.recovery_code_hash || row && row.recovery_code_hash || '');
-  return safeEqual(stored, expected);
-}
-
-async function diracLostPasskeyV158HandleGenerate(req, res, body, owner, bindings) {
-  const activePasskeys = await customerSecurityLostPasskeyActivePasskeys(owner);
-  if (!activePasskeys.length) {
-    return diracLostPasskeyV158GenericError(res, 409, 'ACTIVE_PASSKEY_NOT_FOUND', 'active_passkey_not_found', body);
-  }
-  const built = await diracLostPasskeyV158BuildVault({ body, owner, bindings, activePasskeys });
-  if (!built.ok) return diracLostPasskeyV158GenericError(res, built.status || 400, built.code, built.reason, body);
-
-  const created = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE, {
-    method: 'POST',
-    auth: 'service',
-    prefer: 'return=representation',
-    body: built.insertBody
-  });
-  if (!created.ok) {
-    return diracLostPasskeyV158GenericError(res, created.status || 500, 'RECOVERY_VAULT_STORE_FAILED', 'recovery_vault_store_failed', body);
-  }
-
-  const sent = await diracLostPasskeyV158SendVaultEmail(owner.email, {
-    requestId: built.requestId,
-    recoveryLink: built.recoveryLink,
-    secretEmail: built.secretEmail,
-    expiresAt: built.expiresAt
-  });
-  if (!sent.ok) {
-    await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(built.requestId), {
-      method: 'PATCH',
-      auth: 'service',
-      body: {
-        status: 'revoked',
-        revoked_at: diracLostPasskeyV158NowIso(),
-        metadata: { source: DIRAC_LOST_PASSKEY_VAULT_PATCH_V158, delivery_failed: true, delivery_failed_at: diracLostPasskeyV158NowIso() }
-      }
-    }).catch(() => null);
-    return diracLostPasskeyV158GenericError(res, sent.status || 503, sent.code || 'RECOVERY_EMAIL_SEND_FAILED', 'recovery_email_send_failed', body);
-  }
-
-  await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(built.requestId), {
-    method: 'PATCH',
-    auth: 'service',
-    body: {
-      sent_at: built.nowIso,
-      metadata: {
-        ...((built.insertBody && built.insertBody[0] && built.insertBody[0].metadata) || {}),
-        email_sent: true,
-        email_provider: sent.provider || null,
-        email_sent_at: built.nowIso
-      }
-    }
-  }).catch(() => null);
-
-  await customerSecurityWriteGuardEvent(owner.customerId, {
-    event_type: 'lost_passkey_vault_recovery_generated',
-    status: 'success',
-    risk_level: 'high',
-    description: 'Server 2 membuat vault recovery passkey dan mengirim link resmi ke email customer.',
-    req,
-    metadata: { action: DIRAC_RECOVERY_WORKER_ACTION, request_id: built.requestId, delivery_provider: sent.provider || null, source: DIRAC_LOST_PASSKEY_VAULT_PATCH_V158 }
-  }).catch(() => null);
-
-  return res.status(200).json({
-    ok: true,
-    request_id: built.requestId,
-    expires_at: built.expiresAt,
-    website_recovery_code: built.secretWebsite,
-    website_factor_100_char: built.secretWebsite,
-    delivery: 'email_link_plus_secret_email',
-    message: 'Recovery vault berhasil dibuat. Kode website 100 karakter hanya ditampilkan oleh Server 1 kepada user yang masih login.',
-    time: built.nowIso
-  });
-}
-
-async function diracLostPasskeyV158HandleVerify(req, res, body, owner, bindings) {
-  const requestId = customerSecurityNormalizeLostPasskeyRequestId(body && (body.request_id || body.requestId) || '');
-  const recoveryCode = diracLostPasskeyV158NormalizeSecret(body && (body.recovery_code || body.code) || '');
-  if (!requestId) return diracLostPasskeyV158GenericError(res, 400, 'REQUEST_ID_INVALID', 'request_id_invalid', body);
-
-  const fetched = await diracLostPasskeyV158FetchRequest(requestId);
-  if (!fetched.ok) return diracLostPasskeyV158GenericError(res, fetched.status || 404, fetched.code, fetched.code, body);
-  const row = fetched.row;
-  if (!diracLostPasskeyV158RowActive(row)) return diracLostPasskeyV158GenericError(res, 403, 'RECOVERY_REQUEST_INACTIVE', 'recovery_request_inactive', body);
-  if (String(row.customer_id || '') !== String(owner.customerId || '') || String(row.auth_user_id || '') !== String(owner.authUserId || '')) {
-    return diracLostPasskeyV158GenericError(res, 403, 'RECOVERY_OWNER_MISMATCH', 'recovery_owner_mismatch', body, { customer_id_hash: diracLostPasskeyV158Sha256B64(owner.customerId || '') });
-  }
-  if (!diracLostPasskeyV158RowBindingsMatch(row, bindings)) {
-    return diracLostPasskeyV158GenericError(res, 403, 'RECOVERY_BINDING_MISMATCH', 'recovery_binding_mismatch', body);
-  }
-
-  const valid = await diracLostPasskeyV158VerifyRecoveryCode(row, recoveryCode);
-  if (!valid) {
-    const nextAttempts = Number(row.attempt_count || 0) + 1;
-    const lock = nextAttempts >= LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT;
-    const failedAt = diracLostPasskeyV158NowIso();
-    await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
-      method: 'PATCH',
-      auth: 'service',
-      body: {
-        attempt_count: nextAttempts,
-        status: lock ? 'locked' : row.status,
-        locked_at: lock ? failedAt : row.locked_at || null,
-        metadata: {
-          ...(diracLostPasskeyV158Metadata(row) || {}),
-          last_failed_verify_at: failedAt,
-          last_failed_verify_locked: lock
-        }
-      }
-    }).catch(() => null);
-    await customerSecurityWriteGuardEvent(owner.customerId, {
-      event_type: 'lost_passkey_vault_recovery_verify_failed',
-      status: 'failed',
-      risk_level: 'high',
-      description: 'Server 2 menolak recovery code passkey.',
-      req,
-      metadata: { request_id: requestId, locked: lock, source: DIRAC_LOST_PASSKEY_VAULT_PATCH_V158 }
-    }).catch(() => null);
-    return diracLostPasskeyV158GenericError(res, lock ? 423 : 403, 'RECOVERY_CODE_INVALID', lock ? 'recovery_code_locked' : 'recovery_code_invalid', body);
-  }
-
-  await customerSecurityWriteGuardEvent(owner.customerId, {
-    event_type: 'lost_passkey_vault_recovery_verified',
-    status: 'success',
-    risk_level: 'high',
-    description: 'Server 2 memverifikasi recovery code passkey valid untuk Server 1.',
-    req,
-    metadata: { request_id: requestId, source: DIRAC_LOST_PASSKEY_VAULT_PATCH_V158, finalize_required: true }
-  }).catch(() => null);
-
-  return res.status(200).json({
-    ok: true,
-    valid: true,
-    request_id: requestId,
-    status: 'pending',
-    finalize_required: true,
-    message: 'Recovery code valid. Server 1 boleh melanjutkan pembuatan passkey baru lalu wajib finalize ke Server 2.',
-    time: diracLostPasskeyV158NowIso()
-  });
-}
-
-async function diracLostPasskeyV158HandleFinalize(req, res, body, owner, bindings) {
-  const requestId = customerSecurityNormalizeLostPasskeyRequestId(body && (body.request_id || body.requestId) || '');
-  if (!requestId) return diracLostPasskeyV158GenericError(res, 400, 'REQUEST_ID_INVALID', 'request_id_invalid', body);
-
-  const fetched = await diracLostPasskeyV158FetchRequest(requestId);
-  if (!fetched.ok) return diracLostPasskeyV158GenericError(res, fetched.status || 404, fetched.code, fetched.code, body);
-  const row = fetched.row;
-  if (!diracLostPasskeyV158RowActive(row)) return diracLostPasskeyV158GenericError(res, 403, 'RECOVERY_REQUEST_INACTIVE', 'recovery_request_inactive', body);
-  if (String(row.customer_id || '') !== String(owner.customerId || '') || String(row.auth_user_id || '') !== String(owner.authUserId || '')) {
-    return diracLostPasskeyV158GenericError(res, 403, 'RECOVERY_OWNER_MISMATCH', 'recovery_owner_mismatch', body);
-  }
-  if (!diracLostPasskeyV158RowBindingsMatch(row, bindings)) {
-    return diracLostPasskeyV158GenericError(res, 403, 'RECOVERY_BINDING_MISMATCH', 'recovery_binding_mismatch', body);
-  }
-
-  const nowIso = diracLostPasskeyV158NowIso();
-  const patched = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
-    method: 'PATCH',
-    auth: 'service',
-    prefer: 'return=representation',
-    body: {
-      status: 'used',
-      used_at: nowIso,
-      revoked_at: nowIso,
-      metadata: {
-        ...(diracLostPasskeyV158Metadata(row) || {}),
-        finalized_at: nowIso,
-        finalized_by: 'server1_signed_finalize',
-        link_token_revoked: true,
-        email_secret_revoked: true,
-        website_secret_revoked: true,
-        recovery_code_revoked: true
-      }
-    }
-  });
-  if (!patched.ok) return diracLostPasskeyV158GenericError(res, patched.status || 500, 'RECOVERY_FINALIZE_FAILED', 'recovery_finalize_failed', body);
-
-  await customerSecurityWriteGuardEvent(owner.customerId, {
-    event_type: 'lost_passkey_vault_recovery_finalized',
-    status: 'success',
-    risk_level: 'high',
-    description: 'Server 2 menandai recovery request sebagai used setelah Server 1 selesai membuat passkey baru.',
-    req,
-    metadata: { request_id: requestId, source: DIRAC_LOST_PASSKEY_VAULT_PATCH_V158 }
-  }).catch(() => null);
-
-  return res.status(200).json({
-    ok: true,
-    finalized: true,
-    request_id: requestId,
-    status: 'used',
-    used_at: nowIso,
-    message: 'Recovery request sudah dipakai dan semua faktor recovery direvoke.',
-    time: nowIso
-  });
 }
 
 async function customerSecurityResolveLostPasskeyWorkerOwner(body) {
@@ -25616,39 +25188,58 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
 
   if (!owner || !owner.ok || !bindings || !requestId) {
     await customerSecurityRegisterFailedVerification(req, action, 'invalid_recovery_worker_verify_payload', access && access.customerId).catch(() => null);
-    return res.status(400).json({ ok: false, message: 'Request recovery tidak valid.' });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 400, 'invalid_recovery_worker_verify_payload', { request_id: requestId, customer_id: owner && owner.customerId, auth_user_id: owner && owner.authUserId, email: owner && owner.email });
   }
-  if (Array.from(code).length !== CUSTOMER_SECURITY_RECOVERY_CODE_LENGTH) {
+  if (Array.from(code).length !== LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157) {
     await customerSecurityRegisterFailedVerification(req, action, 'invalid_recovery_code_length', access.customerId).catch(() => null);
-    return res.status(400).json({
-      ok: false,
-      message: 'Recovery code tidak valid. Masukkan tepat 500 karakter dari file recovery terenkripsi.'
-    });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 400, 'invalid_recovery_code_length', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
   }
 
+  const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
+  if (!vaultSecrets.ok) return res.status(503).json({ ok: false, code: vaultSecrets.code, message: vaultSecrets.message });
+
   const path = '/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?select=' +
-    encodeURIComponent('id,request_id,customer_id,auth_user_id,email_hash,customer_binding_hash,auth_user_binding_hash,device_binding_hash,recovery_code_hash,status,attempt_count,expires_at,used_at,revoked_at,locked_at,old_passkey_ids') +
+    encodeURIComponent('id,request_id,customer_id,auth_user_id,email_hash,customer_binding_hash,auth_user_binding_hash,device_binding_hash,ip_hash,user_agent_hash,recovery_code_hash,status,attempt_count,expires_at,used_at,revoked_at,locked_at,old_passkey_ids,metadata') +
     '&request_id=eq.' + encodeURIComponent(requestId) +
     '&limit=1';
 
   const result = await supabaseFetch(path, { method: 'GET', auth: 'service' });
-  if (!result.ok) {
-    return res.status(500).json({ ok: false, message: 'Gagal membaca recovery request.' });
-  }
+  if (!result.ok) return res.status(500).json({ ok: false, message: 'Gagal membaca recovery request.' });
 
   const row = Array.isArray(result.data) ? result.data[0] : null;
   if (!row || !row.id) {
     await customerSecurityRegisterFailedVerification(req, action, 'recovery_request_not_found', access.customerId).catch(() => null);
-    return res.status(404).json({ ok: false, message: 'Recovery request tidak ditemukan.' });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 404, 'recovery_request_not_found', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
   }
 
   const nowMs = Date.now();
   if (row.status !== 'pending' || row.used_at || row.revoked_at || row.locked_at || new Date(row.expires_at).getTime() <= nowMs) {
-    return customerSecuritySendRecoveryError(res, 403, row.status === 'used' || row.used_at ? 'used' : 'expired');
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, row.status === 'used' || row.used_at ? 'used' : 'expired_or_inactive', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
   }
 
-  const expectedHash = customerSecurityLostPasskeyRecoveryCodeHash(requestId, row.customer_id, code);
-  if (!safeEqual(String(row.recovery_code_hash || ''), expectedHash)) {
+  if (String(owner.customerId) !== String(row.customer_id) || String(owner.authUserId) !== String(row.auth_user_id)) {
+    await customerSecurityRegisterFailedVerification(req, action, 'recovery_owner_mismatch', access.customerId).catch(() => null);
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_owner_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+  }
+  if (!safeEqual(String(row.email_hash || ''), bindings.emailBindingHash)
+    || !safeEqual(String(row.customer_binding_hash || ''), bindings.customerBindingHash)
+    || !safeEqual(String(row.auth_user_binding_hash || ''), bindings.authUserBindingHash)
+    || !safeEqual(String(row.device_binding_hash || ''), bindings.deviceBindingHash)
+    || !safeEqual(String(row.ip_hash || ''), bindings.ipHash)
+    || !safeEqual(String(row.user_agent_hash || ''), bindings.userAgentHash)) {
+    await customerSecurityRegisterFailedVerification(req, action, 'recovery_binding_mismatch', access.customerId).catch(() => null);
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_binding_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+  }
+
+  const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  const expectedBinding = await customerSecurityLostPasskeyArgon2VerifyHashV157('binding', customerSecurityLostPasskeyCanonical(bindings), metadata.binding_hash_commitment, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  if (!expectedBinding) {
+    await customerSecurityRegisterFailedVerification(req, action, 'recovery_binding_commitment_mismatch', access.customerId).catch(() => null);
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_binding_commitment_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+  }
+
+  const codeOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('recovery_code', code, row.recovery_code_hash, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  if (!codeOk) {
     const nextAttempts = Number(row.attempt_count || 0) + 1;
     const lock = nextAttempts >= LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT;
     await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
@@ -25658,93 +25249,40 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
         attempt_count: nextAttempts,
         status: lock ? 'locked' : row.status,
         locked_at: lock ? diracNowIso() : row.locked_at || null,
-        metadata: { last_failed_verify_at: diracNowIso(), failed_verify_source: action }
+        metadata: { last_failed_verify_at: diracNowIso(), failed_verify_source: action, patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157 }
       }
     }).catch(() => null);
     await customerSecurityRegisterFailedVerification(req, action, lock ? 'recovery_code_locked' : 'recovery_code_not_matched', access.customerId).catch(() => null);
-    return res.status(lock ? 423 : 403).json({ ok: false, message: lock ? 'Recovery request dikunci karena terlalu banyak percobaan.' : 'Recovery code salah, sudah dipakai, atau sudah expired.' });
-  }
-
-  if (String(owner.customerId) !== String(row.customer_id) || String(owner.authUserId) !== String(row.auth_user_id)) {
-    await customerSecurityRegisterFailedVerification(req, action, 'recovery_owner_mismatch', access.customerId).catch(() => null);
-    return res.status(403).json({ ok: false, message: 'Recovery request tidak cocok dengan sesi login ini.' });
-  }
-  if (!safeEqual(String(row.email_hash || ''), bindings.emailBindingHash)
-    || !safeEqual(String(row.customer_binding_hash || ''), bindings.customerBindingHash)
-    || !safeEqual(String(row.auth_user_binding_hash || ''), bindings.authUserBindingHash)) {
-    await customerSecurityRegisterFailedVerification(req, action, 'recovery_binding_mismatch', access.customerId).catch(() => null);
-    return res.status(403).json({ ok: false, message: 'Recovery binding tidak cocok dengan akun login.' });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, lock ? 423 : 403, lock ? 'recovery_code_locked' : 'recovery_code_not_matched', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
   }
 
   const activePasskeys = await customerSecurityLostPasskeyActivePasskeys(owner);
-  if (!activePasskeys.length) {
-    return res.status(409).json({ ok: false, message: 'Passkey lama tidak ditemukan untuk akun ini.' });
-  }
+  if (!activePasskeys.length) return res.status(409).json({ ok: false, message: 'Passkey lama tidak ditemukan untuk akun ini.' });
 
   const now = diracNowIso();
-  const recoverySessionToken = crypto.randomBytes(32).toString('base64url');
-  const recoverySessionHash = customerSecurityLostPasskeyRecoverySessionHash(recoverySessionToken);
-  const sessionExpiresAt = new Date(Date.now() + Math.max(5, Math.min(30, Number(process.env.DIRAC_LOST_PASSKEY_SESSION_MINUTES || 10))) * 60 * 1000).toISOString();
-  const sessionCreated = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_SESSION_TABLE, {
-    method: 'POST',
-    auth: 'service',
-    prefer: 'return=representation',
-    body: [{
-      request_id: requestId,
-      customer_id: owner.customerId,
-      auth_user_id: owner.authUserId,
-      recovery_session_hash: recoverySessionHash,
-      purpose: LOST_PASSKEY_RECOVERY_PURPOSE,
-      status: 'verified',
-      created_at: now,
-      expires_at: sessionExpiresAt,
-      metadata: { source: action, old_passkey_count: activePasskeys.length }
-    }]
-  });
-  if (!sessionCreated.ok) {
-    return res.status(sessionCreated.status || 500).json({ ok: false, message: 'Gagal membuat recovery session.' });
-  }
-
-  const patched = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
-    method: 'PATCH',
-    auth: 'service',
-    prefer: 'return=representation',
-    body: {
-      status: 'verified',
-      metadata: {
-        source: 'lost_passkey_recovery_code_verify',
-        verified_by_endpoint: action,
-        verified_at: now
-      }
-    }
-  });
-
-  if (!patched.ok) {
-    return res.status(500).json({ ok: false, message: 'Gagal menandai recovery request sebagai verified.' });
-  }
-
   await customerSecurityWriteGuardEvent(access.customerId, {
     event_type: 'lost_passkey_recovery_verified',
     status: 'success',
     risk_level: 'high',
-    description: 'Customer memverifikasi recovery code terenkripsi untuk pemulihan Passkey.',
+    description: 'Server 2 memvalidasi recovery code lost passkey dari signed SERVER 1 payload.',
     req,
-    metadata: { action, request_id: requestId }
+    metadata: { action, request_id: requestId, patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157 }
   });
 
   return res.status(200).json({
     ok: true,
+    valid: true,
     active: true,
     method: 'recovery_code',
     purpose: LOST_PASSKEY_RECOVERY_PURPOSE,
-    message: 'Recovery code valid. Recovery session terbatas untuk daftar Passkey baru sudah dibuat.',
-    recovery_session_token: recoverySessionToken,
-    recovery_session_expires_at: sessionExpiresAt,
+    request_id: requestId,
+    message: 'Recovery code valid.',
     dashboard_access: false,
     recovery_code_verified: true,
     time: now
   });
 }
+
 
 async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
   if (!customerSecurityRecoveryWorkerLocalEnabled()) {
@@ -25755,29 +25293,44 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
   }
   const body = await readBody(req);
   if (!body || body.action !== DIRAC_RECOVERY_WORKER_ACTION) {
-    return diracLostPasskeyV158GenericError(res, 404, 'RECOVERY_WORKER_ACTION_INVALID', 'recovery_worker_action_invalid', body || {});
+    return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_ACTION_INVALID', message: 'Worker action tidak valid.' });
   }
   if (body.pdf_password !== undefined || body.website_recovery_code !== undefined || body.email_pdf_code !== undefined) {
-    return diracLostPasskeyV158GenericError(res, 403, 'RECOVERY_WORKER_LEGACY_FIELD_REJECTED', 'recovery_worker_legacy_field_rejected', body);
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'legacy_pdf_payload_rejected', body);
   }
 
   const owner = await customerSecurityResolveLostPasskeyWorkerOwner(body);
-  if (!owner.ok) return diracLostPasskeyV158GenericError(res, owner.status || 403, 'RECOVERY_WORKER_OWNER_INVALID', 'recovery_worker_owner_invalid', body);
+  if (!owner.ok) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, owner.status || 403, 'worker_owner_invalid', body);
   const bindings = customerSecurityLostPasskeyWorkerBindings(body, owner);
-  if (!bindings) return diracLostPasskeyV158GenericError(res, 403, 'RECOVERY_WORKER_BINDING_INVALID', 'recovery_worker_binding_invalid', body);
+  if (!bindings) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'worker_binding_invalid', body);
 
   const workerTask = String(body.worker_action || '');
   if (workerTask === DIRAC_RECOVERY_WORKER_TASK_GENERATE) {
-    return diracLostPasskeyV158HandleGenerate(req, res, body, owner, bindings);
-  }
-  if (workerTask === DIRAC_RECOVERY_WORKER_TASK_VERIFY) {
-    return diracLostPasskeyV158HandleVerify(req, res, body, owner, bindings);
-  }
-  if (workerTask === DIRAC_RECOVERY_WORKER_TASK_FINALIZE) {
-    return diracLostPasskeyV158HandleFinalize(req, res, body, owner, bindings);
+    const activePasskeys = await customerSecurityLostPasskeyActivePasskeys(owner);
+    if (!activePasskeys.length) {
+      return res.status(409).json({ ok: false, code: 'ACTIVE_PASSKEY_NOT_FOUND', message: 'Passkey aktif untuk akun ini belum ditemukan.' });
+    }
+    return customerSecurityGenerateRecoveryCodes(req, res, 'customer_security_recovery_codes_generate', {
+      localWorker: true,
+      access: { customerId: owner.customerId },
+      owner,
+      activePasskeys,
+      bindings,
+      passwordLatestMaterial: String(body.password_latest_material || body.password_latest_proof || body.account_password || '')
+    });
   }
 
-  return diracLostPasskeyV158GenericError(res, 404, 'RECOVERY_WORKER_TASK_INVALID', 'recovery_worker_task_invalid', body);
+  if (workerTask === DIRAC_RECOVERY_WORKER_TASK_VERIFY) {
+    return customerSecurityVerifyRecoveryCodeLocalWorker(req, res, 'customer_security_recovery_code_verify', {
+      access: { customerId: owner.customerId },
+      owner,
+      bindings,
+      requestId: String(body.request_id || ''),
+      recoveryCode: String(body.recovery_code || body.code || '')
+    });
+  }
+
+  return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_TASK_INVALID', message: 'Worker task recovery tidak valid.' });
 }
 
 const __diracRecoveryWorkerPreviousHandler = module.exports;
@@ -25821,6 +25374,7 @@ const DIRAC_CENTRAL_ASYNC_CONTEXT_V149 = globalThis.__DIRAC_CENTRAL_ASYNC_CONTEX
 })();
 const DIRAC_CENTRAL_SECRET_CACHE_V146 = globalThis.__DIRAC_CENTRAL_SECRET_CACHE_V146__ || new Map();
 const DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148 = globalThis.__DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148__ || new Map();
+const DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157 = globalThis.__DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157__ || new Map();
 globalThis.__DIRAC_CENTRAL_MEMORY_BAN_V146__ = DIRAC_CENTRAL_MEMORY_BAN_V146;
 globalThis.__DIRAC_CENTRAL_NEGATIVE_BAN_V146__ = DIRAC_CENTRAL_NEGATIVE_BAN_V146;
 globalThis.__DIRAC_CENTRAL_DEVICE_BINDINGS_V146__ = DIRAC_CENTRAL_DEVICE_BINDINGS_V146;
@@ -25831,6 +25385,7 @@ globalThis.__DIRAC_CENTRAL_CONTEXT_STACK_V146__ = DIRAC_CENTRAL_CONTEXT_STACK_V1
 globalThis.__DIRAC_CENTRAL_ASYNC_CONTEXT_V149__ = DIRAC_CENTRAL_ASYNC_CONTEXT_V149;
 globalThis.__DIRAC_CENTRAL_SECRET_CACHE_V146__ = DIRAC_CENTRAL_SECRET_CACHE_V146;
 globalThis.__DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148__ = DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148;
+globalThis.__DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157__ = DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157;
 
 const DIRAC_CENTRAL_SCANNER_UA_REGEX_V146 = /\b(?:curl|wget|httpie|fetch-cli|python|python-requests|aiohttp|urllib|requests|mechanize|scrapy|node-fetch|axios|got|undici|go-http-client|java|okhttp|apache-httpclient|libwww-perl|lwp|ruby|php|powershell|httpclient|postman|postmanruntime|insomnia|paw|hoppscotch|burp|burp\s*suite|owasp\s*zap|zap|mitmproxy|fiddler|charles|caido|sqlmap|nuclei|nikto|acunetix|netsparker|invicti|nessus|openvas|qualys|appscan|webinspect|w3af|arachni|skipfish|jaeles|xray|x-ray|whatweb|wpscan|joomscan|droopescan|ffuf|gobuster|dirb|dirbuster|feroxbuster|wfuzz|dirsearch|hydra|medusa|patator|nmap|masscan|zgrab|zmap|shodan|censys|binaryedge|commix|havij|xsser|dalfox|tplmap|ysoserial|metasploit|msfconsole|headlesschrome|phantomjs|selenium|playwright|puppeteer|chromedriver|geckodriver)\b/i;
 const DIRAC_CENTRAL_BROWSER_UA_REGEX_V146 = /\b(chrome|chromium|crios|edg|firefox|fxios|safari|mobile safari)\b/i;
@@ -25872,46 +25427,12 @@ const DIRAC_CENTRAL_ALLOWED_REFERER_PATHS_V146 = new Set([
   '/website.html'
 ]);
 
-// SERVER 2 RECOVERY WORKER LOCK v158:
-// Vercel 2 hanya menerima action internal worker yang sudah melewati Central Guard.
-// Generate / verify / finalize dibedakan lewat worker_action dalam signed canonical payload.
+// SERVER 2 RECOVERY WORKER LOCK v157:
+// Only the isolated signed server-to-server recovery worker action is allowed
+// past the Central Guard on Vercel 2. Browser/legacy bridge actions are blocked.
 const DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157 = new Set([
   DIRAC_RECOVERY_WORKER_ACTION
 ]);
-
-
-function diracCentralIsRecoveryWorkerActionV160(action) {
-  return DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(String(action || '').trim().toLowerCase());
-}
-
-function diracCentralRecoveryWorkerSecurityReportV160(reason, ctx) {
-  const body = ctx && ctx.body && typeof ctx.body === 'object' ? ctx.body : {};
-  if (typeof diracLostPasskeyV158SecurityReport === 'function') {
-    return diracLostPasskeyV158SecurityReport(String(reason || 'central_worker_rejected'), body, {
-      central_guard: DIRAC_CENTRAL_SECURITY_GUARD_V146,
-      central_reason: String(reason || 'central_worker_rejected').slice(0, 120)
-    });
-  }
-  return {
-    type: 'dirac_recovery_worker_security_report_v160',
-    reason: String(reason || 'central_worker_rejected').slice(0, 120),
-    request_id: String((body.request_id || body.requestId || '')).slice(0, 120),
-    worker_action: String(body.worker_action || '').slice(0, 80),
-    central_guard: DIRAC_CENTRAL_SECURITY_GUARD_V146,
-    at: new Date().toISOString()
-  };
-}
-
-function diracCentralRecoveryWorkerBlockedResponseV160(res, reason, ctx) {
-  diracCentralApplyHeadersV146(res);
-  try { if (res && typeof res.setHeader === 'function') res.setHeader('Cache-Control', 'no-store'); } catch (_) {}
-  return res.status(403).json({
-    ok: false,
-    code: 'RECOVERY_WORKER_REJECTED',
-    message: 'Recovery request tidak valid atau sudah tidak berlaku.',
-    security_report_payload: diracCentralRecoveryWorkerSecurityReportV160(reason, ctx)
-  });
-}
 
 const DIRAC_CENTRAL_ACTION_ALIASES_V146 = Object.freeze({});
 
@@ -25924,7 +25445,7 @@ const DIRAC_CENTRAL_PUBLIC_READ_ACTIONS_V146 = new Set([]);
 const DIRAC_CENTRAL_ADMIN_ACTIONS_V146 = new Set([]);
 const DIRAC_CENTRAL_SENSITIVE_ACTIONS_V146 = new Set([]);
 const DIRAC_CENTRAL_A2F_ACTIONS_V148 = new Set([]);
-const DIRAC_CENTRAL_USER_DATA_ACTIONS_V146 = new Set([DIRAC_RECOVERY_WORKER_ACTION]);
+const DIRAC_CENTRAL_USER_DATA_ACTIONS_V146 = new Set([]);
 
 const DIRAC_CENTRAL_KNOWN_JS_ACTION_INPUTS_V146 = [
   DIRAC_RECOVERY_WORKER_ACTION
@@ -26167,17 +25688,13 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     diracCentralStampV146(ctx, 'identity_checked');
     diracCentralStampV146(ctx, 'memory_ban_checked');
 
-    const earlyRawActionV160 = String(req && req.query && req.query.action || '').trim().toLowerCase();
-    const earlyRecoveryWorkerV160 = diracCentralIsRecoveryWorkerActionV160(earlyRawActionV160);
-    const persistentBan = earlyRecoveryWorkerV160
-      ? { blocked: false, serverWorkerLocalOnly: true }
-      : await diracCentralCheckPersistentBanV146(req, identity);
+    const persistentBan = await diracCentralCheckPersistentBanV146(req, identity);
     if (persistentBan.blocked) {
       diracCentralSetMemoryBanV146(identity, persistentBan.blockedUntilMs, 'persistent_ban');
       return diracCentralBlockedResponseV146(res, 'PERSISTENT_BAN_ACTIVE');
     }
     diracCentralStampV146(ctx, 'persistent_ban_checked');
-    if (!earlyRecoveryWorkerV160) diracCentralSetNegativeCacheV146(identity);
+    diracCentralSetNegativeCacheV146(identity);
 
     const rawAction = String(req && req.query && req.query.action || '');
     const lowerAction = rawAction.toLowerCase();
@@ -26529,15 +26046,6 @@ function diracCentralVercel2OnlyActionGuardV150(action) {
   const vercel2OnlyActions = diracCentralVercel2OnlyActionsV150();
   if (!vercel2OnlyActions.has(clean)) return { ok: true };
 
-  // PATCH SEMPIT v159:
-  // Recovery worker Server 2 dikenali dari ENV worker lokal yang memang hanya boleh ada di Vercel 2:
-  // - DIRAC_RECOVERY_WORKER_SECRET ada
-  // - DIRAC_RECOVERY_WORKER_ALLOWED_CALLER ada
-  // - DIRAC_RECOVERY_WORKER_URL kosong
-  // Dengan begitu action Server 2 tidak perlu ENV penanda tambahan, namun tetap tidak boleh hidup di Vercel 1
-  // selama ENV Server 2 tadi tidak dipasang di Vercel 1. Guard HMAC/nonce/timestamp tetap berjalan setelah ini.
-  if (clean === DIRAC_RECOVERY_WORKER_ACTION && customerSecurityRecoveryWorkerLocalEnabled()) return { ok: true };
-
   if (diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')) return { ok: true };
   if (diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED')) return { ok: true };
   if (diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') === 'vercel2') return { ok: true };
@@ -26639,33 +26147,26 @@ function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
   if (!Number.isFinite(timestamp) || timestamp <= 0) return { ok: false, reason: 'recovery_worker_timestamp_invalid' };
   if (Math.abs(Date.now() - timestamp) > customerSecurityRecoveryWorkerClockSkewMs()) return { ok: false, reason: 'recovery_worker_timestamp_stale' };
 
-  const body = ctx.body || {};
-  if (!safeEqual(String(body.timestamp || ''), timestampText)) return { ok: false, reason: 'recovery_worker_timestamp_body_mismatch' };
-
   const signature = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-signature');
   if (!/^[a-zA-Z0-9_-]{32,120}$/.test(signature)) return { ok: false, reason: 'recovery_worker_signature_missing' };
-  const workerTask = String(body.worker_action || '');
+  const body = ctx.body || {};
   if (body.action !== DIRAC_RECOVERY_WORKER_ACTION
-    || ![DIRAC_RECOVERY_WORKER_TASK_GENERATE, DIRAC_RECOVERY_WORKER_TASK_VERIFY, DIRAC_RECOVERY_WORKER_TASK_FINALIZE].includes(workerTask)) {
+    || ![DIRAC_RECOVERY_WORKER_TASK_GENERATE, DIRAC_RECOVERY_WORKER_TASK_VERIFY].includes(String(body.worker_action || ''))) {
     return { ok: false, reason: 'recovery_worker_body_action_invalid' };
   }
-
-  const bodyNonce = String(body.nonce || body.request_nonce || '').trim();
-  if (!/^[a-zA-Z0-9_-]{32,160}$/.test(bodyNonce)) return { ok: false, reason: 'recovery_worker_nonce_invalid' };
-  const headerNonce = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-nonce');
-  if (headerNonce && !safeEqual(headerNonce, bodyNonce)) return { ok: false, reason: 'recovery_worker_nonce_header_mismatch' };
-  const nonceKey = caller + ':' + bodyNonce;
-  const nonceNow = Date.now();
-  for (const [key, value] of DIRAC_LOST_PASSKEY_WORKER_NONCES_V158.entries()) {
-    if (Number(value || 0) <= nonceNow) DIRAC_LOST_PASSKEY_WORKER_NONCES_V158.delete(key);
-    if (DIRAC_LOST_PASSKEY_WORKER_NONCES_V158.size <= 5000) break;
+  if (String(body.caller_id || '') !== caller) return { ok: false, reason: 'recovery_worker_body_caller_invalid' };
+  const nonce = String(body.nonce || '').trim();
+  if (!/^[a-zA-Z0-9_-]{32,120}$/.test(nonce)) return { ok: false, reason: 'recovery_worker_nonce_invalid' };
+  const now = Date.now();
+  for (const [key, until] of DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.entries()) {
+    if (Number(until || 0) <= now) DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.delete(key);
+    if (DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.size <= 5000) break;
   }
-  if (DIRAC_LOST_PASSKEY_WORKER_NONCES_V158.has(nonceKey)) return { ok: false, reason: 'recovery_worker_nonce_replay' };
-
-  if (!safeEqual(String(body.caller_id || body.callerId || caller), caller)) return { ok: false, reason: 'recovery_worker_caller_body_mismatch' };
+  const nonceKey = caller + ':' + nonce;
+  if (DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.has(nonceKey)) return { ok: false, reason: 'recovery_worker_nonce_replay' };
   const expected = customerSecurityRecoveryWorkerSign(caller, timestampText, customerSecurityLostPasskeyCanonical(body));
   if (!safeEqual(signature, expected)) return { ok: false, reason: 'recovery_worker_signature_invalid' };
-  DIRAC_LOST_PASSKEY_WORKER_NONCES_V158.set(nonceKey, nonceNow + customerSecurityRecoveryWorkerClockSkewMs());
+  DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.set(nonceKey, now + customerSecurityRecoveryWorkerClockSkewMs() + 60000);
   req.__diracRecoveryWorkerVerified = true;
   return { ok: true };
 }
@@ -27079,7 +26580,6 @@ async function diracCentralDistributedRateLimitGuardV146(req, ctx) {
   if (!diracCentralNeedsDistributedRateLimitV146(action)) return { ok: true };
   const local = diracCentralRateLimitV146(ctx.identity.key + ':distributed-local:' + action, 60 * 1000, diracCentralDistributedRateLimitMaxV146(action));
   if (!local.ok) return { ok: false, reason: 'distributed_rate_limit_local' };
-  if (diracCentralIsRecoveryWorkerActionV160(action)) return { ok: true, serverWorkerLocalOnly: true };
   const persistReady = Boolean(LOGIN_SECURITY_PERSIST_TABLE && typeof readPersistentSecurityJson === 'function' && typeof writePersistentSecurityJson === 'function');
   if (!persistReady) {
     return diracCentralIsProductionV146() ? { ok: false, reason: 'distributed_rate_limit_storage_required' } : { ok: true };
@@ -27164,7 +26664,7 @@ function diracCentralContractGuardV146(req, ctx) {
     if (!allowed.has(key) && !contract.allowExtra) return { ok: false, reason: 'field_not_allowed_' + key };
     if (diracCentralProtectedFieldV146(key) && !contract.allowProtectedFields) return { ok: false, reason: 'protected_field_from_frontend_' + key };
     if (String(item.value || '').length > (contract.maxFieldBytes || 3000)) return { ok: false, reason: 'field_too_long_' + key };
-    const format = diracCentralValidateContractFieldFormatV160(ctx.action, key, item.value);
+    const format = diracCentralValidateFieldFormatV146(key, item.value);
     if (!format.ok) return { ok: false, reason: format.reason };
   }
   if (ctx.method === 'GET' && contract.mutation) return { ok: false, reason: 'mutation_get_rejected' };
@@ -28084,9 +27584,6 @@ async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason
     source: DIRAC_CENTRAL_SECURITY_GUARD_V146,
     risk: 'critical'
   };
-  if (diracCentralIsRecoveryWorkerActionV160(action)) {
-    return diracCentralRecoveryWorkerBlockedResponseV160(res, threat.kind, ctx);
-  }
   await diracCentralWritePersistentBanV146(req, res, action, method, threat).catch(() => null);
   const identityKey = String(ctx && ctx.identity && ctx.identity.key || '').trim();
   if (identityKey && typeof writePersistentSecurityJson === 'function') {
@@ -28187,8 +27684,8 @@ function diracCentralContractForActionV146(action) {
   const recoveryVerifyPost = { methods: ['POST'], allowed: ['action', 'request_id', 'recovery_code', 'code', 'csrf', 'nonce', 'idempotency_key'], required: ['request_id'], maxBodyBytes: 4096, maxFieldBytes: 1200, mutation: true };
   const recoveryWorkerPost = {
     methods: ['POST'],
-    allowed: ['action', 'worker_action', 'caller_id', 'callerId', 'timestamp', 'nonce', 'request_nonce', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'session_hash', 'ip_hash', 'user_agent_hash', 'active_passkey_count', 'requested_at', 'password_latest_material', 'password_latest_proof', 'password_latest_material_proof', 'account_password', 'current_password', 'currentPassword', 'request_id', 'requestId', 'recovery_code', 'recoveryCode', 'code', 'finalize_status', 'passkey_created', 'new_passkey_id'],
-    required: ['action', 'worker_action', 'caller_id', 'timestamp', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'ip_hash', 'user_agent_hash', 'nonce'],
+    allowed: ['action', 'worker_action', 'caller_id', 'nonce', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'session_hash', 'ip_hash', 'user_agent_hash', 'active_passkey_count', 'requested_at', 'password_latest_material', 'password_latest_proof', 'request_id', 'recovery_code', 'code'],
+    required: ['action', 'worker_action', 'caller_id', 'nonce', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'session_hash', 'ip_hash', 'user_agent_hash'],
     maxBodyBytes: customerSecurityRecoveryWorkerMaxBodyBytes(),
     maxFieldBytes: 4096,
     mutation: true,
@@ -28233,24 +27730,6 @@ function diracCentralFlattenObjectV146(value, depth, prefix, max) {
   };
   walk(value, depth || 0, prefix || '');
   return out;
-}
-
-
-// PATCH SEMPIT v160:
-// Recovery worker Server 2 menerima customer_id/auth_user_id internal dari Server 1.
-// Format UUID lama tetap berlaku untuk semua action lain. Khusus signed worker payload,
-// ID internal hanya boleh token ASCII aman dan tetap dilindungi HMAC/caller/timestamp/nonce
-// oleh Central Server-to-Server Guard sebelum business handler berjalan.
-function diracCentralValidateContractFieldFormatV160(action, key, value) {
-  const cleanAction = String(action || '').trim().toLowerCase();
-  const cleanKey = String(key || '').trim().toLowerCase();
-  const text = String(value === undefined || value === null ? '' : value).trim();
-  if (cleanAction === DIRAC_RECOVERY_WORKER_ACTION && /^(customer_id|auth_user_id|user_id)$/.test(cleanKey)) {
-    if (!text) return { ok: true };
-    if (/^[A-Za-z0-9_.:@-]{1,160}$/.test(text)) return { ok: true };
-    return { ok: false, reason: cleanKey + '_worker_token_format_invalid' };
-  }
-  return diracCentralValidateFieldFormatV146(key, value);
 }
 
 function diracCentralValidateFieldFormatV146(key, value) {
