@@ -26491,6 +26491,15 @@ function diracCentralVercel2OnlyActionGuardV150(action) {
   const vercel2OnlyActions = diracCentralVercel2OnlyActionsV150();
   if (!vercel2OnlyActions.has(clean)) return { ok: true };
 
+  // PATCH SEMPIT v159:
+  // Recovery worker Server 2 dikenali dari ENV worker lokal yang memang hanya boleh ada di Vercel 2:
+  // - DIRAC_RECOVERY_WORKER_SECRET ada
+  // - DIRAC_RECOVERY_WORKER_ALLOWED_CALLER ada
+  // - DIRAC_RECOVERY_WORKER_URL kosong
+  // Dengan begitu action Server 2 tidak perlu ENV penanda tambahan, namun tetap tidak boleh hidup di Vercel 1
+  // selama ENV Server 2 tadi tidak dipasang di Vercel 1. Guard HMAC/nonce/timestamp tetap berjalan setelah ini.
+  if (clean === DIRAC_RECOVERY_WORKER_ACTION && customerSecurityRecoveryWorkerLocalEnabled()) return { ok: true };
+
   if (diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')) return { ok: true };
   if (diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED')) return { ok: true };
   if (diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') === 'vercel2') return { ok: true };
@@ -26592,9 +26601,11 @@ function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
   if (!Number.isFinite(timestamp) || timestamp <= 0) return { ok: false, reason: 'recovery_worker_timestamp_invalid' };
   if (Math.abs(Date.now() - timestamp) > customerSecurityRecoveryWorkerClockSkewMs()) return { ok: false, reason: 'recovery_worker_timestamp_stale' };
 
+  const body = ctx.body || {};
+  if (!safeEqual(String(body.timestamp || ''), timestampText)) return { ok: false, reason: 'recovery_worker_timestamp_body_mismatch' };
+
   const signature = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-signature');
   if (!/^[a-zA-Z0-9_-]{32,120}$/.test(signature)) return { ok: false, reason: 'recovery_worker_signature_missing' };
-  const body = ctx.body || {};
   const workerTask = String(body.worker_action || '');
   if (body.action !== DIRAC_RECOVERY_WORKER_ACTION
     || ![DIRAC_RECOVERY_WORKER_TASK_GENERATE, DIRAC_RECOVERY_WORKER_TASK_VERIFY, DIRAC_RECOVERY_WORKER_TASK_FINALIZE].includes(workerTask)) {
@@ -28135,7 +28146,7 @@ function diracCentralContractForActionV146(action) {
   const recoveryWorkerPost = {
     methods: ['POST'],
     allowed: ['action', 'worker_action', 'caller_id', 'callerId', 'timestamp', 'nonce', 'request_nonce', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'session_hash', 'ip_hash', 'user_agent_hash', 'active_passkey_count', 'requested_at', 'password_latest_material', 'password_latest_proof', 'password_latest_material_proof', 'account_password', 'current_password', 'currentPassword', 'request_id', 'requestId', 'recovery_code', 'recoveryCode', 'code', 'finalize_status', 'passkey_created', 'new_passkey_id'],
-    required: ['action', 'worker_action', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'ip_hash', 'user_agent_hash', 'nonce'],
+    required: ['action', 'worker_action', 'caller_id', 'timestamp', 'auth_user_id', 'customer_id', 'email', 'email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'ip_hash', 'user_agent_hash', 'nonce'],
     maxBodyBytes: customerSecurityRecoveryWorkerMaxBodyBytes(),
     maxFieldBytes: 4096,
     mutation: true,
