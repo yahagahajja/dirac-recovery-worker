@@ -25155,379 +25155,38 @@ const DIRAC_CENTRAL_ALLOWED_REFERER_PATHS_V146 = new Set([
   '/website.html'
 ]);
 
-const DIRAC_CENTRAL_ACTION_ALIASES_V146 = Object.freeze({
-  'domain-login': 'domain_login',
-  'domain-register': 'domain_register',
-  'domain-logout': 'domain_logout',
-  'domain-health': 'domain_health',
-  'hostinger-check': 'hostinger_check',
-  'check-domain': 'domain_check',
-  'create-order': 'domain_checkout',
-  'get-orders': 'domain_orders',
-  'dashboard-summary': 'domain_dashboard_me',
-  'dashboard_summary': 'domain_dashboard_me',
-  'customer-summary': 'customer_security_overview',
-  'customer_summary': 'customer_security_overview',
-  'customer-security-status': 'customer_security_status',
-  'customer-security-overview': 'customer_security_overview',
-  'midtrans-webhook': 'midtrans_webhook',
-  'midtrans-health': 'midtrans_health'
-});
-
-const DIRAC_CENTRAL_ACTIVE_ACTIONS_V146 = new Set([
-  'domain_health',
-  'hostinger_check',
-  'domain_login',
-  'domain_register',
-  'domain_me',
-  'domain_dashboard_me',
-  'domain_logout',
-  'domain_check',
-  'domain_checkout',
-  'domain_orders',
-  'domain_mfa_status',
-  'customer_security_status',
-  'customer_security_overview',
-  'customer_security_guard_status',
-  'customer_security_revoke_session',
-  'customer_security_revoke_other_sessions',
-  'customer_security_account_request',
-  'customer_security_recovery_codes_status',
-  'customer_security_recovery_codes_generate',
-  'customer_security_recovery_code_verify',
-  'customer_security_features_bundle',
-  'customer_security_features_bundle_v2',
-  'customer_security_features_bundle_v3',
-  'customer_security_trusted_devices',
-  'customer_security_login_history',
-  'customer_security_score',
-  'customer_security_notifications',
-  'customer_security_request_tracker',
-  'customer_security_trust_current_device',
-  'customer_security_untrust_device',
-  'customer_security_prune_login_history',
-  'admin_security_overview',
-  'admin_security_events',
-  'admin_security_blocks',
-  'admin_security_unblock_user',
-  'checkout_order',
-  'my_orders',
-  'customer_orders',
-  'pesanan_saya',
-  'my_invoices',
-  'customer_invoices',
-  'invoices',
-  'invoice_saya',
-  'my_bills',
-  'my_shipments',
-  'customer_shipments',
-  'pengiriman_saya',
-  'my_domains',
-  'customer_domains',
-  'my_projects',
-  'customer_projects',
-  'my_tickets',
-  'customer_tickets',
-  'tiket_bantuan',
-  'my_notifications',
-  'customer_notifications',
-  'notifications',
-  'notifikasi',
-  'dashboard',
-  'create_payment',
-  'midtrans_health',
-  'midtrans_webhook',
-  'dirac_mfa_passkey_start',
-  'dirac_mfa_passkey_verify',
-  'domain_mfa_passkey_start',
-  'domain_mfa_passkey_verify',
-  'dirac_mfa_passkey_status',
-  'domain_mfa_passkey_status',
-  'dirac_passkey_status',
-  'domain_passkey_status',
-  'public_products',
-  'products_public',
-  'catalog_products',
-  'product_catalog',
-  'public_catalog',
-  'parfum_products',
-  'perfume_products',
-  'parfum_catalog',
-  'katalog_parfum',
-  'katalog_produk',
-  'lihat_produk',
+// SERVER 2 RECOVERY WORKER LOCK v157:
+// Only the isolated lost-passkey recovery worker action and its legacy recovery
+// bridge actions are allowed past the Central Guard on Vercel 2.
+const DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157 = new Set([
   DIRAC_RECOVERY_WORKER_ACTION,
-  'security_report'
+  'customer_security_recovery_codes_generate',
+  'customer_security_recovery_code_verify'
 ]);
 
-const DIRAC_CENTRAL_DISABLED_ACTIONS_V146 = new Set([
-  'checkout_order_hp_test',
-  'ipaymu_health',
-  'ipaymu_webhook'
-]);
+const DIRAC_CENTRAL_ACTION_ALIASES_V146 = Object.freeze({});
 
-const DIRAC_CENTRAL_SERVER_ACTIONS_V146 = new Set(['midtrans_webhook', DIRAC_RECOVERY_WORKER_ACTION]);
-const DIRAC_CENTRAL_PUBLIC_READ_ACTIONS_V146 = new Set([
-  'domain_health',
-  'hostinger_check',
-  'domain_check',
-  'public_products',
-  'products_public',
-  'catalog_products',
-  'product_catalog',
-  'public_catalog',
-  'parfum_products',
-  'perfume_products',
-  'parfum_catalog',
-  'katalog_parfum',
-  'katalog_produk',
-  'lihat_produk',
-  'midtrans_health'
-]);
-const DIRAC_CENTRAL_ADMIN_ACTIONS_V146 = new Set([
-  'admin_security_overview',
-  'admin_security_events',
-  'admin_security_blocks',
-  'admin_security_unblock_user'
-]);
+const DIRAC_CENTRAL_ACTIVE_ACTIONS_V146 = new Set(DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157);
+
+const DIRAC_CENTRAL_DISABLED_ACTIONS_V146 = new Set([]);
+
+const DIRAC_CENTRAL_SERVER_ACTIONS_V146 = new Set([DIRAC_RECOVERY_WORKER_ACTION]);
+const DIRAC_CENTRAL_PUBLIC_READ_ACTIONS_V146 = new Set([]);
+const DIRAC_CENTRAL_ADMIN_ACTIONS_V146 = new Set([]);
 const DIRAC_CENTRAL_SENSITIVE_ACTIONS_V146 = new Set([
-  'domain_logout',
-  'domain_checkout',
-  'checkout_order',
-  'create_payment',
-  'customer_security_revoke_session',
-  'customer_security_revoke_other_sessions',
   'customer_security_recovery_codes_generate',
-  'customer_security_recovery_code_verify',
-  'dirac_mfa_passkey_start',
-  'dirac_mfa_passkey_verify',
-  'domain_mfa_passkey_start',
-  'domain_mfa_passkey_verify',
-  'dirac_mfa_passkey_status',
-  'domain_mfa_passkey_status',
-  'dirac_passkey_status',
-  'domain_passkey_status'
+  'customer_security_recovery_code_verify'
 ]);
-const DIRAC_CENTRAL_A2F_ACTIONS_V148 = new Set([
-  'dirac_mfa_passkey_start',
-  'dirac_mfa_passkey_verify',
-  'domain_mfa_passkey_start',
-  'domain_mfa_passkey_verify',
-  'dirac_mfa_passkey_status',
-  'domain_mfa_passkey_status',
-  'dirac_passkey_status',
-  'domain_passkey_status'
-]);
+const DIRAC_CENTRAL_A2F_ACTIONS_V148 = new Set([]);
 const DIRAC_CENTRAL_USER_DATA_ACTIONS_V146 = new Set([
-  'domain_me',
-  'domain_dashboard_me',
-  'domain_orders',
-  'domain_mfa_status',
-  'customer_security_status',
-  'customer_security_overview',
-  'customer_security_guard_status',
-  'customer_security_revoke_session',
-  'customer_security_revoke_other_sessions',
-  'customer_security_account_request',
-  'customer_security_recovery_codes_status',
   'customer_security_recovery_codes_generate',
-  'customer_security_recovery_code_verify',
-  'customer_security_features_bundle',
-  'customer_security_features_bundle_v2',
-  'customer_security_features_bundle_v3',
-  'customer_security_trusted_devices',
-  'customer_security_login_history',
-  'customer_security_score',
-  'customer_security_notifications',
-  'customer_security_request_tracker',
-  'customer_security_trust_current_device',
-  'customer_security_untrust_device',
-  'customer_security_prune_login_history',
-  'checkout_order',
-  'my_orders',
-  'create_payment'
+  'customer_security_recovery_code_verify'
 ]);
 
 const DIRAC_CENTRAL_KNOWN_JS_ACTION_INPUTS_V146 = [
-  'admin-security-blocks',
-  'admin-security-events',
-  'admin-security-overview',
-  'admin-security-unblock-user',
-  'admin_security_blocks',
-  'admin_security_events',
-  'admin_security_overview',
-  'admin_security_unblock_user',
-  'catalog_products',
-  'check-domain',
-  'check_domain',
-  'checkout-order',
-  'checkout-order-hp-test',
-  'checkout_order',
-  'checkout_order_hp_test',
-  'create-checkout-order',
-  'create-order',
-  'create-payment',
-  'create-payment-order',
-  'create_checkout_order',
-  'create_order',
-  'create_payment',
-  'create_payment_order',
-  'customer-security-account-request',
-  'customer-security-dashboard',
-  'customer-security-features-bundle',
-  'customer-security-features-bundle-v2',
-  'customer-security-features-bundle-v3',
-  'customer-security-guard-status',
-  'customer-security-login-history',
-  'customer-security-notifications',
-  'customer-security-overview',
-  'customer-security-prune-login-history',
-  'customer-security-recovery-code-verify',
-  'customer-security-recovery-codes-generate',
-  'customer-security-recovery-codes-status',
-  'customer-security-request-tracker',
-  'customer-security-revoke-other-sessions',
-  'customer-security-revoke-session',
-  'customer-security-score',
-  'customer-security-status',
-  'customer-security-summary',
-  'customer-security-trust-current-device',
-  'customer-security-trusted-devices',
-  'customer-security-untrust-device',
-  'customer-summary',
-  'customer_domains',
-  'customer_invoices',
-  'customer_notifications',
-  'customer_orders',
-  'customer_projects',
-  'customer_security_account_request',
-  'customer_security_dashboard',
-  'customer_security_features_bundle',
-  'customer_security_features_bundle_v2',
-  'customer_security_features_bundle_v3',
-  'customer_security_guard_status',
-  'customer_security_login_history',
-  'customer_security_notifications',
-  'customer_security_overview',
-  'customer_security_prune_login_history',
-  'customer_security_recovery_code_verify',
+  DIRAC_RECOVERY_WORKER_ACTION,
   'customer_security_recovery_codes_generate',
-  'customer_security_recovery_codes_status',
-  'customer_security_request_tracker',
-  'customer_security_revoke_other_sessions',
-  'customer_security_revoke_session',
-  'customer_security_score',
-  'customer_security_status',
-  'customer_security_summary',
-  'customer_security_trust_current_device',
-  'customer_security_trusted_devices',
-  'customer_security_untrust_device',
-  'customer_shipments',
-  'customer_tickets',
-  'dashboard',
-  'dashboard-me',
-  'dashboard-mfa-status',
-  'dashboard-summary',
-  'dashboard_me',
-  'dashboard_mfa_status',
-  'dashboard_summary',
-  'digital-checkout',
-  'digital_checkout',
-  'dirac_mfa_passkey_start',
-  'dirac_mfa_passkey_status',
-  'dirac_mfa_passkey_verify',
-  'dirac_passkey_status',
-  'domain-dashboard-me',
-  'domain-health',
-  'domain-login',
-  'domain-logout',
-  'domain-me',
-  'domain-mfa-status',
-  'domain-register',
-  'domain_check',
-  'domain_checkout',
-  'domain_create_order',
-  'domain_dashboard_me',
-  'domain_get_orders',
-  'domain_health',
-  'domain_hostinger_check',
-  'domain_login',
-  'domain_logout',
-  'domain_me',
-  'domain_mfa_passkey_start',
-  'domain_mfa_passkey_status',
-  'domain_mfa_passkey_verify',
-  'domain_mfa_status',
-  'domain_orders',
-  'domain_passkey_status',
-  'domain_register',
-  'get-orders',
-  'get_orders',
-  'hostinger-check',
-  'hostinger-domain-check',
-  'hostinger_check',
-  'hp-checkout-test',
-  'hp_checkout_test',
-  'invoice_saya',
-  'invoices',
-  'ipaymu_callback',
-  'ipaymu_health',
-  'ipaymu_notification',
-  'ipaymu_webhook',
-  'jasa-website-checkout',
-  'jasa_website_checkout',
-  'katalog_parfum',
-  'katalog_produk',
-  'layanan-digital-checkout',
-  'layanan_digital_checkout',
-  'lihat_produk',
-  'login-domain',
-  'login_domain',
-  'midtrans-callback',
-  'midtrans-health',
-  'midtrans-notification',
-  'midtrans-webhook',
-  'midtrans_callback',
-  'midtrans_health',
-  'midtrans_notification',
-  'midtrans_webhook',
-  'my_bills',
-  'my_domains',
-  'my_invoices',
-  'my_notifications',
-  'my_orders',
-  'my_projects',
-  'my_shipments',
-  'my_tickets',
-  'notifications',
-  'notifikasi',
-  'order-payment',
-  'order_payment',
-  'parfum-checkout',
-  'parfum_catalog',
-  'parfum_checkout',
-  'parfum_products',
-  'pay-order',
-  'pay_order',
-  'payment-callback',
-  'payment-webhook',
-  'payment_callback',
-  'payment_webhook',
-  'pengembangan-checkout',
-  'pengembangan_checkout',
-  'pengiriman_saya',
-  'perfume_products',
-  'pesanan_saya',
-  'product_catalog',
-  'products_public',
-  'public-checkout',
-  'public_catalog',
-  'public_checkout',
-  'public_products',
-  'register-domain',
-  'register_domain',
-  'security_report',
-  'tiket_bantuan'
+  'customer_security_recovery_code_verify'
 ];
 
 const DIRAC_CENTRAL_KNOWN_ACTION_INPUTS_V146 = new Set([
@@ -26134,12 +25793,7 @@ function diracCentralVercel2OnlyActionGuardV150(action) {
 }
 
 function diracCentralVercel2OnlyActionsV150() {
-  const actions = new Set([
-    // Only internal/server-side worker action is hardcoded as Vercel 2 only.
-    // User-facing recovery actions must pass the full Server 1 central guard first;
-    // their handler then calls the signed recovery worker on Vercel 2.
-    String(typeof DIRAC_RECOVERY_WORKER_ACTION !== 'undefined' ? DIRAC_RECOVERY_WORKER_ACTION : '').trim().toLowerCase()
-  ].filter(Boolean));
+  const actions = new Set(DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157);
 
   for (const item of diracCentralEnvCsvV150('DIRAC_CENTRAL_VERCEL2_ONLY_ACTIONS')) actions.add(item);
   for (const item of diracCentralEnvCsvV150('DIRAC_VERCEL2_ONLY_ACTIONS')) actions.add(item);
@@ -26672,7 +26326,7 @@ async function diracCentralDistributedRateLimitGuardV146(req, ctx) {
 }
 
 function diracCentralNeedsDistributedRateLimitV146(action) {
-  return /^(domain_login|domain_register|domain_check|hostinger_check|checkout_order|domain_checkout|create_payment|customer_security_recovery_codes_generate|customer_security_recovery_code_verify|dirac_mfa_passkey_start|dirac_mfa_passkey_verify|domain_mfa_passkey_start|domain_mfa_passkey_verify)$/.test(String(action || ''));
+  return DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(String(action || '').trim().toLowerCase());
 }
 
 function diracCentralDistributedRateLimitMaxV146(action) {
@@ -27337,7 +26991,7 @@ function diracCentralIsNonNegativeNumberV146(value) {
 
 function diracCentralIsPasskeyServiceRoleV146(ctx, table, path, options = {}, method) {
   const action = String(ctx && ctx.action || '').toLowerCase();
-  if (!/^(dirac_mfa_passkey_start|dirac_mfa_passkey_verify|domain_mfa_passkey_start|domain_mfa_passkey_verify|dirac_mfa_passkey_status|domain_mfa_passkey_status|dirac_passkey_status|domain_passkey_status|customer_security_recovery_codes_generate|customer_security_recovery_code_verify|dirac_recovery_worker_generate)$/.test(action)) return false;
+  if (!DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(action)) return false;
   const cleanTable = String(table || '').toLowerCase();
   const cleanMethod = String(method || options.method || 'GET').toUpperCase();
   const rawPath = String(path || '').toLowerCase();
@@ -27745,6 +27399,9 @@ function diracCentralStableMfaReadGateV146(req, res, ctx) {
 
 function diracCentralContractForActionV146(action) {
   const clean = String(action || '');
+  if (!DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)) {
+    return { methods: [], allowed: [], required: [], maxBodyBytes: 0, maxFieldBytes: 0, mutation: false };
+  }
   const commonGet = ['action', '_csrf_boot', '_csrf_a2f', '_csrf_login_final', '_csrf_probe', '_dirac_page_nonce_for', '_page_nonce_for', 'page_nonce_for', '_ts', '_t', '_', 'domain', 'limit', 'type', 'include_expired', 'order_id', 'order_code', 'domain_order_id', 'payment_id', 'transaction_id', 'invoice_id', 'gateway_reference', 'session_id', 'recovery_code_id', 'credential_id', 'project_id', 'document_id', 'item_id', 'email', 'slug'];
   const commonPost = ['action', 'email', 'password', 'fullName', 'full_name', 'name', 'phone', 'domain', 'domain_name', 'quantity', 'items', 'order_id', 'order_code', 'domain_order_id', 'payment_id', 'transaction_id', 'invoice_id', 'gateway_reference', 'session_id', 'recovery_code', 'recovery_code_id', 'credential_id', 'user_id', 'challenge', 'response', 'setupToken', 'mfaSetupToken', 'code', 'reason', 'csrf', 'nonce', 'idempotency_key'];
   const getOnly = { methods: ['GET', 'HEAD'], allowed: commonGet, required: [], maxBodyBytes: 1024, maxFieldBytes: 3000, mutation: false };
@@ -27764,89 +27421,9 @@ function diracCentralContractForActionV146(action) {
   const authLoginPost = { methods: ['POST'], allowed: ['email', 'password', 'fullName', 'full_name', 'name', 'phone'], required: ['email', 'password'], maxBodyBytes: 20 * 1024, maxFieldBytes: 3000, mutation: true };
   const authRegisterPost = { methods: ['POST'], allowed: ['email', 'password', 'fullName', 'full_name', 'name', 'phone'], required: ['email', 'password'], maxBodyBytes: 20 * 1024, maxFieldBytes: 3000, mutation: true };
   const contracts = {
-    domain_health: { ...getOnly, allowed: commonGet.concat(['_csrf_bootstrap']) },
-    hostinger_check: { ...getOnly, required: ['domain'] },
-    domain_check: { ...getOnly, required: ['domain'] },
-    midtrans_health: getOnly,
-    public_products: getOnly,
-    products_public: getOnly,
-    catalog_products: getOnly,
-    product_catalog: getOnly,
-    public_catalog: getOnly,
-    parfum_products: getOnly,
-    perfume_products: getOnly,
-    parfum_catalog: getOnly,
-    katalog_parfum: getOnly,
-    katalog_produk: getOnly,
-    lihat_produk: getOnly,
-    domain_me: getOnly,
-    domain_dashboard_me: getOnly,
-    domain_orders: getOnly,
-    domain_mfa_status: getOnly,
-    customer_security_status: getOnly,
-    customer_security_overview: getOnly,
-    customer_security_guard_status: getOnly,
-    customer_security_recovery_codes_status: getOnly,
-    customer_security_features_bundle: getOnly,
-    customer_security_features_bundle_v2: getOnly,
-    customer_security_features_bundle_v3: getOnly,
-    customer_security_trusted_devices: getOnly,
-    customer_security_login_history: getOnly,
-    customer_security_score: getOnly,
-    customer_security_notifications: getOnly,
-    customer_security_request_tracker: getOnly,
-    admin_security_overview: getOnly,
-    admin_security_events: getOnly,
-    admin_security_blocks: getOnly,
-    my_orders: getOnly,
-    customer_orders: getOnly,
-    pesanan_saya: getOnly,
-    my_invoices: getOnly,
-    customer_invoices: getOnly,
-    invoices: getOnly,
-    invoice_saya: getOnly,
-    my_bills: getOnly,
-    my_shipments: getOnly,
-    customer_shipments: getOnly,
-    pengiriman_saya: getOnly,
-    my_domains: getOnly,
-    customer_domains: getOnly,
-    my_projects: getOnly,
-    customer_projects: getOnly,
-    my_tickets: getOnly,
-    customer_tickets: getOnly,
-    tiket_bantuan: getOnly,
-    my_notifications: getOnly,
-    customer_notifications: getOnly,
-    notifications: getOnly,
-    notifikasi: getOnly,
-    dashboard: getOnly,
-    dirac_mfa_passkey_status: getOnly,
-    domain_mfa_passkey_status: getOnly,
-    dirac_passkey_status: getOnly,
-    domain_passkey_status: getOnly,
-    domain_login: authLoginPost,
-    domain_register: authRegisterPost,
-    domain_logout: postOnly,
-    domain_checkout: { ...postOnly, required: ['domain'] },
-    checkout_order: { ...postOnly, allowed: commonPost.concat(['service_type', 'product_title', 'total', 'payment_method', 'customer_address', 'customer_note', 'source', 'product_id', 'title', 'qty', 'client_price', 'client_subtotal']) },
-    create_payment: postOnly,
-    customer_security_revoke_session: { ...postOnly, required: ['session_id'] },
-    customer_security_revoke_other_sessions: postOnly,
-    customer_security_account_request: postOnly,
     customer_security_recovery_codes_generate: recoveryGeneratePost,
     customer_security_recovery_code_verify: recoveryVerifyPost,
-    [DIRAC_RECOVERY_WORKER_ACTION]: recoveryWorkerPost,
-    customer_security_trust_current_device: postOnly,
-    customer_security_untrust_device: postOnly,
-    customer_security_prune_login_history: postOnly,
-    admin_security_unblock_user: postOnly,
-    dirac_mfa_passkey_start: passkeyPost,
-    dirac_mfa_passkey_verify: passkeyPost,
-    domain_mfa_passkey_start: passkeyPost,
-    domain_mfa_passkey_verify: passkeyPost,
-    security_report: { ...postOnly, allowed: ['action', 'reason', 'type', 'page', 'event', 'nonce', 'csrf'], maxBodyBytes: 8 * 1024 },
-    midtrans_webhook: { methods: ['POST'], allowed: ['transaction_time', 'transaction_status', 'transaction_id', 'status_message', 'status_code', 'signature_key', 'payment_type', 'order_id', 'merchant_id', 'gross_amount', 'fraud_status', 'currency', 'settlement_time', 'expiry_time'], required: ['order_id', 'status_code', 'gross_amount', 'signature_key'], maxBodyBytes: 64 * 1024, maxFieldBytes: 3000, mutation: true, allowExtra: true, allowProtectedFields: true }
+    [DIRAC_RECOVERY_WORKER_ACTION]: recoveryWorkerPost
   };
   return contracts[clean] || { methods: [], allowed: [], required: [], maxBodyBytes: 0, maxFieldBytes: 0, mutation: false };
 }
