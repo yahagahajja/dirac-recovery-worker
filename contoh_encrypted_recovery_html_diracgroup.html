@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DiracGroup Encrypted Recovery Demo</title>
+  <style>
+    :root {
+      font-family: Arial, sans-serif;
+      color: #111827;
+      background: #f3f4f6;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 12px 36px rgba(0,0,0,.08);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    .muted {
+      color: #6b7280;
+      line-height: 1.5;
+    }
+    label {
+      display: block;
+      margin-top: 14px;
+      font-weight: 700;
+    }
+    input {
+      box-sizing: border-box;
+      width: 100%;
+      margin-top: 6px;
+      padding: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      font-size: 15px;
+    }
+    button {
+      margin-top: 16px;
+      padding: 12px 18px;
+      border: 0;
+      border-radius: 10px;
+      background: #111827;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-all;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px;
+      line-height: 1.55;
+    }
+    .box {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 14px;
+    }
+    .ok {
+      color: #047857;
+      font-weight: 700;
+    }
+    .bad {
+      color: #b91c1c;
+      font-weight: 700;
+    }
+    code {
+      background: #eef2ff;
+      padding: 2px 5px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>DiracGroup Encrypted HTML Recovery Demo</h1>
+  <p class="muted">
+    Ini contoh pengganti PDF terenkripsi. Recovery code 500 karakter tidak disimpan sebagai plaintext di HTML.
+    Isi recovery hanya terbuka kalau password gabungan benar.
+  </p>
+
+  <div class="box">
+    <strong>Demo unlock data</strong>
+    <p>Website recovery code: <code>A7DGK9Q2</code> — posisi <code>DG</code> tidak di depan.</p>
+    <p>Email code 2 digit: <code>42</code></p>
+    <p>Demo account password: <code>DiracDemoPassword-2026-Recovery-Test-Account-Key-XYZ12</code></p>
+    <p>Total unlock password: <code>64 byte</code></p>
+    <p class="muted">Produksi: password akun jangan ditulis di HTML. Ini hanya demo agar bisa dites offline.</p>
+  </div>
+
+  <label for="websiteCode">Website recovery code</label>
+  <input id="websiteCode" autocomplete="off" spellcheck="false" value="A7DGK9Q2">
+
+  <label for="emailCode">Email code 2 digit</label>
+  <input id="emailCode" autocomplete="one-time-code" inputmode="numeric" maxlength="2" value="42">
+
+  <label for="accountPassword">Password akun</label>
+  <input id="accountPassword" type="password" autocomplete="current-password" value="DiracDemoPassword-2026-Recovery-Test-Account-Key-XYZ12">
+
+  <button id="unlockBtn">Unlock recovery file</button>
+
+  <div id="status" class="box muted">Belum dibuka.</div>
+
+  <section id="result" hidden>
+    <h2>Recovery berhasil dibuka</h2>
+    <p><strong>Request ID:</strong> <span id="requestId"></span></p>
+    <p><strong>Purpose:</strong> <span id="purpose"></span></p>
+    <p><strong>Dashboard access:</strong> <span id="dashboardAccess"></span></p>
+    <p><strong>Expires at:</strong> <span id="expiresAt"></span></p>
+    <p><strong>Recovery code length:</strong> <span id="codeLength"></span></p>
+    <pre id="recoveryCode"></pre>
+    <button id="copyBtn">Copy recovery code</button>
+  </section>
+
+  <h2>Encrypted payload</h2>
+  <pre id="encryptedPayload"></pre>
+</main>
+
+<script>
+'use strict';
+
+const encryptedBlob = {
+  "version": "dirac-recovery-html-v1",
+  "algorithm": "AES-GCM",
+  "kdf": "PBKDF2-SHA256",
+  "iterations": 310000,
+  "salt_b64u": "AixJt2Ss9ys8h2XXHzCY0Q",
+  "iv_b64u": "rpnwxZTNhieomd1p",
+  "aad": "diracgroup-lost-passkey-recovery-html-v1",
+  "ciphertext_b64u": "conTPF2fFqWNqJD2-wsgD_D_AlOAO-Zwd042vlH-LeMcJ8zbOZHvEj3-YiH-crxqiJazWQC2SwD9b_cHaiOg0Eq-ndDqDzt8Uu_ZbCHEV0cGkfDeSlaD9mJPJoYgkDcYE7fGoDuHFCPjbbtvTJulb5JaeQK48FrLWjDLyWgAi2cwS9B_49L4g0MpL6G45ovkLiWDINI3sVGMkkQDekO85ROZg7p5M4KjRPC9JlX091wx58uEPoOV1wagRHDF5nxvkjDo8cPTS9mkNXYValVeyTTD0ya1-jkn95yS00UdH2WWTGlGSfsTHuvD0sgc3SrmUaNthetdHcpILFUfJMNcII16vm2zVbdugU2Tho-rpVqZ7QR8dNLjD6aUtduRmuyfpoEB8oUuncGuSiuMzDAPn686JwRdHvF2N_BfH9ksuMXaHYMcy6gLS0m2RHlQ63dw--oeYDj8j5EdCsfNJGtIaLs6dkbNbC_aaYSqaDZCVkvX1D3G-YJF1yN6LfvpcTd4WT8j7Upji5tWWXI-X4ECEl2T58ztxTGPXffe98CJPdp0t9yOhQaF6dsLTG6onECUCwdk0EG1E8iXvXewCzsEXtbyv_iaNfFEaFiV6lOBc2VuC7-OwDHbEBSbfV0UwTd09VcmPUkheAW3wKDR8Gawl-oWbekFjkkQpeT_ugp0ob3CWNNaS95cgMTgErTqfuvvH2_PKvgZLngDnepZSpj9aKP5WNBhLkXEZsRPnqxirsKJljuU-u4zKYiPt9C5JagoRmz__nF6zGwFuOXeOojoO6AyDqaZ4YmGR64Fq2peSt1RPoIbaDokJnmTPlhS0uepZ9r9VflEbKO_Ik1bBIYZ4Lvic9V1an6XSqyKsNbBY8EdtZxatl1jS2wiYEa_5FrcgNfo71qA_l7E2hyKDssTwv8MVakmqVT7HYiL_Fg1Ecu9kbfW9i3Vnj2Fwz8_Gg_iKZII3Lh6L7Jznu10NTtSkbQmMwcZPlb8cpmeKpc5FYz3PniBqGY0xLb95C8LkGUXV-0YkTZCCK8z78QJrD-lvyvI1UT5V-Wleyg0pamihUtzSUDq_X4fwgsGJNzJhdh3Zi7sgAOjrm8l58Bm5iO7oDs4-o7_bW0U4EmU6EzEqscW5ueCETxerzeEOhXZJfB_S4hOAw",
+  "request_id_hint": "lrq_demo_20260708_001",
+  "purpose_hint": "register_new_passkey",
+  "expires_at_hint": "2026-07-08T07:33:14.322160+00:00"
+};
+
+const encryptedPayloadEl = document.getElementById('encryptedPayload');
+encryptedPayloadEl.textContent = JSON.stringify({
+  version: encryptedBlob.version,
+  algorithm: encryptedBlob.algorithm,
+  kdf: encryptedBlob.kdf,
+  iterations: encryptedBlob.iterations,
+  salt_b64u: encryptedBlob.salt_b64u,
+  iv_b64u: encryptedBlob.iv_b64u,
+  aad: encryptedBlob.aad,
+  ciphertext_b64u: encryptedBlob.ciphertext_b64u.slice(0, 96) + '...'
+}, null, 2);
+
+function b64uToBytes(value) {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function utf8Bytes(value) {
+  return new TextEncoder().encode(String(value || ''));
+}
+
+function byteLength(value) {
+  return utf8Bytes(value).length;
+}
+
+async function deriveAesKey(password, salt, iterations) {
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    utf8Bytes(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey']
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt,
+      iterations,
+      hash: 'SHA-256'
+    },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+}
+
+function normalizeRecoveryCode(value) {
+  return String(value || '')
+    .replace(/[\s\u00A0\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, '-');
+}
+
+async function unlockRecovery() {
+  const status = document.getElementById('status');
+  const result = document.getElementById('result');
+  const unlockBtn = document.getElementById('unlockBtn');
+
+  result.hidden = true;
+  status.className = 'box muted';
+  status.textContent = 'Memproses dekripsi...';
+  unlockBtn.disabled = true;
+
+  try {
+    const websiteCode = document.getElementById('websiteCode').value.trim();
+    const emailCode = document.getElementById('emailCode').value.trim();
+    const accountPassword = document.getElementById('accountPassword').value;
+
+    if (!websiteCode || !/^\d{2}$/.test(emailCode) || !accountPassword) {
+      throw new Error('Website code, email code 2 digit, dan password akun wajib diisi.');
+    }
+
+    const unlockPassword = websiteCode + emailCode + accountPassword;
+    if (byteLength(unlockPassword) !== 64) {
+      throw new Error('Demo ini sengaja dikunci dengan password gabungan tepat 64 byte. Password sekarang: ' + byteLength(unlockPassword) + ' byte.');
+    }
+
+    const key = await deriveAesKey(
+      unlockPassword,
+      b64uToBytes(encryptedBlob.salt_b64u),
+      Number(encryptedBlob.iterations)
+    );
+
+    const plaintextBuffer = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: b64uToBytes(encryptedBlob.iv_b64u),
+        additionalData: utf8Bytes(encryptedBlob.aad),
+        tagLength: 128
+      },
+      key,
+      b64uToBytes(encryptedBlob.ciphertext_b64u)
+    );
+
+    const payload = JSON.parse(new TextDecoder().decode(plaintextBuffer));
+    const cleanCode = normalizeRecoveryCode(payload.recovery_code);
+
+    if (!/^[A-Za-z0-9_-]{500}$/.test(cleanCode)) {
+      throw new Error('Recovery code hasil decrypt tidak valid.');
+    }
+
+    document.getElementById('requestId').textContent = payload.request_id;
+    document.getElementById('purpose').textContent = payload.purpose;
+    document.getElementById('dashboardAccess').textContent = String(payload.dashboard_access);
+    document.getElementById('expiresAt').textContent = payload.expires_at;
+    document.getElementById('codeLength').textContent = cleanCode.length;
+    document.getElementById('recoveryCode').textContent = cleanCode.match(/.{1,82}/g).join('\n');
+
+    status.className = 'box ok';
+    status.textContent = 'Recovery file berhasil dibuka. Dashboard access tetap false; ini hanya untuk register_new_passkey.';
+    result.hidden = false;
+  } catch (error) {
+    status.className = 'box bad';
+    status.textContent = 'Gagal membuka recovery file: ' + (error && error.message ? error.message : 'password salah atau payload rusak');
+  } finally {
+    unlockBtn.disabled = false;
+  }
+}
+
+document.getElementById('unlockBtn').addEventListener('click', unlockRecovery);
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  const text = document.getElementById('recoveryCode').textContent.replace(/\s+/g, '');
+  await navigator.clipboard.writeText(text);
+});
+</script>
+</body>
+</html>
