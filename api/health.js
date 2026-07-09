@@ -6118,55 +6118,123 @@ async function customerSecurityLostPasskeyQueueTryClaimExpiredV164(ownerId, cont
   return { ok: false, reason: 'queue_lock_busy' };
 }
 
+async function customerSecurityLostPasskeyQueueTryPatchAvailableV167(ownerId, context = {}) {
+  const table = customerSecurityLostPasskeyQueueTableV164();
+  if (!table) return { ok: false, reason: 'queue_table_missing' };
+  const nowMs = Date.now();
+  const lockUntilMs = nowMs + customerSecurityLostPasskeyQueueTtlMsV164();
+  const payload = {
+    record_json: customerSecurityLostPasskeyQueueRecordV164(ownerId, nowMs, lockUntilMs, context),
+    blocked_until_ms: lockUntilMs,
+    updated_at: new Date(nowMs).toISOString(),
+    expires_at: new Date(lockUntilMs + 60_000).toISOString()
+  };
+  const path = '/rest/v1/' + encodeURIComponent(table)
+    + '?security_key=eq.' + encodeURIComponent(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164)
+    + '&blocked_until_ms=lte.' + encodeURIComponent(String(nowMs));
+  const result = await supabaseFetch(path, {
+    method: 'PATCH',
+    auth: 'service',
+    prefer: 'return=representation',
+    body: payload
+  }).catch(() => null);
+  if (result && result.ok && Array.isArray(result.data) && result.data.some((row) => (
+    customerSecurityLostPasskeyQueueRowOwnerV164(row) === ownerId
+    && customerSecurityLostPasskeyQueueRowActiveV164(row, Date.now())
+  ))) {
+    return { ok: true, ownerId, claimed: 'expired_or_released' };
+  }
+  return { ok: false, reason: 'queue_lock_busy_or_absent' };
+}
+
+async function customerSecurityLostPasskeyQueueTryInsertAvailableV167(ownerId, context = {}) {
+  const table = customerSecurityLostPasskeyQueueTableV164();
+  if (!table) return { ok: false, reason: 'queue_table_missing' };
+  const nowMs = Date.now();
+  const lockUntilMs = nowMs + customerSecurityLostPasskeyQueueTtlMsV164();
+  const payload = [{
+    security_key: DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164,
+    record_json: customerSecurityLostPasskeyQueueRecordV164(ownerId, nowMs, lockUntilMs, context),
+    blocked_until_ms: lockUntilMs,
+    updated_at: new Date(nowMs).toISOString(),
+    expires_at: new Date(lockUntilMs + 60_000).toISOString()
+  }];
+  const result = await supabaseFetch('/rest/v1/' + encodeURIComponent(table) + '?on_conflict=security_key', {
+    method: 'POST',
+    auth: 'service',
+    prefer: 'resolution=ignore-duplicates,return=representation',
+    body: payload
+  }).catch(() => null);
+  if (result && result.ok && Array.isArray(result.data) && result.data.some((row) => (
+    customerSecurityLostPasskeyQueueRowOwnerV164(row) === ownerId
+    && customerSecurityLostPasskeyQueueRowActiveV164(row, Date.now())
+  ))) {
+    return { ok: true, ownerId, claimed: 'inserted' };
+  }
+  return { ok: false, reason: 'queue_lock_busy' };
+}
+
 async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
   if (!customerSecurityLostPasskeyQueueEnabledV164()) return { ok: true, disabled: true, release: async () => {} };
   const ownerId = customerSecurityLostPasskeyQueueOwnerV164();
   const startMs = Date.now();
-  const deadlineMs = startMs + customerSecurityLostPasskeyQueueMaxWaitMsV164();
   const context = { nonce: body && body.nonce, callerId: body && body.caller_id };
-  let attempts = 0;
-  let lastReason = '';
+  const nowMs = Date.now();
+  const memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
+  if (memory && Number(memory.lockUntilMs || 0) > nowMs && String(memory.ownerId || '') !== ownerId) {
+    return {
+      ok: false,
+      status: 429,
+      code: 'RECOVERY_GENERATE_QUEUE_BUSY',
+      reason: 'memory_lock_busy',
+      attempts: 1,
+      waited_ms: Date.now() - startMs
+    };
+  }
 
-  while (Date.now() <= deadlineMs) {
-    attempts += 1;
-    const row = await customerSecurityLostPasskeyQueueReadV164();
-    const nowMs = Date.now();
-    const memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
-    if (memory && Number(memory.lockUntilMs || 0) > nowMs && String(memory.ownerId || '') !== ownerId) {
-      lastReason = 'memory_lock_busy';
-    } else if (!row) {
-      const claim = await customerSecurityLostPasskeyQueueTryInsertV164(ownerId, context);
-      if (claim.ok) {
-        DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, { ownerId, lockUntilMs: Date.now() + customerSecurityLostPasskeyQueueTtlMsV164() });
-        return { ok: true, ownerId, attempts, waited_ms: Date.now() - startMs, release: () => customerSecurityLostPasskeyQueueReleaseV164(ownerId) };
-      }
-      lastReason = claim.reason || 'queue_insert_failed';
-    } else if (!customerSecurityLostPasskeyQueueRowActiveV164(row, nowMs)) {
-      const claim = await customerSecurityLostPasskeyQueueTryClaimExpiredV164(ownerId, context);
-      if (claim.ok) {
-        DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, { ownerId, lockUntilMs: Date.now() + customerSecurityLostPasskeyQueueTtlMsV164() });
-        return { ok: true, ownerId, attempts, waited_ms: Date.now() - startMs, release: () => customerSecurityLostPasskeyQueueReleaseV164(ownerId) };
-      }
-      lastReason = claim.reason || 'queue_claim_failed';
-    } else {
-      lastReason = 'queue_lock_busy';
-    }
-
-    const jitter = crypto.randomInt(0, 250);
-    await customerSecurityLostPasskeyQueueSleepV164(customerSecurityLostPasskeyQueuePollMsV164() + jitter);
+  // V167: no polling and no repeated DB reads. One fast claim pass only:
+  // PATCH released/expired lock row, then INSERT only when no reusable row exists.
+  const patched = await customerSecurityLostPasskeyQueueTryPatchAvailableV167(ownerId, context);
+  const claimed = patched.ok ? patched : await customerSecurityLostPasskeyQueueTryInsertAvailableV167(ownerId, context);
+  if (claimed && claimed.ok) {
+    DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
+      ownerId,
+      lockUntilMs: Date.now() + customerSecurityLostPasskeyQueueTtlMsV164()
+    });
+    return {
+      ok: true,
+      ownerId,
+      attempts: 1,
+      waited_ms: Date.now() - startMs,
+      claim_mode: claimed.claimed || 'fast_claim',
+      release: () => customerSecurityLostPasskeyQueueReleaseV164(ownerId)
+    };
   }
 
   try {
     await customerSecurityWriteGuardEvent(null, {
-      event_type: 'lost_passkey_generate_queue_timeout',
+      event_type: 'lost_passkey_generate_queue_busy',
       status: 'blocked',
       risk_level: 'medium',
-      description: 'SERVER 2 menolak generate lost-passkey karena antrean Argon2id masih penuh.',
+      description: 'SERVER 2 menolak generate lost-passkey karena lock Argon2id sedang aktif.',
       req,
-      metadata: { patch: DIRAC_LOST_PASSKEY_GENERATE_QUEUE_PATCH_V164, attempts, waited_ms: Date.now() - startMs, reason: lastReason || 'queue_timeout' }
+      metadata: {
+        patch: DIRAC_LOST_PASSKEY_GENERATE_QUEUE_PATCH_V164,
+        no_polling_patch: 'v167',
+        attempts: 1,
+        waited_ms: Date.now() - startMs,
+        reason: (claimed && claimed.reason) || (patched && patched.reason) || 'queue_lock_busy'
+      }
     }).catch(() => null);
   } catch (_) {}
-  return { ok: false, status: 503, code: 'RECOVERY_GENERATE_QUEUE_TIMEOUT', reason: lastReason || 'queue_timeout', attempts, waited_ms: Date.now() - startMs };
+  return {
+    ok: false,
+    status: 429,
+    code: 'RECOVERY_GENERATE_QUEUE_BUSY',
+    reason: (claimed && claimed.reason) || (patched && patched.reason) || 'queue_lock_busy',
+    attempts: 1,
+    waited_ms: Date.now() - startMs
+  };
 }
 
 async function customerSecurityLostPasskeyQueueReleaseV164(ownerId) {
@@ -6176,22 +6244,23 @@ async function customerSecurityLostPasskeyQueueReleaseV164(ownerId) {
   if (memory && String(memory.ownerId || '') === cleanOwner) DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
   const table = customerSecurityLostPasskeyQueueTableV164();
   if (!table) return false;
-  const row = await customerSecurityLostPasskeyQueueReadV164();
-  if (customerSecurityLostPasskeyQueueRowOwnerV164(row) !== cleanOwner) return false;
   const nowMs = Date.now();
-  const record = row && row.record_json && typeof row.record_json === 'object' ? row.record_json : {};
   const releasedRecord = {
-    ...record,
+    type: 'lost_passkey_generate_argon2id_queue_lock_v164',
+    patch: DIRAC_LOST_PASSKEY_GENERATE_QUEUE_PATCH_V164,
     released_at_ms: nowMs,
     released_by_owner_id_hash: customerSecurityLostPasskeySha256B64(Buffer.from(cleanOwner, 'utf8')),
     owner_id: '',
-    status: 'released'
+    status: 'released',
+    worker_action: DIRAC_RECOVERY_WORKER_TASK_GENERATE
   };
   const path = '/rest/v1/' + encodeURIComponent(table)
-    + '?security_key=eq.' + encodeURIComponent(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
+    + '?security_key=eq.' + encodeURIComponent(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164)
+    + '&' + encodeURIComponent('record_json->>owner_id') + '=eq.' + encodeURIComponent(cleanOwner);
   const result = await supabaseFetch(path, {
     method: 'PATCH',
     auth: 'service',
+    prefer: 'return=minimal',
     body: {
       record_json: releasedRecord,
       blocked_until_ms: 0,
