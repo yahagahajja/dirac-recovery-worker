@@ -59,6 +59,12 @@
     .status { margin: 16px 0 0; padding: 13px 14px; border-radius: 14px; border: 1px solid #2d3d53; background: #0d1420; color: #dce8f9; white-space: pre-wrap; }
     .status.ok { border-color: #245f3d; background: #0b2115; color: #ccffe2; }
     .status.err { border-color: #6b2530; background: #241016; color: #ffd3dc; }
+
+    [hidden] { display: none !important; }
+    .debug-panel { margin: 14px 0 0; border: 1px solid #6b5f25; background: #211d0b; color: #fff2b8; border-radius: 14px; padding: 12px 14px; }
+    .debug-panel summary { cursor: pointer; font-weight: 850; }
+    .debug-output { margin: 10px 0 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.45; color: #ffeeb0; }
+    .debug-note { margin-top: 8px; color: #d6c987; font-size: 12px; line-height: 1.45; }
     body.locked .card { border-color: #6b2530; }
     body.locked .badge { background: #241016; border-color: #6b2530; color: #ffd3dc; }
     body.locked input, body.locked textarea, body.locked button { pointer-events: none; }
@@ -83,6 +89,12 @@
       <p>Halaman ini adalah alat decrypt lokal. Secret hanya diproses di browser, tidak disimpan, network dimatikan setelah vault diterima, dan decrypt hanya aktif saat browser offline.</p>
 
       <div id="status" class="status" role="status" aria-live="polite">Memuat halaman recovery...</div>
+
+      <details id="debugPanel" class="debug-panel" open>
+        <summary>Debug recovery — jangan pakai di production</summary>
+        <div id="debugOutput" class="debug-output">Debug aktif. Token/secret/ciphertext tidak ditampilkan.</div>
+        <div class="debug-note">File ini hanya untuk mencari penyebab invalid. Setelah ketemu, kembali pakai HTML production.</div>
+      </details>
 
       <form id="decryptForm" class="grid" autocomplete="off" spellcheck="false" hidden>
         <div class="split">
@@ -164,7 +176,8 @@
       offlineUnlockSeen: false,
       expiresAtMs: 0,
       expiryTimer: null,
-      sensitiveBuffers: []
+      sensitiveBuffers: [],
+      debugEvents: []
     };
 
     var el = {
@@ -176,22 +189,94 @@
       decryptButton: document.getElementById('decryptButton'),
       clearButton: document.getElementById('clearButton'),
       resultBox: document.getElementById('resultBox'),
-      recoveryOutput: document.getElementById('recoveryOutput')
+      recoveryOutput: document.getElementById('recoveryOutput'),
+      debugPanel: document.getElementById('debugPanel'),
+      debugOutput: document.getElementById('debugOutput')
     };
+
+    function debugRedactKey(key) {
+      return /(token|password|secret|cipher|auth_tag|tag_b64|salt|nonce|signature|plaintext|recovery|code)/i.test(String(key || ''));
+    }
+
+    function debugSafe(value, key, depth) {
+      depth = depth || 0;
+      if (depth > 3) return '[depth-limit]';
+      if (value == null) return value;
+      if (debugRedactKey(key)) {
+        if (typeof value === 'string') return { present: value.length > 0, length: value.length, redacted: true };
+        if (value && typeof value.length === 'number') return { present: true, length: value.length, redacted: true };
+        return { present: true, redacted: true };
+      }
+      if (typeof value === 'string') return value.length > 160 ? value.slice(0, 80) + '…' + value.slice(-24) : value;
+      if (typeof value === 'number' || typeof value === 'boolean') return value;
+      if (Array.isArray(value)) return value.slice(0, 12).map(function (item) { return debugSafe(item, key, depth + 1); });
+      if (typeof value === 'object') {
+        var out = {};
+        Object.keys(value).slice(0, 60).forEach(function (k) { out[k] = debugSafe(value[k], k, depth + 1); });
+        return out;
+      }
+      return String(value);
+    }
+
+    function debugAdd(step, data, level) {
+      var event = {
+        time: new Date().toISOString(),
+        step: String(step || 'debug'),
+        level: level || 'info',
+        data: debugSafe(data || {}, '', 0)
+      };
+      state.debugEvents.push(event);
+      try { console.log('[DIRAC_DEBUG]', event.step, event.data); } catch (_) {}
+      try {
+        if (el.debugOutput) el.debugOutput.textContent = state.debugEvents.map(function (item, index) {
+          return '[' + (index + 1) + '] ' + item.level.toUpperCase() + ' ' + item.step + '\n' + JSON.stringify(item.data, null, 2);
+        }).join('\n\n');
+      } catch (_) {}
+    }
+
+    function debugBodySummary(body) {
+      var vault = body && (body.vault_bundle || body.vaultBundle || (body.metadata && body.metadata.vault_bundle) || body.vault);
+      var signed = body && (body.signed_manifest || body.manifest_signed || null);
+      var manifest = signed && signed.payload ? signed.payload : (body && body.manifest && body.manifest.payload ? body.manifest.payload : body && body.manifest);
+      return {
+        ok: body && body.ok,
+        error: body && (body.error || body.code || body.message || body.reason || null),
+        topLevelKeys: body && typeof body === 'object' ? Object.keys(body).sort() : [],
+        hasVaultBundle: !!vault,
+        hasSignedManifest: !!(signed || manifest),
+        vaultKeys: vault && typeof vault === 'object' ? Object.keys(vault).sort() : [],
+        manifestKeys: manifest && typeof manifest === 'object' ? Object.keys(manifest).sort() : [],
+        requestIdMatchesUrl: !!(vault && String(vault.request_id || body.request_id || '') === state.fragment.rid),
+        manifestRequestIdMatchesUrl: !!(manifest && String(manifest.request_id || body.request_id || '') === state.fragment.rid),
+        expiresAt: manifest && (manifest.expires_at || manifest.expiresAt) || body && body.expires_at || null,
+        argon2id_params: vault && (vault.argon2id_params || body.kdf) || body && body.kdf || null
+      };
+    }
+
+    function debugFatal(error, phase) {
+      var msg = String(error && error.message || error || 'UNKNOWN');
+      debugAdd('FATAL_' + String(phase || 'BOOTSTRAP'), { error: msg }, 'error');
+      wipeMemory();
+      setStatus('DEBUG: gagal di tahap ' + String(phase || 'BOOTSTRAP') + ' → ' + msg, 'err');
+      try { el.form.hidden = true; } catch (_) {}
+      try { el.decryptButton.disabled = true; } catch (_) {}
+    }
 
     function setStatus(message, type) {
       el.status.textContent = String(message || CONFIG.genericError);
       el.status.className = 'status' + (type ? ' ' + type : '');
     }
 
-    function failClosed() {
+    function failClosed(reason) {
+      debugAdd('FAIL_CLOSED', { reason: reason || CONFIG.genericError }, 'error');
       wipeMemory();
-      setStatus(CONFIG.genericError, 'err');
+      setStatus(CONFIG.genericError + ' DEBUG=' + String(reason || 'FAIL_CLOSED'), 'err');
       el.form.hidden = true;
       el.decryptButton.disabled = true;
     }
 
     function deploymentFailClosed(message) {
+      debugAdd('DEPLOYMENT_FAIL_CLOSED', { message: message }, 'error');
       wipeMemory();
       setStatus(message || 'Konfigurasi recovery belum siap. Hubungi admin.', 'err');
       el.form.hidden = true;
@@ -320,6 +405,7 @@
       var token = String(params.get('token') || '').trim();
       if (!/^[A-Za-z0-9_-]{16,120}$/.test(rid)) throw new Error('RID_INVALID');
       if (!/^[A-Za-z0-9_-]{320,360}$/.test(token)) throw new Error('TOKEN_INVALID');
+      debugAdd('fragment_valid', { ridLength: rid.length, tokenLength: token.length });
       try { history.replaceState(null, document.title, location.pathname + '#recovery'); } catch (_) {}
       return { rid: rid, token: token };
     }
@@ -398,6 +484,7 @@
       url.searchParams.set('rid', fragment.rid);
       url.searchParams.set('token', fragment.token);
       url.searchParams.set('format', 'json');
+      debugAdd('fetch_start', { path: CONFIG.vaultApiPath, action: CONFIG.vaultApiAction, ridLength: fragment.rid.length, tokenLength: fragment.token.length });
       var response = await fetch(url.toString(), {
         method: 'GET',
         credentials: 'omit',
@@ -406,16 +493,19 @@
         referrerPolicy: 'no-referrer',
         headers: { 'Accept': 'application/json' }
       });
-      if (!response.ok) throw new Error('VAULT_FETCH_FAILED');
       var contentType = String(response.headers.get('content-type') || '').toLowerCase();
-      if (contentType.indexOf('application/json') === -1) throw new Error('VAULT_RESPONSE_NOT_JSON');
+      debugAdd('fetch_response', { httpOk: response.ok, status: response.status, statusText: response.statusText, contentType: contentType });
+      if (!response.ok) throw new Error('VAULT_FETCH_FAILED status=' + response.status);
+      if (contentType.indexOf('application/json') === -1) throw new Error('VAULT_RESPONSE_NOT_JSON contentType=' + contentType);
       var body = await response.json();
-      if (!body || body.ok !== true) throw new Error('VAULT_RESPONSE_INVALID');
+      debugAdd('fetch_body', debugBodySummary(body));
+      if (!body || body.ok !== true) throw new Error('VAULT_RESPONSE_INVALID ok=' + String(body && body.ok) + ' error=' + String(body && (body.error || body.code || body.message || body.reason || '')));
       return body;
     }
 
     function normalizeVaultBundle(raw) {
       var bundle = raw.vault_bundle || raw.vaultBundle || (raw.metadata && raw.metadata.vault_bundle) || raw.vault || null;
+      debugAdd('normalize_bundle_source', debugBodySummary(raw));
       if (!bundle || typeof bundle !== 'object') throw new Error('VAULT_BUNDLE_MISSING');
 
       var normalized = {
@@ -431,8 +521,25 @@
         hkdf_info: String(bundle.hkdf_info || (raw.hkdf && raw.hkdf.info) || '')
       };
 
+      debugAdd('bundle_normalized', {
+        version: normalized.version,
+        hasSalt: !!normalized.salt,
+        saltLength: normalized.salt.length,
+        hasNonce: !!normalized.aes_nonce,
+        nonceLength: normalized.aes_nonce.length,
+        hasCiphertext: !!normalized.ciphertext,
+        ciphertextLength: normalized.ciphertext.length,
+        hasAuthTag: !!normalized.auth_tag,
+        authTagLength: normalized.auth_tag.length,
+        hasVaultId: !!normalized.vault_id,
+        vaultIdLength: normalized.vault_id.length,
+        requestIdMatchesUrl: normalized.request_id === state.fragment.rid,
+        metadataKeys: normalized.metadata && typeof normalized.metadata === 'object' ? Object.keys(normalized.metadata).sort() : [],
+        argon2id_params: normalized.argon2id_params,
+        hasHkdfInfo: !!normalized.hkdf_info
+      });
       if (!normalized.salt || !normalized.aes_nonce || !normalized.ciphertext || !normalized.auth_tag || !normalized.vault_id) throw new Error('VAULT_BUNDLE_INCOMPLETE');
-      if (normalized.request_id !== state.fragment.rid) throw new Error('VAULT_RID_MISMATCH');
+      if (normalized.request_id !== state.fragment.rid) throw new Error('VAULT_RID_MISMATCH bundleRidLength=' + normalized.request_id.length + ' urlRidLength=' + state.fragment.rid.length);
       return normalized;
     }
 
@@ -440,6 +547,16 @@
       var signed = raw.signed_manifest || raw.manifest_signed || null;
       var payload = signed && signed.payload ? signed.payload : (raw.manifest && raw.manifest.payload ? raw.manifest.payload : raw.manifest);
       var signature = signed && signed.signature_b64 ? signed.signature_b64 : (raw.signature_b64 || raw.ed25519_signature_b64 || '');
+      debugAdd('manifest_extracted', {
+        hasPayload: !!payload,
+        payloadKeys: payload && typeof payload === 'object' ? Object.keys(payload).sort() : [],
+        keyId: payload && (payload.key_id || payload.keyId || null),
+        purpose: payload && payload.purpose || null,
+        requestIdMatchesUrl: !!(payload && String(payload.request_id || '') === state.fragment.rid),
+        expiresAt: payload && (payload.expires_at || payload.expiresAt) || null,
+        hasSignature: !!signature,
+        signatureLength: String(signature || '').length
+      });
       if (!payload || typeof payload !== 'object' || !signature) throw new Error('SIGNED_MANIFEST_MISSING');
       return { payload: payload, signatureB64: String(signature) };
     }
@@ -450,46 +567,55 @@
     }
 
     function normalizedArgonParams(params) {
-      return {
+      var normalized = {
         memoryCost: getArgonParam(params, 'memoryCost', 'memory_kib', 0),
         timeCost: getArgonParam(params, 'timeCost', 'time_cost', 0),
         parallelism: getArgonParam(params, 'parallelism', 'parallelism', 0),
         hashLength: getArgonParam(params, 'hashLength', 'hash_len', 64)
       };
+      debugAdd('argon_params_normalized', { raw: params || null, normalized: normalized, minimum: CONFIG.minArgon2id });
+      return normalized;
     }
 
     function verifyMinimumArgon2idParams(params) {
-      if (params.memoryCost < CONFIG.minArgon2id.memoryCost) throw new Error('ARGON2_MEMORY_DOWNGRADE');
-      if (params.timeCost < CONFIG.minArgon2id.timeCost) throw new Error('ARGON2_TIME_DOWNGRADE');
-      if (params.parallelism < CONFIG.minArgon2id.parallelism) throw new Error('ARGON2_PARALLELISM_INVALID');
-      if (params.hashLength < CONFIG.minArgon2id.hashLength) throw new Error('ARGON2_HASHLEN_INVALID');
+      if (params.memoryCost < CONFIG.minArgon2id.memoryCost) throw new Error('ARGON2_MEMORY_DOWNGRADE got=' + params.memoryCost + ' min=' + CONFIG.minArgon2id.memoryCost);
+      if (params.timeCost < CONFIG.minArgon2id.timeCost) throw new Error('ARGON2_TIME_DOWNGRADE got=' + params.timeCost + ' min=' + CONFIG.minArgon2id.timeCost);
+      if (params.parallelism < CONFIG.minArgon2id.parallelism) throw new Error('ARGON2_PARALLELISM_INVALID got=' + params.parallelism + ' min=' + CONFIG.minArgon2id.parallelism);
+      if (params.hashLength < CONFIG.minArgon2id.hashLength) throw new Error('ARGON2_HASHLEN_INVALID got=' + params.hashLength + ' min=' + CONFIG.minArgon2id.hashLength);
+      debugAdd('argon_params_minimum_ok', params);
     }
 
     async function verifyEd25519Manifest(payload, signatureB64) {
       var keyId = String(payload.key_id || payload.keyId || '');
       var publicKeyB64 = CONFIG.ed25519PublicKeysBase64[keyId];
-      if (!keyId || !publicKeyB64 || publicKeyB64.indexOf('PASTE_') === 0) throw new Error('ED25519_PUBLIC_KEY_MISSING');
+      debugAdd('ed25519_key_check', { keyId: keyId, hasConfiguredPublicKey: !!publicKeyB64, signatureLength: String(signatureB64 || '').length });
+      if (!keyId || !publicKeyB64 || publicKeyB64.indexOf('PASTE_') === 0) throw new Error('ED25519_PUBLIC_KEY_MISSING keyId=' + keyId);
       var publicKeyBytes = b64ToBytes(publicKeyB64);
       var signatureBytes = b64ToBytes(signatureB64);
       var publicKey = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
       var ok = await crypto.subtle.verify({ name: 'Ed25519' }, publicKey, signatureBytes, utf8(canonical(payload)));
+      debugAdd('ed25519_verify_result', { ok: ok });
       if (!ok) throw new Error('ED25519_SIGNATURE_INVALID');
     }
 
     async function verifyManifestAndVault(raw, bundle, signedManifest) {
       var payload = signedManifest.payload;
+      debugAdd('verify_manifest_start', { payloadKeys: Object.keys(payload || {}).sort() });
       await verifyEd25519Manifest(payload, signedManifest.signatureB64);
 
       var purpose = String(payload.purpose || raw.purpose || '').trim();
-      if (purpose && purpose !== CONFIG.expectedPurpose) throw new Error('PURPOSE_INVALID');
+      debugAdd('purpose_check', { purpose: purpose, expected: CONFIG.expectedPurpose, ok: !purpose || purpose === CONFIG.expectedPurpose });
+      if (purpose && purpose !== CONFIG.expectedPurpose) throw new Error('PURPOSE_INVALID got=' + purpose);
 
       var expiresAt = String(payload.expires_at || raw.expires_at || bundle.metadata.expires_at || '');
       var expiresMs = Date.parse(expiresAt);
-      if (!Number.isFinite(expiresMs) || expiresMs <= Date.now()) throw new Error('EXPIRED');
+      debugAdd('expiry_check', { expiresAt: expiresAt, expiresMs: expiresMs, nowMs: Date.now(), expired: !(Number.isFinite(expiresMs) && expiresMs > Date.now()) });
+      if (!Number.isFinite(expiresMs) || expiresMs <= Date.now()) throw new Error('EXPIRED expiresAt=' + expiresAt);
       scheduleExpiryLock(expiresMs);
 
       var manifestRid = String(payload.request_id || raw.request_id || bundle.request_id || '');
-      if (manifestRid !== state.fragment.rid) throw new Error('MANIFEST_RID_MISMATCH');
+      debugAdd('manifest_rid_check', { match: manifestRid === state.fragment.rid, manifestRidLength: manifestRid.length, urlRidLength: state.fragment.rid.length });
+      if (manifestRid !== state.fragment.rid) throw new Error('MANIFEST_RID_MISMATCH manifestRidLength=' + manifestRid.length + ' urlRidLength=' + state.fragment.rid.length);
 
       var params = normalizedArgonParams(bundle.argon2id_params);
       verifyMinimumArgon2idParams(params);
@@ -503,12 +629,14 @@
       if (ciphertextHash) {
         var actualCipherB64 = await sha256B64Url(ciphertextBytes);
         var actualCipherHex = await sha256Hex(ciphertextBytes);
+        debugAdd('ciphertext_hash_check', { providedLength: ciphertextHash.length, matchesB64Url: ciphertextHash === actualCipherB64, matchesHex: ciphertextHash === actualCipherHex });
         if (ciphertextHash !== actualCipherB64 && ciphertextHash !== actualCipherHex) throw new Error('CIPHERTEXT_HASH_INVALID');
       }
 
       if (aadHash) {
         var actualAadB64 = await sha256B64Url(aadBytes);
         var actualAadHex = await sha256Hex(aadBytes);
+        debugAdd('aad_hash_check', { providedLength: aadHash.length, matchesB64Url: aadHash === actualAadB64, matchesHex: aadHash === actualAadHex });
         if (aadHash !== actualAadB64 && aadHash !== actualAadHex) throw new Error('AAD_HASH_INVALID');
       }
 
@@ -516,9 +644,11 @@
         var saltBytes = b64ToBytes(bundle.salt);
         var actualSaltB64 = await sha256B64Url(saltBytes);
         var actualSaltHex = await sha256Hex(saltBytes);
+        debugAdd('salt_hash_check', { providedLength: saltHash.length, matchesB64Url: saltHash === actualSaltB64, matchesHex: saltHash === actualSaltHex });
         if (saltHash !== actualSaltB64 && saltHash !== actualSaltHex) throw new Error('SALT_HASH_INVALID');
       }
 
+      debugAdd('verify_manifest_and_vault_ok', { params: params, hashChecksPresent: { ciphertextHash: !!ciphertextHash, aadHash: !!aadHash, saltHash: !!saltHash } });
       return params;
     }
 
@@ -636,17 +766,22 @@
       } catch (error) {
         var msg = String(error && error.message || '');
         if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') renderLocked404();
-        else failClosed();
+        else failClosed(msg);
       } finally {
         if (!el.form.hidden && !state.permanentLocked) updateOfflineDecryptState();
       }
     }
 
     async function bootstrap() {
+      debugAdd('bootstrap_start', { hrefHasHash: !!location.hash, origin: location.origin, online: navigator.onLine });
       hardenStorageAccess();
+      debugAdd('storage_hardened', {});
       requireSecureContext();
+      debugAdd('secure_context_ok', { protocol: location.protocol, cryptoSubtle: !!(window.crypto && crypto.subtle) });
       assertOfficialOrigin();
+      debugAdd('origin_ok', { origin: location.origin });
       assertArgon2idReady();
+      debugAdd('argon2_wasm_ready', { hasWindowArgon2: !!(window.argon2 && window.argon2.hash), hasDiracArgon: !!(window.DiracArgon2idWasm && window.DiracArgon2idWasm.hashRaw) });
       state.fragment = parseFragment();
       setStatus('Mengambil encrypted vault dari Server 2...', '');
       var raw = await fetchVaultOnce(state.fragment);
@@ -655,7 +790,9 @@
       var signedManifest = extractSignedManifest(raw);
       state.manifestPayload = signedManifest.payload;
       await verifyManifestAndVault(raw, state.vaultBundle, signedManifest);
+      debugAdd('bootstrap_validated_before_network_lock', {});
       disableAllNetwork();
+      debugAdd('network_disabled_after_valid_vault', {});
       armOfflineOnlyDecrypt();
     }
 
@@ -675,10 +812,7 @@
 
     bootstrap().catch(function (error) {
       var msg = String(error && error.message || '');
-      if (msg === 'ARGON2ID_WASM_MISSING') return deploymentFailClosed('Argon2id WASM belum dibundel lokal/inline. Halaman berhenti secara aman.');
-      if (msg === 'ED25519_PUBLIC_KEY_MISSING') return deploymentFailClosed('Ed25519 public key belum diisi. Halaman berhenti secara aman.');
-      if (/^(RID_INVALID|TOKEN_INVALID|ORIGIN_NOT_ALLOWED|VAULT_FETCH_FAILED|VAULT_RESPONSE_|EXPIRED|MANIFEST_RID_MISMATCH|RECOVERY_LOCKED)/.test(msg)) return renderLocked404();
-      return failClosed();
+      return debugFatal(error, 'BOOTSTRAP');
     });
   }());
   </script>
