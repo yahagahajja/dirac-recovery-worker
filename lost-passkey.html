@@ -249,7 +249,8 @@
         requestIdMatchesUrl: !!(vault && String(vault.request_id || body.request_id || '') === state.fragment.rid),
         manifestRequestIdMatchesUrl: !!(manifest && String(manifest.request_id || body.request_id || '') === state.fragment.rid),
         expiresAt: manifest && (manifest.expires_at || manifest.expiresAt) || body && body.expires_at || null,
-        argon2id_params: vault && (vault.argon2id_params || body.kdf) || body && body.kdf || null
+        argon2id_params: vault && (vault.argon2id_params || body.kdf) || body && body.kdf || null,
+        ed25519SignDiag: body && body.ed25519_sign_diag || null
       };
     }
 
