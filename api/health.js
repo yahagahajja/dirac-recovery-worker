@@ -7706,19 +7706,63 @@ function customerSecurityLostPasskeyEmailEscapeHtmlV157(value) {
   return String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
+function customerSecurityLostPasskeyRecoveryEmailBannerUrlV172() {
+  const fallback = 'https://secure.diracgroup.store/assets/dirac-recovery-email-banner-1200x400.png';
+  const raw = String(process.env.DIRAC_RECOVERY_EMAIL_BANNER_URL || process.env.DIRAC_LOST_PASSKEY_EMAIL_BANNER_URL || fallback).trim();
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    if (url.protocol !== 'https:') return fallback;
+    if (host !== 'diracgroup.store' && host !== 'www.diracgroup.store' && host !== 'secure.diracgroup.store' && !host.endsWith('.diracgroup.store')) return fallback;
+    return url.toString();
+  } catch (_) {
+    return fallback;
+  }
+}
+
 function customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context = {}) {
   const requestId = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.requestId || '');
   const expiresAt = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.expiresAt || '');
   const recoveryLink = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.recoveryLink || '');
   const emailSecret = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.emailSecret || '');
-  return '<!doctype html><html><body style="font-family:Arial,sans-serif;line-height:1.5;color:#111">'
-    + '<h2>DiracGroup Secure Recovery</h2>'
-    + '<p>Link recovery Passkey resmi sudah dibuat.</p>'
-    + '<p><b>Request ID:</b> ' + requestId + '<br><b>Berlaku sampai:</b> ' + expiresAt + '</p>'
-    + '<p><a href="' + recoveryLink + '">Buka recovery resmi</a></p>'
-    + '<p><b>SECRET_EMAIL_100_CHAR:</b></p>'
-    + '<pre style="white-space:pre-wrap;word-break:break-all;background:#f4f4f4;padding:12px;border-radius:8px">' + emailSecret + '</pre>'
-    + '<p>Jangan bagikan email secret, link, atau isi pesan ini kepada pihak lain. Website secret hanya tampil di website yang masih login.</p>'
+  const bannerUrl = customerSecurityLostPasskeyEmailEscapeHtmlV157(customerSecurityLostPasskeyRecoveryEmailBannerUrlV172());
+
+  return '<!doctype html>'
+    + '<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dirac Group Secure Recovery</title></head>'
+    + '<body style="margin:0;padding:0;background:#111827;font-family:Arial,Helvetica,sans-serif;color:#e5e7eb">'
+    + '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#111827;margin:0;padding:24px 0"><tr><td align="center" style="padding:0 12px">'
+    + '<table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:100%;border-collapse:collapse;border:1px solid #c7d2fe;background:#1f2937">'
+    + '<tr><td style="height:3px;line-height:3px;font-size:0;background:#1d4ed8">&nbsp;</td></tr>'
+    + '<tr><td style="padding:0;border-bottom:1px solid #c7d2fe;background:#0f172a">'
+    + '<img src="' + bannerUrl + '" width="600" alt="Dirac Group Secure Recovery" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none">'
+    + '</td></tr>'
+    + '<tr><td style="padding:28px 28px 10px;background:#1f2937;color:#f9fafb">'
+    + '<p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#f3f4f6">Yth. Pengguna Dirac Group,</p>'
+    + '<p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#e5e7eb">Permintaan pemulihan Passkey Anda telah diterima dan paket recovery terenkripsi sudah disiapkan oleh sistem Dirac Group.</p>'
+    + '<p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#e5e7eb">Silakan buka link resmi berikut untuk mengambil vault recovery. Proses decrypt tetap dilakukan secara lokal di browser dan membutuhkan Secret Email, Secret Website, serta material password terbaru akun Anda.</p>'
+    + '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;margin:20px 0 22px;background:#111827;border:1px solid #374151">'
+    + '<tr><td style="padding:13px 14px;border-bottom:1px solid #374151;color:#9ca3af;font-size:13px">Request ID</td><td style="padding:13px 14px;border-bottom:1px solid #374151;color:#ffffff;font-size:13px;font-weight:700;text-align:right;word-break:break-all">' + requestId + '</td></tr>'
+    + '<tr><td style="padding:13px 14px;color:#9ca3af;font-size:13px">Berlaku sampai</td><td style="padding:13px 14px;color:#ffffff;font-size:13px;font-weight:700;text-align:right;word-break:break-all">' + expiresAt + '</td></tr>'
+    + '</table>'
+    + '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:6px 0 22px"><tr><td bgcolor="#2563eb" style="border-radius:8px">'
+    + '<a href="' + recoveryLink + '" style="display:inline-block;padding:13px 18px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px">Buka Recovery Resmi</a>'
+    + '</td></tr></table>'
+    + '<p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#f9fafb;font-weight:700">SECRET_EMAIL_100_CHAR</p>'
+    + '<div style="font-family:Consolas,Menlo,Monaco,monospace;font-size:12px;line-height:1.6;color:#dbeafe;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;word-break:break-all;white-space:pre-wrap">' + emailSecret + '</div>'
+    + '<div style="margin:20px 0 0;padding:15px 16px;background:#111827;border-left:4px solid #60a5fa;color:#d1d5db;font-size:13px;line-height:1.65">'
+    + '<b style="color:#ffffff">Petunjuk singkat:</b><br>'
+    + '1. Buka link recovery resmi di atas.<br>'
+    + '2. Setelah vault diterima, halaman akan meminta decrypt lokal/offline.<br>'
+    + '3. Masukkan material password terbaru, Secret Email, dan Secret Website sesuai instruksi sistem.'
+    + '</div>'
+    + '<p style="margin:22px 0 0;font-size:13px;line-height:1.65;color:#d1d5db">Jangan membagikan link recovery, Secret Email, Secret Website, atau hasil decrypt kepada pihak mana pun. Jika Anda tidak meminta pemulihan ini, abaikan email ini dan segera hubungi bantuan resmi Dirac Group.</p>'
+    + '<p style="margin:24px 0 0;font-size:14px;line-height:1.7;color:#f3f4f6">Terima kasih,<br><b>Dirac Group</b></p>'
+    + '</td></tr>'
+    + '<tr><td style="padding:16px 28px 22px;background:#1f2937;color:#9ca3af;font-size:12px;line-height:1.6;border-top:1px solid #374151">'
+    + '(Email ini dibuat otomatis oleh sistem, mohon untuk tidak dibalas.)<br>Dirac Group Secure Recovery • diracgroup.store'
+    + '</td></tr>'
+    + '</table>'
+    + '</td></tr></table>'
     + '</body></html>';
 }
 
@@ -26178,11 +26222,15 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
 
 const __diracRecoveryWorkerPreviousHandler = module.exports;
 module.exports = async function diracRecoveryWorkerWrapper(req, res) {
-  if (customerSecurityLostPasskeyIsRecoveryLinkPathV162(req)) {
-    return customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
-  }
   const rawAction = String(req && req.query && req.query.action || '').trim().toLowerCase();
-  if (rawAction === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
+  const isRecoveryLinkRoute = customerSecurityLostPasskeyIsRecoveryLinkPathV162(req) || rawAction === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165;
+  const isRecoveryWorkerAction = rawAction === DIRAC_RECOVERY_WORKER_ACTION;
+  if ((isRecoveryLinkRoute || isRecoveryWorkerAction || customerSecurityRecoveryWorkerLocalEnabled()) && !diracCentralGuardPassedForHandlerV168(req)) {
+    if (isRecoveryLinkRoute) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+    if (isRecoveryWorkerAction) return res.status(403).json({ ok: false, code: 'CENTRAL_GUARD_REQUIRED', message: 'Permintaan wajib melewati Central Guard.' });
+    return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_ONLY', message: 'Endpoint worker hanya menerima action internal recovery.' });
+  }
+  if (isRecoveryLinkRoute) {
     return customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
   }
   const action = rawAction === DIRAC_RECOVERY_WORKER_ACTION ? DIRAC_RECOVERY_WORKER_ACTION : rawAction;
