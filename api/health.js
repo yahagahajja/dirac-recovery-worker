@@ -6697,6 +6697,28 @@ function customerSecurityLostPasskeyHmacHexV157(secret, label, value) {
     .digest('hex');
 }
 
+
+// PATCH V170: link-open must never run the 1700MB Argon2id verifier.
+// The 2000-bit link token is verified with a server-only HMAC commitment here.
+// Heavy Argon2id remains only in generate/secret-hardening paths, protected by queue.
+function customerSecurityLostPasskeyFastLinkTokenHashV170(rootSecret, requestId, linkToken) {
+  return customerSecurityLostPasskeyHmacHexV157(
+    rootSecret,
+    'link_token_fast_v170',
+    String(requestId || '') + ':' + String(linkToken || '')
+  );
+}
+
+function customerSecurityLostPasskeySafeEqualHexV170(left, right) {
+  const a = String(left || '').trim().toLowerCase();
+  const b = String(right || '').trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(a) || !/^[a-f0-9]{64}$/.test(b)) return false;
+  const ab = Buffer.from(a, 'hex');
+  const bb = Buffer.from(b, 'hex');
+  if (ab.length !== bb.length) return false;
+  try { return crypto.timingSafeEqual(ab, bb); } catch (_) { return false; }
+}
+
 function customerSecurityLostPasskeyVaultMaterialV157(passwordMaterial, emailSecret, websiteSecret, salt, vaultId) {
   return Buffer.from(customerSecurityLostPasskeyCanonical({
     version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
@@ -6982,12 +7004,16 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   if (!result.ok) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   const row = Array.isArray(result.data) ? result.data[0] : null;
   const metadata = row && row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
-  const linkTokenHash = String(metadata.link_token_hash || '');
-  if (!row || !row.id || !linkTokenHash.startsWith('$argon2id$')) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  const linkTokenFastHash = String(metadata.link_token_fast_hash || '');
+  if (!row || !row.id || !/^[a-f0-9]{64}$/i.test(linkTokenFastHash)) {
+    try { console.warn('[dirac-lost-passkey-link-v170]', JSON.stringify({ event: 'missing_fast_link_token_hash_regenerate_required', request_id_hash: customerSecurityLostPasskeySha256HexV157(parsed.requestId), time: diracNowIso() })); } catch (_) {}
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
 
-  const tokenOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('link_token', parsed.linkToken, linkTokenHash, vaultSecrets.pepper, vaultSecrets.rootSecret).catch(() => false);
+  const expectedFastHash = customerSecurityLostPasskeyFastLinkTokenHashV170(vaultSecrets.rootSecret, parsed.requestId, parsed.linkToken);
+  const tokenOk = customerSecurityLostPasskeySafeEqualHexV170(linkTokenFastHash, expectedFastHash);
   if (!tokenOk) {
-    try { console.warn('[dirac-lost-passkey-link-v162]', JSON.stringify({ event: 'invalid_link_token', request_id_hash: customerSecurityLostPasskeySha256HexV157(parsed.requestId), time: diracNowIso() })); } catch (_) {}
+    try { console.warn('[dirac-lost-passkey-link-v170]', JSON.stringify({ event: 'invalid_link_token_fast_hash', request_id_hash: customerSecurityLostPasskeySha256HexV157(parsed.requestId), time: diracNowIso() })); } catch (_) {}
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
 
@@ -8060,6 +8086,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
       password_formula: 'password_latest_material_plus_secret_email_100_char_plus_secret_website_100_char_plus_salt_plus_vault_id',
       official_recovery_link_hash: customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'official_recovery_link', recoveryLink),
       link_token_hash: linkTokenHash,
+      link_token_fast_hash: customerSecurityLostPasskeyFastLinkTokenHashV170(vaultSecrets.rootSecret, requestId, linkToken),
       email_secret_hash: emailSecretHash,
       website_secret_hash: websiteSecretHash,
       recovery_code_hash_label: 'recovery_code',
