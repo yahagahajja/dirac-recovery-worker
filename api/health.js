@@ -178,6 +178,10 @@ function setCors(req, res, options = {}) {
 }
 
 function getAllowedOrigins() {
+  const server2RecoveryOnly = /^(vercel2)$/i.test(String(process.env.DIRAC_CENTRAL_DEPLOYMENT_ROLE || process.env.DIRAC_DEPLOYMENT_ROLE || '').trim())
+    || /^(1|true|yes|on|enabled|enable)$/i.test(String(process.env.DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED || process.env.DIRAC_VERCEL2_ACTIONS_ENABLED || '').trim());
+  if (server2RecoveryOnly) return ['https://secure.diracgroup.store'];
+
   const fromEnv = String(process.env.AI_ALLOWED_ORIGINS || '').split(',').map((item) => item.trim()).filter(Boolean);
   const domainSite = String(process.env.DOMAIN_SITE_URL || '').trim();
   const dev = process.env.NODE_ENV !== 'production' ? ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'] : [];
@@ -6740,15 +6744,19 @@ function customerSecurityLostPasskeyBuildAadV157(metadata) {
 }
 
 function customerSecurityLostPasskeyOfficialBaseUrlV157() {
-  const raw = String(process.env.DIRAC_LOST_PASSKEY_RECOVERY_BASE_URL || 'https://diracgroup.store').trim().replace(/\/+$/, '');
+  // SERVER 2 SECURE ORIGIN LOCK v169:
+  // Lost-passkey static HTML and vault API are only allowed on secure.diracgroup.store.
+  // Do not fall back to diracgroup.store or www.diracgroup.store.
+  const requiredOrigin = 'https://secure.diracgroup.store';
+  const raw = String(process.env.DIRAC_LOST_PASSKEY_RECOVERY_BASE_URL || requiredOrigin).trim().replace(/\/+$/, '');
   try {
     const url = new URL(raw);
     const host = String(url.hostname || '').toLowerCase();
-    if (url.protocol !== 'https:') return 'https://diracgroup.store';
-    if (host !== 'diracgroup.store' && host !== 'www.diracgroup.store') return 'https://diracgroup.store';
-    return url.origin;
+    if (url.protocol !== 'https:') return requiredOrigin;
+    if (host !== 'secure.diracgroup.store') return requiredOrigin;
+    return requiredOrigin;
   } catch (_) {
-    return 'https://diracgroup.store';
+    return requiredOrigin;
   }
 }
 
@@ -6763,8 +6771,26 @@ function customerSecurityLostPasskeyIsRecoveryLinkPathV162(req) {
 
 function customerSecurityLostPasskeyParseRecoveryLinkV162(req) {
   try {
-    const host = String(req && req.headers && (req.headers.host || req.headers['x-forwarded-host']) || 'diracgroup.store').split(',')[0].trim() || 'diracgroup.store';
+    const host = String(req && req.headers && (req.headers.host || req.headers['x-forwarded-host']) || 'secure.diracgroup.store').split(',')[0].trim() || 'secure.diracgroup.store';
     const url = new URL(String(req && req.url || '/'), 'https://' + host);
+    const action = String(url.searchParams.get('action') || req && req.query && req.query.action || '').trim().toLowerCase();
+
+    // Static HTML API shape:
+    // /api/health?action=lost_passkey_recovery_link_open&rid=...&token=...
+    if (action === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
+      const requestIdRaw = String(url.searchParams.get('rid') || req && req.query && req.query.rid || '').trim();
+      const linkTokenRaw = String(url.searchParams.get('token') || req && req.query && req.query.token || '').trim();
+      return {
+        matched: true,
+        requestId: customerSecurityNormalizeLostPasskeyRequestId(requestIdRaw),
+        linkToken: linkTokenRaw,
+        requestIdRaw,
+        linkTokenRaw,
+        api: true
+      };
+    }
+
+    // Legacy path remains parseable only for generic-invalid handling/backward compatibility.
     const parts = url.pathname.split('/').filter(Boolean);
     if (parts.length !== 4 || parts[0] !== 'recovery' || parts[1] !== 'r') return { matched: false };
     const requestIdRaw = decodeURIComponent(parts[2] || '');
@@ -6774,7 +6800,8 @@ function customerSecurityLostPasskeyParseRecoveryLinkV162(req) {
       requestId: customerSecurityNormalizeLostPasskeyRequestId(requestIdRaw),
       linkToken: String(linkTokenRaw || '').trim(),
       requestIdRaw,
-      linkTokenRaw
+      linkTokenRaw,
+      api: false
     };
   } catch (_) {
     return { matched: false };
@@ -6826,6 +6853,82 @@ function customerSecurityLostPasskeyGenericLinkErrorV162(res, status) {
   return customerSecurityLostPasskeyEndHtmlV162(res, status || 404, customerSecurityLostPasskeyGenericLinkHtmlV162('Link recovery tidak valid atau sudah tidak berlaku.'));
 }
 
+function customerSecurityLostPasskeySetVaultJsonHeadersV169(res) {
+  try { res.setHeader('Content-Type', 'application/json; charset=utf-8'); } catch (_) {}
+  try { res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0'); } catch (_) {}
+  try { res.setHeader('Pragma', 'no-cache'); } catch (_) {}
+  try { res.setHeader('Expires', '0'); } catch (_) {}
+  try { res.setHeader('Referrer-Policy', 'no-referrer'); } catch (_) {}
+  try { res.setHeader('X-Content-Type-Options', 'nosniff'); } catch (_) {}
+  try { res.setHeader('X-Frame-Options', 'DENY'); } catch (_) {}
+}
+
+function customerSecurityLostPasskeyEd25519SignManifestB64V169(payload) {
+  const raw = String(process.env.DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY_PEM || process.env.DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY || '').trim();
+  if (!raw) return '';
+  try {
+    const pem = raw.includes('-----BEGIN') ? raw.replace(/\\n/g, '\n') : Buffer.from(raw, 'base64').toString('utf8');
+    const key = crypto.createPrivateKey(pem);
+    if (key.asymmetricKeyType && key.asymmetricKeyType !== 'ed25519') return '';
+    return crypto.sign(null, Buffer.from(customerSecurityLostPasskeyCanonical(payload), 'utf8'), key).toString('base64url');
+  } catch (_) {
+    return '';
+  }
+}
+
+function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata) {
+  const vaultBundle = metadata && metadata.vault_bundle && typeof metadata.vault_bundle === 'object' ? metadata.vault_bundle : {};
+  const aadMetadata = vaultBundle.metadata && typeof vaultBundle.metadata === 'object' ? vaultBundle.metadata : {};
+  const argon2Params = vaultBundle.argon2id_params && typeof vaultBundle.argon2id_params === 'object' ? vaultBundle.argon2id_params : (metadata.argon2id_params || {});
+  const ciphertext = String(vaultBundle.ciphertext || row.encrypted_file_key_text || '');
+  const aad = customerSecurityLostPasskeyBuildAadV157(aadMetadata);
+  const manifestPayload = {
+    version: String(vaultBundle.version || DIRAC_LOST_PASSKEY_VAULT_PATCH_V157),
+    purpose: 'lost_passkey_recovery',
+    request_id: String(row.request_id || vaultBundle.request_id || ''),
+    key_id: String(process.env.DIRAC_LOST_PASSKEY_ED25519_KEY_ID || 'dirac-recovery-ed25519-2026-01'),
+    signature_alg: 'Ed25519',
+    cipher: 'AES-256-GCM',
+    kdf: 'Argon2id+HKDF-SHA256',
+    hkdf_info: String(vaultBundle.hkdf_info || ''),
+    ciphertext_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(ciphertext, 'base64')),
+    aad_sha256: customerSecurityLostPasskeySha256B64(aad),
+    salt_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(String(vaultBundle.salt || row.salt || ''), 'base64')),
+    vault_id_hash: customerSecurityLostPasskeySha256HexV157(String(vaultBundle.vault_id || '')),
+    min_argon2id_memory_kib: Number(argon2Params.memoryCost || argon2Params.memory_kib || 0),
+    min_argon2id_time_cost: Number(argon2Params.timeCost || argon2Params.time_cost || 0),
+    min_argon2id_parallelism: Number(argon2Params.parallelism || 1),
+    created_at: String(row.created_at || metadata.created_at || ''),
+    expires_at: String(row.expires_at || '')
+  };
+  const ed25519SignatureB64 = customerSecurityLostPasskeyEd25519SignManifestB64V169(manifestPayload);
+  customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
+  return res.status(200).json({
+    ok: true,
+    version: manifestPayload.version,
+    purpose: 'lost_passkey_recovery',
+    request_id: manifestPayload.request_id,
+    expires_at: String(row.expires_at || ''),
+    vault_bundle: {
+      version: manifestPayload.version,
+      salt: String(vaultBundle.salt || row.salt || ''),
+      aes_nonce: String(vaultBundle.aes_nonce || row.file_key_wrap_nonce || ''),
+      ciphertext,
+      auth_tag: String(vaultBundle.auth_tag || row.file_key_wrap_tag || ''),
+      vault_id: String(vaultBundle.vault_id || ''),
+      request_id: manifestPayload.request_id,
+      metadata: aadMetadata,
+      metadata_signature: String(vaultBundle.metadata_signature || row.server_signature || ''),
+      argon2id_params: argon2Params,
+      hkdf_info: String(vaultBundle.hkdf_info || '')
+    },
+    aad_hash: String(row.aad_hash || manifestPayload.aad_sha256),
+    signed_manifest: { payload: manifestPayload, signature_b64: ed25519SignatureB64 },
+    manifest: manifestPayload,
+    signature_b64: ed25519SignatureB64
+  });
+}
+
 function customerSecurityLostPasskeyLinkRateKeyV162(req, requestId) {
   const ip = typeof getLoginSecurityIp === 'function' ? getLoginSecurityIp(req || {}) : String(req && req.headers && (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) || 'unknown').split(',')[0].trim();
   const ua = typeof requestUserAgent === 'function' ? requestUserAgent(req || {}) : String(req && req.headers && req.headers['user-agent'] || '');
@@ -6874,7 +6977,7 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
   if (!vaultSecrets.ok) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
 
-  const select = 'id,request_id,customer_id,auth_user_id,status,expires_at,used_at,revoked_at,locked_at,metadata,encrypted_file_key_text,file_key_wrap_nonce,file_key_wrap_tag,salt,file_sha256,aad_hash,server_signature';
+  const select = 'id,request_id,customer_id,auth_user_id,status,created_at,expires_at,used_at,revoked_at,locked_at,metadata,encrypted_file_key_text,file_key_wrap_nonce,file_key_wrap_tag,salt,file_sha256,aad_hash,server_signature';
   const result = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?select=' + encodeURIComponent(select) + '&request_id=eq.' + encodeURIComponent(parsed.requestId) + '&limit=1', { method: 'GET', auth: 'service' });
   if (!result.ok) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   const row = Array.isArray(result.data) ? result.data[0] : null;
@@ -6900,7 +7003,12 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
     try { if (typeof res.status === 'function') res.status(200); } catch (_) {}
     return res.end();
   }
-  return customerSecurityLostPasskeyEndHtmlV162(res, 200, customerSecurityLostPasskeyGenericLinkHtmlV162('Link recovery valid. Template HTML offline akan dipasang pada tahap desain berikutnya.'));
+
+  if (parsed.api || String(req && req.query && req.query.format || '').trim().toLowerCase() === 'json') {
+    return customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata);
+  }
+
+  return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
 }
 
 function customerSecurityLostPasskeySecurityReportPayloadV157(reason, body) {
@@ -7900,7 +8008,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const recoveryCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('recovery_code', recoveryCode, recoveryCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const bindingHashCommitment = await customerSecurityLostPasskeyArgon2EncodedHashV157('binding', bindingsCanonical, bindingSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
 
-  const recoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157() + '/recovery/r/' + encodeURIComponent(requestId) + '/' + encodeURIComponent(linkToken);
+  const recoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157() + '/lost-passkey.html#rid=' + encodeURIComponent(requestId) + '&token=' + encodeURIComponent(linkToken);
   const vaultBundle = {
     version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
     salt: customerSecurityLostPasskeyB64(vaultSalt),
@@ -26007,6 +26115,9 @@ module.exports = async function diracRecoveryWorkerWrapper(req, res) {
     return customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
   }
   const rawAction = String(req && req.query && req.query.action || '').trim().toLowerCase();
+  if (rawAction === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
+    return customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
+  }
   const action = rawAction === DIRAC_RECOVERY_WORKER_ACTION ? DIRAC_RECOVERY_WORKER_ACTION : rawAction;
   if (action === DIRAC_RECOVERY_WORKER_ACTION) {
     return customerSecurityHandleRecoveryWorkerGenerate(req, res, action);
@@ -26083,7 +26194,7 @@ const DIRAC_CENTRAL_THREAT_CHECKS_V146 = [
 ];
 
 const DIRAC_CENTRAL_ALLOWED_ORIGINS_V146 = new Set([
-  'https://diracgroup.store'
+  'https://secure.diracgroup.store'
 ]);
 
 const DIRAC_CENTRAL_ALLOWED_REFERER_PATHS_V146 = new Set([
@@ -26095,7 +26206,8 @@ const DIRAC_CENTRAL_ALLOWED_REFERER_PATHS_V146 = new Set([
   '/keamanan.html',
   '/livechat.html',
   '/domain.html',
-  '/website.html'
+  '/website.html',
+  '/lost-passkey.html'
 ]);
 
 // SERVER 2 RECOVERY WORKER LOCK v157:
@@ -26424,6 +26536,12 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     }
     diracCentralStampV146(ctx, 'vercel2_action_checked');
 
+    const server2SecureHost = diracCentralServer2SecureHostGuardV169(req, ctx);
+    if (!server2SecureHost.ok) {
+      return await diracCentralBanAndBlockV146(req, res, ctx, action, method, server2SecureHost.reason);
+    }
+    diracCentralStampV146(ctx, 'server2_secure_host_checked');
+
     ctx.classification = diracCentralClassifyActionV146(action);
     diracCentralStampV146(ctx, 'classification_checked');
 
@@ -26559,7 +26677,7 @@ function diracCentralApplyHeadersV146(res) {
   try { res.setHeader('X-Dirac-Dashboard-Session-Fix', 'v147-bola-direct-timeout-fast-self-read'); } catch (_) {}
   try { res.setHeader('Cache-Control', 'no-store'); } catch (_) {}
   try { res.setHeader('X-Content-Type-Options', 'nosniff'); } catch (_) {}
-  try { res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://diracgroup.store https://www.diracgroup.store"); } catch (_) {}
+  try { res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://secure.diracgroup.store"); } catch (_) {}
   try { res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin'); } catch (_) {}
   try { res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)'); } catch (_) {}
 }
@@ -26764,6 +26882,17 @@ function diracCentralVercel2OnlyActionGuardV150(action) {
   return { ok: false, reason: 'vercel2_only_action_blocked' };
 }
 
+function diracCentralServer2SecureHostGuardV169(req, ctx) {
+  if (!ctx || !diracCentralIsServer2RecoveryOnlyActionV166(ctx.action)) return { ok: true };
+  const headers = req && req.headers || {};
+  const forwardedHost = String(headers['x-forwarded-host'] || '').split(',')[0].trim().toLowerCase();
+  const host = (forwardedHost || String(headers.host || '').split(',')[0].trim()).toLowerCase();
+  const forwardedProto = String(headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+  if (host !== 'secure.diracgroup.store') return { ok: false, reason: 'server2_secure_host_required' };
+  if (forwardedProto && forwardedProto !== 'https') return { ok: false, reason: 'server2_https_required' };
+  return { ok: true };
+}
+
 function diracCentralVercel2OnlyActionsV150() {
   const actions = new Set([
     ...DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157,
@@ -26813,7 +26942,8 @@ function diracCentralIntegrityVerifierV146(ctx) {
     'idor_checked',
     'circuit_checked',
     'mfa_checked',
-    'vercel2_action_checked'
+    'vercel2_action_checked',
+    'server2_secure_host_checked'
   ];
   if (ctx && ctx.classification === 'server') required.push('server_guard_checked');
   if (ctx && ctx.classification === 'public_read') required.push('public_read_checked', 'sample_checked', 'threat_checked', 'zeroday_checked');
@@ -28444,7 +28574,7 @@ function diracCentralStableMfaReadGateV146(req, res, ctx) {
 function diracCentralContractForActionV146(action) {
   const clean = String(action || '');
   if (DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean)) {
-    return { methods: ['GET', 'HEAD'], allowed: ['action'], required: [], maxBodyBytes: 0, maxFieldBytes: 80, mutation: false };
+    return { methods: ['GET', 'HEAD'], allowed: ['action', 'rid', 'token', 'format'], required: ['rid', 'token'], maxBodyBytes: 0, maxFieldBytes: 4096, mutation: false };
   }
   if (!DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)) {
     return { methods: [], allowed: [], required: [], maxBodyBytes: 0, maxFieldBytes: 0, mutation: false };
