@@ -5974,6 +5974,7 @@ const LOST_PASSKEY_RECOVERY_VAULT_ID_BYTES_V157 = 2500;
 const LOST_PASSKEY_RECOVERY_EXTRA_NONCE_BYTES_V157 = 2500;
 const LOST_PASSKEY_RECOVERY_TTL_MINUTES_V157 = 7;
 const LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157 = 524288; // 512 MB.
+const LOST_PASSKEY_ARGON2_MEMORY_MAX_KIB_V163 = 5242880; // 5 GB clamp for DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB.
 const LOST_PASSKEY_ROOT_SECRET_MIN_BYTES_V157 = 3000;
 const LOST_PASSKEY_DB_PEPPER_MIN_BYTES_V157 = 64;
 const LOST_PASSKEY_SECRET_100_ALPHABET_V157 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
@@ -6286,7 +6287,7 @@ function customerSecurityLostPasskeyArgon2ParamsV157(hashLength) {
   const timeRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_TIME_COST || 5);
   const parallelRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM || 1);
   return {
-    memoryCost: Math.max(LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157, Math.min(1048576, Number.isFinite(memoryRaw) ? Math.floor(memoryRaw) : 655360)),
+    memoryCost: Math.max(LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157, Math.min(LOST_PASSKEY_ARGON2_MEMORY_MAX_KIB_V163, Number.isFinite(memoryRaw) ? Math.floor(memoryRaw) : 655360)),
     timeCost: Math.max(3, Math.min(10, Number.isFinite(timeRaw) ? Math.floor(timeRaw) : 5)),
     parallelism: Math.max(1, Math.min(8, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 1)),
     hashLength: Math.max(32, Math.min(128, Number(hashLength || 32)))
@@ -6945,7 +6946,7 @@ async function customerSecurityBuildLostPasskeyFile(input) {
     created_at: input.createdAt,
     expires_at: input.expiresAt,
     kdf_params: {
-      memory_cost_kib: Math.max(65536, Math.min(1048576, Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB || 655360))),
+      memory_cost_kib: Math.max(65536, Math.min(LOST_PASSKEY_ARGON2_MEMORY_MAX_KIB_V163, Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB || 655360))),
       time_cost: Math.max(3, Math.min(10, Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_TIME_COST || 5))),
       parallelism: 1,
       hash_length: 32
