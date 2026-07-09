@@ -6919,32 +6919,6 @@ function customerSecurityLostPasskeyEd25519SignManifestB64V169(payload) {
   }
 }
 
-function customerSecurityLostPasskeyEd25519SignDiagV176() {
-  const pemEnv = String(process.env.DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY_PEM || '').trim();
-  const keyEnv = String(process.env.DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY || '').trim();
-  const raw = String(pemEnv || keyEnv || '').trim();
-  const diag = {
-    env_source: pemEnv ? 'DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY_PEM' : (keyEnv ? 'DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY' : 'missing'),
-    env_present: !!raw,
-    pem_marker_present: raw.includes('-----BEGIN'),
-    decoded_pem_marker_present: false,
-    key_type: '',
-    parse_ok: false
-  };
-  if (!raw) return diag;
-  try {
-    const pem = raw.includes('-----BEGIN') ? raw.replace(/\\n/g, '\n') : Buffer.from(raw, 'base64').toString('utf8');
-    diag.decoded_pem_marker_present = pem.includes('-----BEGIN');
-    const key = crypto.createPrivateKey(pem);
-    diag.key_type = String(key.asymmetricKeyType || 'unknown');
-    diag.parse_ok = diag.key_type === 'ed25519';
-    return diag;
-  } catch (_) {
-    diag.key_type = 'parse_failed';
-    return diag;
-  }
-}
-
 function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata) {
   const vaultBundle = metadata && metadata.vault_bundle && typeof metadata.vault_bundle === 'object' ? metadata.vault_bundle : {};
   const aadMetadata = vaultBundle.metadata && typeof vaultBundle.metadata === 'object' ? vaultBundle.metadata : {};
@@ -6971,17 +6945,6 @@ function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata) {
     expires_at: String(row.expires_at || '')
   };
   const ed25519SignatureB64 = customerSecurityLostPasskeyEd25519SignManifestB64V169(manifestPayload);
-  if (!ed25519SignatureB64) {
-    customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
-    return res.status(503).json({
-      ok: false,
-      code: 'ED25519_SIGNATURE_BUILD_FAILED',
-      message: 'Signed manifest Ed25519 gagal dibuat di Server 2.',
-      request_id: manifestPayload.request_id,
-      key_id: manifestPayload.key_id,
-      ed25519_sign_diag: customerSecurityLostPasskeyEd25519SignDiagV176()
-    });
-  }
   customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
   return res.status(200).json({
     ok: true,
@@ -7003,19 +6966,9 @@ function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata) {
       hkdf_info: String(vaultBundle.hkdf_info || '')
     },
     aad_hash: String(row.aad_hash || manifestPayload.aad_sha256),
-    signed_manifest: {
-      payload: manifestPayload,
-      signature_b64: ed25519SignatureB64,
-      signatureB64: ed25519SignatureB64
-    },
-    manifest_signed: {
-      payload: manifestPayload,
-      signature_b64: ed25519SignatureB64,
-      signatureB64: ed25519SignatureB64
-    },
+    signed_manifest: { payload: manifestPayload, signature_b64: ed25519SignatureB64 },
     manifest: manifestPayload,
-    signature_b64: ed25519SignatureB64,
-    ed25519_signature_b64: ed25519SignatureB64
+    signature_b64: ed25519SignatureB64
   });
 }
 
