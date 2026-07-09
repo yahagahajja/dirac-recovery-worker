@@ -496,10 +496,10 @@
       });
       var contentType = String(response.headers.get('content-type') || '').toLowerCase();
       debugAdd('fetch_response', { httpOk: response.ok, status: response.status, statusText: response.statusText, contentType: contentType });
-      if (!response.ok) throw new Error('VAULT_FETCH_FAILED status=' + response.status);
-      if (contentType.indexOf('application/json') === -1) throw new Error('VAULT_RESPONSE_NOT_JSON contentType=' + contentType);
+      if (contentType.indexOf('application/json') === -1) throw new Error('VAULT_RESPONSE_NOT_JSON contentType=' + contentType + ' status=' + response.status);
       var body = await response.json();
       debugAdd('fetch_body', debugBodySummary(body));
+      if (!response.ok) throw new Error('VAULT_FETCH_FAILED status=' + response.status + ' code=' + String(body && (body.code || body.error || body.reason || '')));
       if (!body || body.ok !== true) throw new Error('VAULT_RESPONSE_INVALID ok=' + String(body && body.ok) + ' error=' + String(body && (body.error || body.code || body.message || body.reason || '')));
       return body;
     }
