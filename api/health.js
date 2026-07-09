@@ -26882,6 +26882,13 @@ function diracCentralVercel2OnlyActionGuardV150(action) {
   return { ok: false, reason: 'vercel2_only_action_blocked' };
 }
 
+function diracCentralIsServer2RecoveryOnlyActionV166(action) {
+  const clean = String(action || '').trim().toLowerCase();
+  if (!clean) return false;
+  return DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)
+    || DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean);
+}
+
 function diracCentralServer2SecureHostGuardV169(req, ctx) {
   if (!ctx || !diracCentralIsServer2RecoveryOnlyActionV166(ctx.action)) return { ok: true };
   const headers = req && req.headers || {};
