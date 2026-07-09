@@ -62,6 +62,11 @@
     body.locked .card { border-color: #6b2530; }
     body.locked .badge { background: #241016; border-color: #6b2530; color: #ffd3dc; }
     body.locked input, body.locked textarea, body.locked button { pointer-events: none; }
+    .notfound-wrap { min-height: 100vh; display: grid; place-items: center; padding: 28px 18px; background: #090d14; }
+    .notfound-box { width: min(620px, 100%); border: 1px solid #6b2530; border-radius: 18px; padding: 28px; background: #140b10; box-shadow: 0 18px 60px rgba(0,0,0,.45); text-align: left; }
+    .notfound-code { font-size: clamp(54px, 16vw, 104px); line-height: .9; font-weight: 900; letter-spacing: -.06em; color: #ffd3dc; margin: 0 0 12px; }
+    .notfound-title { font-size: clamp(22px, 5vw, 34px); font-weight: 850; margin: 0 0 10px; color: #f8edf1; }
+    .notfound-text { color: #cbaebb; margin: 0; line-height: 1.55; }
     .result { display: none; margin-top: 20px; }
     .result.show { display: block; }
     .danger { color: #ffd3dc; }
@@ -96,11 +101,6 @@
           Secret website 100 karakter
           <input id="websiteSecret" name="websiteSecret" type="password" autocomplete="off" inputmode="text" minlength="100" maxlength="220" required>
           <span class="hint">Dari halaman Server 1. Jangan dikirim ke pihak lain.</span>
-        </label>
-        <label>
-          Activation code website-only jika manifest mewajibkan
-          <input id="activationCode" name="activationCode" type="password" autocomplete="off" inputmode="text" maxlength="220">
-          <span class="hint">Opsional. Hanya dipakai jika signed manifest berisi activation_required=true.</span>
         </label>
         <div class="row">
           <button id="decryptButton" class="primary" type="submit">Decrypt lokal</button>
@@ -173,7 +173,6 @@
       passwordMaterial: document.getElementById('passwordMaterial'),
       emailSecret: document.getElementById('emailSecret'),
       websiteSecret: document.getElementById('websiteSecret'),
-      activationCode: document.getElementById('activationCode'),
       decryptButton: document.getElementById('decryptButton'),
       clearButton: document.getElementById('clearButton'),
       resultBox: document.getElementById('resultBox'),
@@ -207,12 +206,17 @@
       state.expiryTimer = null;
       try { document.body.classList.add('locked'); } catch (_) {}
       try { document.title = '404 Recovery Locked'; } catch (_) {}
-      try { document.getElementById('title').textContent = '404 Recovery Locked'; } catch (_) {}
-      try { el.form.hidden = true; } catch (_) {}
-      try { el.decryptButton.disabled = true; } catch (_) {}
-      try { el.resultBox.classList.remove('show'); } catch (_) {}
       try { history.replaceState(null, document.title, location.pathname + '#locked'); } catch (_) {}
-      setStatus('404 / Recovery terkunci. Link tidak valid, expired, sudah digunakan, atau halaman kembali online.', 'err');
+      try {
+        document.body.innerHTML = ''
+          + '<main class="notfound-wrap" aria-labelledby="nf-title">'
+          + '  <section class="notfound-box">'
+          + '    <p class="notfound-code">404</p>'
+          + '    <h1 id="nf-title" class="notfound-title">Recovery link terkunci</h1>'
+          + '    <p class="notfound-text">Halaman tidak tersedia, token tidak valid, sudah expired, sudah digunakan, atau mode keamanan mengunci sesi recovery.</p>'
+          + '  </section>'
+          + '</main>';
+      } catch (_) {}
     }
 
     function assertNotPermanentlyLocked() {
@@ -272,7 +276,6 @@
       try { el.passwordMaterial.value = ''; } catch (_) {}
       try { el.emailSecret.value = ''; } catch (_) {}
       try { el.websiteSecret.value = ''; } catch (_) {}
-      try { el.activationCode.value = ''; } catch (_) {}
       try { el.recoveryOutput.value = ''; } catch (_) {}
       try { el.resultBox.classList.remove('show'); } catch (_) {}
     }
@@ -615,7 +618,7 @@
         var params = normalizedArgonParams(bundle.argon2id_params);
         var manifest = state.manifestPayload || {};
         var activationRequired = Boolean(manifest.activation_required || manifest.activationRequired);
-        if (activationRequired && normalizeSecret(el.activationCode.value).length < 16) throw new Error('ACTIVATION_REQUIRED');
+        if (activationRequired) throw new Error('RECOVERY_LOCKED');
 
         var saltBytes = rememberBuffer(b64ToBytes(bundle.salt));
         var nonceBytes = rememberBuffer(b64ToBytes(bundle.aes_nonce));
