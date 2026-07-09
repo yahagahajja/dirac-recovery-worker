@@ -5962,6 +5962,7 @@ const DIRAC_RECOVERY_WORKER_ACTION = 'dirac_recovery_worker_generate';
 const DIRAC_RECOVERY_WORKER_TASK_GENERATE = 'lost_passkey_generate';
 const DIRAC_RECOVERY_WORKER_TASK_VERIFY = 'lost_passkey_verify';
 const DIRAC_RECOVERY_WORKER_TASK_FINALIZE = 'lost_passkey_finalize';
+const DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165 = 'lost_passkey_recovery_link_open';
 
 // Lost-passkey recovery vault v157: SERVER 2 only, called by signed SERVER 1 payload.
 // No PDF, no per-user HTML file, no plaintext recovery material persisted.
@@ -6483,7 +6484,12 @@ function diracCentralRecoveryWorkerGuardFailV158(req, ctx, stage, reason, extra 
 }
 
 function customerSecurityRecoveryWorkerLocalEnabled() {
-  return !customerSecurityRecoveryWorkerUrl()
+  const server2Enabled = diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')
+    || diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED')
+    || diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') === 'vercel2'
+    || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE') === 'vercel2';
+  return server2Enabled
+    && !customerSecurityRecoveryWorkerUrl()
     && Boolean(customerSecurityRecoveryWorkerSecret())
     && Boolean(customerSecurityRecoveryWorkerAllowedCaller());
 }
@@ -6694,6 +6700,12 @@ function customerSecurityLostPasskeyParseRecoveryLinkV162(req) {
   } catch (_) {
     return { matched: false };
   }
+}
+
+function customerSecurityLostPasskeyRedactedRecoveryUrlV165(req) {
+  const parsed = customerSecurityLostPasskeyParseRecoveryLinkV162(req);
+  if (!parsed || !parsed.matched) return String(req && req.url || '').slice(0, 300);
+  return '/recovery/r/' + encodeURIComponent(parsed.requestId || 'invalid') + '/[redacted-link-token]';
 }
 
 function customerSecurityLostPasskeySetLinkSecurityHeadersV162(res) {
@@ -26009,9 +26021,16 @@ const DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157 = new Set([
   DIRAC_RECOVERY_WORKER_ACTION
 ]);
 
+const DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165 = new Set([
+  DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
+]);
+
 const DIRAC_CENTRAL_ACTION_ALIASES_V146 = Object.freeze({});
 
-const DIRAC_CENTRAL_ACTIVE_ACTIONS_V146 = new Set(DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157);
+const DIRAC_CENTRAL_ACTIVE_ACTIONS_V146 = new Set([
+  ...DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157,
+  ...DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165
+]);
 
 const DIRAC_CENTRAL_DISABLED_ACTIONS_V146 = new Set([]);
 
@@ -26023,7 +26042,8 @@ const DIRAC_CENTRAL_A2F_ACTIONS_V148 = new Set([]);
 const DIRAC_CENTRAL_USER_DATA_ACTIONS_V146 = new Set([]);
 
 const DIRAC_CENTRAL_KNOWN_JS_ACTION_INPUTS_V146 = [
-  DIRAC_RECOVERY_WORKER_ACTION
+  DIRAC_RECOVERY_WORKER_ACTION,
+  DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
 ];
 
 const DIRAC_CENTRAL_KNOWN_ACTION_INPUTS_V146 = new Set([
@@ -26281,14 +26301,15 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     diracCentralStampV146(ctx, 'persistent_ban_checked');
     diracCentralSetNegativeCacheV146(identity);
 
-    if (customerSecurityLostPasskeyIsRecoveryLinkPathV162(req)) {
-      ctx.action = 'lost_passkey_recovery_link_open';
-      ctx.classification = 'recovery_link';
+    const isRecoveryLinkRouteV165 = customerSecurityLostPasskeyIsRecoveryLinkPathV162(req);
+    if (isRecoveryLinkRouteV165) {
+      ctx.__diracCentralRecoveryLinkRouteV165 = true;
       diracCentralStampV146(ctx, 'recovery_link_route_checked');
-      return customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
     }
 
-    const rawAction = String(req && req.query && req.query.action || '');
+    const rawAction = isRecoveryLinkRouteV165
+      ? DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
+      : String(req && req.query && req.query.action || '');
     const lowerAction = rawAction.toLowerCase();
     const format = diracCentralValidateActionFormatV146(rawAction, lowerAction);
     if (!format.ok) return await diracCentralBanAndBlockV146(req, res, ctx, lowerAction || 'missing_action', method, format.reason);
@@ -26301,7 +26322,7 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     const action = aliasResult.action;
     ctx.action = action;
     ctx.isA2FAction = diracCentralIsA2FActionV148(action);
-    if (req && req.query) req.query.action = action;
+    if (req && req.query && !isRecoveryLinkRouteV165) req.query.action = action;
 
     if (!DIRAC_CENTRAL_ACTIVE_ACTIONS_V146.has(action) && !DIRAC_CENTRAL_DISABLED_ACTIONS_V146.has(action)) {
       return await diracCentralBanAndBlockV146(req, res, ctx, action, method, 'action_not_in_global_whitelist');
@@ -26638,6 +26659,7 @@ function diracCentralNormalizeAliasV146(lowerAction) {
 function diracCentralClassifyActionV146(action) {
   const clean = String(action || '');
   if (DIRAC_CENTRAL_SERVER_ACTIONS_V146.has(clean)) return 'server';
+  if (DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean)) return 'recovery_link';
   if (DIRAC_CENTRAL_PUBLIC_READ_ACTIONS_V146.has(clean)) return 'public_read';
   if (DIRAC_CENTRAL_ADMIN_ACTIONS_V146.has(clean)) return 'admin';
   return 'browser';
@@ -26659,7 +26681,10 @@ function diracCentralVercel2OnlyActionGuardV150(action) {
 }
 
 function diracCentralVercel2OnlyActionsV150() {
-  const actions = new Set(DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157);
+  const actions = new Set([
+    ...DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157,
+    ...DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165
+  ]);
 
   for (const item of diracCentralEnvCsvV150('DIRAC_CENTRAL_VERCEL2_ONLY_ACTIONS')) actions.add(item);
   for (const item of diracCentralEnvCsvV150('DIRAC_VERCEL2_ONLY_ACTIONS')) actions.add(item);
@@ -27238,7 +27263,9 @@ async function diracCentralDistributedRateLimitGuardV146(req, ctx) {
 }
 
 function diracCentralNeedsDistributedRateLimitV146(action) {
-  return DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(String(action || '').trim().toLowerCase());
+  const clean = String(action || '').trim().toLowerCase();
+  return DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)
+    || DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean);
 }
 
 function diracCentralDistributedRateLimitMaxV146(action) {
@@ -27339,7 +27366,10 @@ function diracCentralSampleCollectorV146(req, ctx) {
   };
   push('action', ctx.action);
   push('method', ctx.method);
-  push('url', req && req.url);
+  const sampleUrl = ctx && ctx.action === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
+    ? customerSecurityLostPasskeyRedactedRecoveryUrlV165(req)
+    : req && req.url;
+  push('url', sampleUrl);
   const headers = req && req.headers || {};
   ['origin', 'referer', 'referrer', 'user-agent', 'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest', 'content-type', 'accept', 'accept-language'].forEach((key) => push(key, headers[key]));
   Object.entries(req && req.query || {}).slice(0, 80).forEach(([key, value]) => push('query.' + key, Array.isArray(value) ? value.join(',') : value));
@@ -28329,6 +28359,9 @@ function diracCentralStableMfaReadGateV146(req, res, ctx) {
 
 function diracCentralContractForActionV146(action) {
   const clean = String(action || '');
+  if (DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean)) {
+    return { methods: ['GET', 'HEAD'], allowed: ['action'], required: [], maxBodyBytes: 0, maxFieldBytes: 80, mutation: false };
+  }
   if (!DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)) {
     return { methods: [], allowed: [], required: [], maxBodyBytes: 0, maxFieldBytes: 0, mutation: false };
   }
