@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://diracgroup.store https://www.diracgroup.store; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Dirac Lost Passkey Recovery</title>
+  <!--
+    DIRAC LOST PASSKEY OFFLINE DECRYPT HTML
+    Deploy statis 1x di Server 2.
+
+    Header HTTP production yang WAJIB diset di hosting/static server:
+    Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+    Pragma: no-cache
+    Expires: 0
+    Referrer-Policy: no-referrer
+    X-Content-Type-Options: nosniff
+    X-Frame-Options: DENY
+    Cross-Origin-Opener-Policy: same-origin
+    Cross-Origin-Resource-Policy: same-origin
+    Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://SERVER2-DOMAIN; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+
+    HTML ini sengaja fail-closed bila:
+    - Ed25519 public key belum diisi.
+    - Argon2id WASM adapter belum dibundel lokal/inline.
+    - Server 2 belum mengirim signed manifest Ed25519.
+
+    Tidak boleh memasukkan ke file ini:
+    root secret, pepper, worker secret, service role key, private key,
+    secret email, secret website, recovery code, plaintext vault.
+  -->
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #0b0f16; color: #eaf0f8; }
+    main { width: min(940px, 100%); margin: 0 auto; padding: 32px 18px 48px; }
+    .card { background: #121926; border: 1px solid #263244; border-radius: 18px; padding: 22px; box-shadow: 0 18px 60px rgba(0,0,0,.35); }
+    h1 { margin: 0 0 8px; font-size: clamp(24px, 4vw, 34px); letter-spacing: -.02em; }
+    h2 { margin: 26px 0 10px; font-size: 18px; }
+    p { line-height: 1.58; color: #b9c6d8; }
+    .badge { display: inline-flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 999px; background: #172235; color: #dbe8fb; font-size: 12px; border: 1px solid #2b3a50; }
+    .grid { display: grid; gap: 14px; margin-top: 16px; }
+    label { display: grid; gap: 7px; color: #d7e2f2; font-weight: 650; }
+    input, textarea { width: 100%; border: 1px solid #33445c; background: #0c121d; color: #f3f7fc; border-radius: 12px; padding: 13px 14px; font: inherit; outline: none; }
+    input:focus, textarea:focus { border-color: #83b7ff; box-shadow: 0 0 0 3px rgba(131,183,255,.15); }
+    textarea { min-height: 132px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.45; }
+    .hint { color: #91a3bb; font-size: 12px; font-weight: 500; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    button { appearance: none; border: 0; border-radius: 12px; padding: 12px 15px; font: inherit; font-weight: 750; cursor: pointer; }
+    button.primary { background: #7bb2ff; color: #07111f; }
+    button.secondary { background: #263244; color: #eaf0f8; border: 1px solid #3a4b63; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+    .status { margin: 16px 0 0; padding: 13px 14px; border-radius: 14px; border: 1px solid #2d3d53; background: #0d1420; color: #dce8f9; white-space: pre-wrap; }
+    .status.ok { border-color: #245f3d; background: #0b2115; color: #ccffe2; }
+    .status.err { border-color: #6b2530; background: #241016; color: #ffd3dc; }
+    .result { display: none; margin-top: 20px; }
+    .result.show { display: block; }
+    .danger { color: #ffd3dc; }
+    .small { font-size: 12px; color: #91a3bb; }
+    .split { display: grid; gap: 14px; grid-template-columns: 1fr; }
+    @media (min-width: 760px) { .split { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card" aria-labelledby="title">
+      <span class="badge">Dirac Secure Recovery • Offline Decrypt</span>
+      <h1 id="title">Lost Passkey Recovery</h1>
+      <p>Halaman ini adalah alat decrypt lokal. Secret hanya diproses di browser, tidak disimpan, dan network dimatikan setelah vault terenkripsi diterima.</p>
+
+      <div id="status" class="status" role="status" aria-live="polite">Memuat halaman recovery...</div>
+
+      <form id="decryptForm" class="grid" autocomplete="off" spellcheck="false" hidden>
+        <div class="split">
+          <label>
+            Password / material terbaru akun
+            <input id="passwordMaterial" name="passwordMaterial" type="password" autocomplete="off" minlength="6" maxlength="1024" required>
+            <span class="hint">Wajib sesuai formula vault Server 2 saat generate.</span>
+          </label>
+          <label>
+            Secret email 100 karakter
+            <input id="emailSecret" name="emailSecret" type="password" autocomplete="off" inputmode="text" minlength="100" maxlength="220" required>
+            <span class="hint">Dari email resmi. Spasi akan dihapus.</span>
+          </label>
+        </div>
+        <label>
+          Secret website 100 karakter
+          <input id="websiteSecret" name="websiteSecret" type="password" autocomplete="off" inputmode="text" minlength="100" maxlength="220" required>
+          <span class="hint">Dari halaman Server 1. Jangan dikirim ke pihak lain.</span>
+        </label>
+        <label>
+          Activation code website-only jika manifest mewajibkan
+          <input id="activationCode" name="activationCode" type="password" autocomplete="off" inputmode="text" maxlength="220">
+          <span class="hint">Opsional. Hanya dipakai jika signed manifest berisi activation_required=true.</span>
+        </label>
+        <div class="row">
+          <button id="decryptButton" class="primary" type="submit">Decrypt lokal</button>
+          <button id="clearButton" class="secondary" type="button">Clear memory</button>
+        </div>
+      </form>
+
+      <section id="resultBox" class="result" aria-labelledby="resultTitle">
+        <h2 id="resultTitle">Recovery material</h2>
+        <p class="danger">Salin secara manual, lalu segera lanjutkan pembuatan passkey baru di Server 1. Setelah selesai, lakukan finalize agar recovery menjadi used/revoked.</p>
+        <textarea id="recoveryOutput" readonly autocomplete="off" spellcheck="false"></textarea>
+      </section>
+
+      <h2>Alur aman</h2>
+      <p class="small">Link → fetch encrypted vault sekali → verify Ed25519 → cek hash/manifest → network mati → input secret → Argon2id WASM → HKDF-SHA256 → AES-256-GCM → hasil tampil lokal → memory wipe.</p>
+    </section>
+  </main>
+
+  <!--
+    WAJIB BUNDLE ARGON2ID WASM LOKAL/INLINE DI SINI ATAU SEBELUM SCRIPT UTAMA.
+    Jangan load script luar. Jangan worker remote. Jangan fallback ke KDF lain.
+
+    Adapter yang diterima:
+    window.DiracArgon2idWasm.hashRaw({ passwordBytes, saltBytes, memoryCost, timeCost, parallelism, hashLength })
+    harus mengembalikan Uint8Array atau ArrayBuffer raw hash Argon2id.
+  -->
+
+  <script>
+  (function () {
+    'use strict';
+
+    var CONFIG = Object.freeze({
+      officialServer2Origins: Object.freeze([
+        'https://diracgroup.store',
+        'https://www.diracgroup.store'
+      ]),
+      vaultApiPath: '/api/health',
+      vaultApiAction: 'lost_passkey_recovery_link_open',
+      ed25519PublicKeysBase64: Object.freeze({
+        'dirac-recovery-ed25519-2026-01': ''
+      }),
+      minArgon2id: Object.freeze({
+        memoryCost: 1740800,
+        timeCost: 5,
+        parallelism: 1,
+        hashLength: 32
+      }),
+      expectedPurpose: 'lost_passkey_recovery',
+      expectedLegacyVersion: 'lost-passkey-html-vault-aes256gcm-argon2id-v157',
+      genericError: 'Recovery tidak valid, expired, atau sudah digunakan.'
+    });
+
+    var state = {
+      fragment: null,
+      vaultResponse: null,
+      vaultBundle: null,
+      manifestPayload: null,
+      networkLocked: false,
+      vaultFetched: false,
+      sensitiveBuffers: []
+    };
+
+    var el = {
+      status: document.getElementById('status'),
+      form: document.getElementById('decryptForm'),
+      passwordMaterial: document.getElementById('passwordMaterial'),
+      emailSecret: document.getElementById('emailSecret'),
+      websiteSecret: document.getElementById('websiteSecret'),
+      activationCode: document.getElementById('activationCode'),
+      decryptButton: document.getElementById('decryptButton'),
+      clearButton: document.getElementById('clearButton'),
+      resultBox: document.getElementById('resultBox'),
+      recoveryOutput: document.getElementById('recoveryOutput')
+    };
+
+    function setStatus(message, type) {
+      el.status.textContent = String(message || CONFIG.genericError);
+      el.status.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function failClosed() {
+      wipeMemory();
+      setStatus(CONFIG.genericError, 'err');
+      el.form.hidden = true;
+      el.decryptButton.disabled = true;
+    }
+
+    function deploymentFailClosed(message) {
+      wipeMemory();
+      setStatus(message || 'Konfigurasi recovery belum siap. Hubungi admin.', 'err');
+      el.form.hidden = true;
+      el.decryptButton.disabled = true;
+    }
+
+    function rememberBuffer(value) {
+      if (value && value instanceof Uint8Array) state.sensitiveBuffers.push(value);
+      return value;
+    }
+
+    function wipeMemory() {
+      for (var i = 0; i < state.sensitiveBuffers.length; i += 1) {
+        try { state.sensitiveBuffers[i].fill(0); } catch (_) {}
+      }
+      state.sensitiveBuffers = [];
+      try { el.passwordMaterial.value = ''; } catch (_) {}
+      try { el.emailSecret.value = ''; } catch (_) {}
+      try { el.websiteSecret.value = ''; } catch (_) {}
+      try { el.activationCode.value = ''; } catch (_) {}
+      try { el.recoveryOutput.value = ''; } catch (_) {}
+      try { el.resultBox.classList.remove('show'); } catch (_) {}
+    }
+
+    function hardenStorageAccess() {
+      var blocked = function () { throw new Error('DIRAC_STORAGE_DISABLED'); };
+      try { Object.defineProperty(window, 'localStorage', { configurable: false, get: blocked }); } catch (_) {}
+      try { Object.defineProperty(window, 'sessionStorage', { configurable: false, get: blocked }); } catch (_) {}
+      try { Object.defineProperty(window, 'indexedDB', { configurable: false, get: blocked }); } catch (_) {}
+      try { Object.defineProperty(window, 'openDatabase', { configurable: false, value: blocked }); } catch (_) {}
+      try { Object.defineProperty(document, 'cookie', { configurable: false, get: function () { return ''; }, set: blocked }); } catch (_) {}
+      try { if (navigator.serviceWorker && navigator.serviceWorker.register) navigator.serviceWorker.register = blocked; } catch (_) {}
+    }
+
+    function disableAllNetwork() {
+      if (state.networkLocked) return;
+      state.networkLocked = true;
+      var blocked = function () { return Promise.reject(new Error('DIRAC_NETWORK_DISABLED')); };
+      var blockedCtor = function () { throw new Error('DIRAC_NETWORK_DISABLED'); };
+      try { window.fetch = blocked; } catch (_) {}
+      try { window.XMLHttpRequest = blockedCtor; } catch (_) {}
+      try { window.WebSocket = blockedCtor; } catch (_) {}
+      try { window.EventSource = blockedCtor; } catch (_) {}
+      try { navigator.sendBeacon = function () { return false; }; } catch (_) {}
+      try { window.Worker = blockedCtor; } catch (_) {}
+      try { window.SharedWorker = blockedCtor; } catch (_) {}
+    }
+
+    function requireSecureContext() {
+      if (!window.crypto || !crypto.subtle || !crypto.getRandomValues) throw new Error('WEBCRYPTO_REQUIRED');
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') throw new Error('HTTPS_REQUIRED');
+    }
+
+    function assertOfficialOrigin() {
+      if (CONFIG.officialServer2Origins.indexOf(location.origin) === -1) throw new Error('ORIGIN_NOT_ALLOWED');
+    }
+
+    function parseFragment() {
+      var hash = String(location.hash || '').replace(/^#/, '');
+      var params = new URLSearchParams(hash);
+      var rid = String(params.get('rid') || '').trim();
+      var token = String(params.get('token') || '').trim();
+      if (!/^[A-Za-z0-9_-]{16,120}$/.test(rid)) throw new Error('RID_INVALID');
+      if (!/^[A-Za-z0-9_-]{320,360}$/.test(token)) throw new Error('TOKEN_INVALID');
+      try { history.replaceState(null, document.title, location.pathname + '#recovery'); } catch (_) {}
+      return { rid: rid, token: token };
+    }
+
+    function utf8(value) {
+      return new TextEncoder().encode(String(value == null ? '' : value));
+    }
+
+    function fromUtf8(bytes) {
+      return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    }
+
+    function normalizeSecret(value) {
+      return String(value || '').normalize('NFKC').replace(/[\u200B-\u200D\uFEFF\s]+/g, '').trim();
+    }
+
+    function normalizePassword(value) {
+      var normalized = String(value || '').normalize('NFC');
+      var size = utf8(normalized).byteLength;
+      if (size < 6 || size > 1024) return '';
+      return normalized;
+    }
+
+    function canonical(value) {
+      if (value === null || value === undefined) return 'null';
+      if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
+      if (typeof value === 'object') {
+        return '{' + Object.keys(value).sort().map(function (key) {
+          return JSON.stringify(key) + ':' + canonical(value[key]);
+        }).join(',') + '}';
+      }
+      return JSON.stringify(value);
+    }
+
+    function b64ToBytes(value) {
+      var raw = String(value || '').trim().replace(/-/g, '+').replace(/_/g, '/');
+      while (raw.length % 4) raw += '=';
+      var bin = atob(raw);
+      var out = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    function bytesToB64Url(bytes) {
+      var bin = '';
+      var view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+      for (var i = 0; i < view.length; i += 1) bin += String.fromCharCode(view[i]);
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    }
+
+    function concatBytes(a, b) {
+      var out = new Uint8Array(a.length + b.length);
+      out.set(a, 0);
+      out.set(b, a.length);
+      return out;
+    }
+
+    async function sha256B64Url(data) {
+      var digest = await crypto.subtle.digest('SHA-256', data instanceof Uint8Array ? data : utf8(String(data || '')));
+      return bytesToB64Url(new Uint8Array(digest));
+    }
+
+    async function sha256Hex(data) {
+      var digest = await crypto.subtle.digest('SHA-256', data instanceof Uint8Array ? data : utf8(String(data || '')));
+      var bytes = new Uint8Array(digest);
+      var out = '';
+      for (var i = 0; i < bytes.length; i += 1) out += bytes[i].toString(16).padStart(2, '0');
+      return out;
+    }
+
+    async function fetchVaultOnce(fragment) {
+      if (state.vaultFetched) throw new Error('VAULT_FETCH_ALREADY_USED');
+      state.vaultFetched = true;
+      var url = new URL(CONFIG.vaultApiPath, location.origin);
+      url.searchParams.set('action', CONFIG.vaultApiAction);
+      url.searchParams.set('rid', fragment.rid);
+      url.searchParams.set('token', fragment.token);
+      url.searchParams.set('format', 'json');
+      var response = await fetch(url.toString(), {
+        method: 'GET',
+        credentials: 'omit',
+        cache: 'no-store',
+        redirect: 'error',
+        referrerPolicy: 'no-referrer',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error('VAULT_FETCH_FAILED');
+      var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      if (contentType.indexOf('application/json') === -1) throw new Error('VAULT_RESPONSE_NOT_JSON');
+      var body = await response.json();
+      if (!body || body.ok !== true) throw new Error('VAULT_RESPONSE_INVALID');
+      return body;
+    }
+
+    function normalizeVaultBundle(raw) {
+      var bundle = raw.vault_bundle || raw.vaultBundle || (raw.metadata && raw.metadata.vault_bundle) || raw.vault || null;
+      if (!bundle || typeof bundle !== 'object') throw new Error('VAULT_BUNDLE_MISSING');
+
+      var normalized = {
+        version: String(bundle.version || raw.version || CONFIG.expectedLegacyVersion),
+        salt: String(bundle.salt || bundle.salt_b64 || ''),
+        aes_nonce: String(bundle.aes_nonce || bundle.aes_nonce_b64 || bundle.nonce_b64 || ''),
+        ciphertext: String(bundle.ciphertext || bundle.ciphertext_b64 || ''),
+        auth_tag: String(bundle.auth_tag || bundle.auth_tag_b64 || bundle.tag_b64 || ''),
+        vault_id: String(bundle.vault_id || bundle.vault_id_b64 || ''),
+        request_id: String(bundle.request_id || raw.request_id || ''),
+        metadata: bundle.metadata || raw.aad || raw.metadata || {},
+        argon2id_params: bundle.argon2id_params || raw.kdf || {},
+        hkdf_info: String(bundle.hkdf_info || (raw.hkdf && raw.hkdf.info) || '')
+      };
+
+      if (!normalized.salt || !normalized.aes_nonce || !normalized.ciphertext || !normalized.auth_tag || !normalized.vault_id) throw new Error('VAULT_BUNDLE_INCOMPLETE');
+      if (normalized.request_id !== state.fragment.rid) throw new Error('VAULT_RID_MISMATCH');
+      return normalized;
+    }
+
+    function extractSignedManifest(raw) {
+      var signed = raw.signed_manifest || raw.manifest_signed || null;
+      var payload = signed && signed.payload ? signed.payload : (raw.manifest && raw.manifest.payload ? raw.manifest.payload : raw.manifest);
+      var signature = signed && signed.signature_b64 ? signed.signature_b64 : (raw.signature_b64 || raw.ed25519_signature_b64 || '');
+      if (!payload || typeof payload !== 'object' || !signature) throw new Error('SIGNED_MANIFEST_MISSING');
+      return { payload: payload, signatureB64: String(signature) };
+    }
+
+    function getArgonParam(params, camel, snake, fallback) {
+      var value = Number(params && (params[camel] != null ? params[camel] : params[snake]));
+      return Number.isFinite(value) ? Math.floor(value) : fallback;
+    }
+
+    function normalizedArgonParams(params) {
+      return {
+        memoryCost: getArgonParam(params, 'memoryCost', 'memory_kib', 0),
+        timeCost: getArgonParam(params, 'timeCost', 'time_cost', 0),
+        parallelism: getArgonParam(params, 'parallelism', 'parallelism', 0),
+        hashLength: getArgonParam(params, 'hashLength', 'hash_len', 64)
+      };
+    }
+
+    function verifyMinimumArgon2idParams(params) {
+      if (params.memoryCost < CONFIG.minArgon2id.memoryCost) throw new Error('ARGON2_MEMORY_DOWNGRADE');
+      if (params.timeCost < CONFIG.minArgon2id.timeCost) throw new Error('ARGON2_TIME_DOWNGRADE');
+      if (params.parallelism < CONFIG.minArgon2id.parallelism) throw new Error('ARGON2_PARALLELISM_INVALID');
+      if (params.hashLength < CONFIG.minArgon2id.hashLength) throw new Error('ARGON2_HASHLEN_INVALID');
+    }
+
+    async function verifyEd25519Manifest(payload, signatureB64) {
+      var keyId = String(payload.key_id || payload.keyId || '');
+      var publicKeyB64 = CONFIG.ed25519PublicKeysBase64[keyId];
+      if (!keyId || !publicKeyB64 || publicKeyB64.indexOf('PASTE_') === 0) throw new Error('ED25519_PUBLIC_KEY_MISSING');
+      var publicKeyBytes = b64ToBytes(publicKeyB64);
+      var signatureBytes = b64ToBytes(signatureB64);
+      var publicKey = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
+      var ok = await crypto.subtle.verify({ name: 'Ed25519' }, publicKey, signatureBytes, utf8(canonical(payload)));
+      if (!ok) throw new Error('ED25519_SIGNATURE_INVALID');
+    }
+
+    async function verifyManifestAndVault(raw, bundle, signedManifest) {
+      var payload = signedManifest.payload;
+      await verifyEd25519Manifest(payload, signedManifest.signatureB64);
+
+      var purpose = String(payload.purpose || raw.purpose || '').trim();
+      if (purpose && purpose !== CONFIG.expectedPurpose) throw new Error('PURPOSE_INVALID');
+
+      var expiresAt = String(payload.expires_at || raw.expires_at || bundle.metadata.expires_at || '');
+      var expiresMs = Date.parse(expiresAt);
+      if (!Number.isFinite(expiresMs) || expiresMs <= Date.now()) throw new Error('EXPIRED');
+
+      var manifestRid = String(payload.request_id || raw.request_id || bundle.request_id || '');
+      if (manifestRid !== state.fragment.rid) throw new Error('MANIFEST_RID_MISMATCH');
+
+      var params = normalizedArgonParams(bundle.argon2id_params);
+      verifyMinimumArgon2idParams(params);
+
+      var ciphertextBytes = b64ToBytes(bundle.ciphertext);
+      var aadBytes = utf8(canonical(bundle.metadata));
+      var ciphertextHash = String(payload.ciphertext_sha256 || payload.ciphertext_hash || '');
+      var aadHash = String(payload.aad_sha256 || payload.aad_hash || raw.aad_hash || '');
+      var saltHash = String(payload.salt_sha256 || payload.salt_hash || '');
+
+      if (ciphertextHash) {
+        var actualCipherB64 = await sha256B64Url(ciphertextBytes);
+        var actualCipherHex = await sha256Hex(ciphertextBytes);
+        if (ciphertextHash !== actualCipherB64 && ciphertextHash !== actualCipherHex) throw new Error('CIPHERTEXT_HASH_INVALID');
+      }
+
+      if (aadHash) {
+        var actualAadB64 = await sha256B64Url(aadBytes);
+        var actualAadHex = await sha256Hex(aadBytes);
+        if (aadHash !== actualAadB64 && aadHash !== actualAadHex) throw new Error('AAD_HASH_INVALID');
+      }
+
+      if (saltHash) {
+        var saltBytes = b64ToBytes(bundle.salt);
+        var actualSaltB64 = await sha256B64Url(saltBytes);
+        var actualSaltHex = await sha256Hex(saltBytes);
+        if (saltHash !== actualSaltB64 && saltHash !== actualSaltHex) throw new Error('SALT_HASH_INVALID');
+      }
+
+      return params;
+    }
+
+    function assertArgon2idReady() {
+      if (window.DiracArgon2idWasm && typeof window.DiracArgon2idWasm.hashRaw === 'function') return;
+      if (window.argon2 && typeof window.argon2.hash === 'function') return;
+      throw new Error('ARGON2ID_WASM_MISSING');
+    }
+
+    async function runArgon2idRaw(passwordBytes, saltBytes, params) {
+      assertArgon2idReady();
+      if (window.DiracArgon2idWasm && typeof window.DiracArgon2idWasm.hashRaw === 'function') {
+        var raw = await window.DiracArgon2idWasm.hashRaw({
+          passwordBytes: passwordBytes,
+          saltBytes: saltBytes,
+          memoryCost: params.memoryCost,
+          timeCost: params.timeCost,
+          parallelism: params.parallelism,
+          hashLength: params.hashLength
+        });
+        return rememberBuffer(new Uint8Array(raw));
+      }
+
+      var result = await window.argon2.hash({
+        pass: passwordBytes,
+        salt: saltBytes,
+        type: window.argon2.ArgonType ? window.argon2.ArgonType.Argon2id : 2,
+        mem: params.memoryCost,
+        time: params.timeCost,
+        parallelism: params.parallelism,
+        hashLen: params.hashLength,
+        raw: true
+      });
+      if (result && result.hash) return rememberBuffer(new Uint8Array(result.hash));
+      throw new Error('ARGON2ID_WASM_OUTPUT_INVALID');
+    }
+
+    async function hkdfSha256(ikmBytes, saltBytes, info, length) {
+      var key = await crypto.subtle.importKey('raw', ikmBytes, 'HKDF', false, ['deriveBits']);
+      var bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: saltBytes, info: utf8(info) }, key, length * 8);
+      return rememberBuffer(new Uint8Array(bits));
+    }
+
+    async function decryptAesGcm(aesKeyBytes, nonceBytes, ciphertextBytes, tagBytes, aadBytes) {
+      var key = await crypto.subtle.importKey('raw', aesKeyBytes.slice(0, 32), { name: 'AES-GCM' }, false, ['decrypt']);
+      var combined = concatBytes(ciphertextBytes, tagBytes);
+      rememberBuffer(combined);
+      var plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonceBytes, additionalData: aadBytes, tagLength: 128 }, key, combined);
+      return rememberBuffer(new Uint8Array(plaintext));
+    }
+
+    function buildVaultMaterial(passwordMaterial, emailSecret, websiteSecret, bundle) {
+      var password = normalizePassword(passwordMaterial);
+      var email = normalizeSecret(emailSecret);
+      var website = normalizeSecret(websiteSecret);
+      if (!password) throw new Error('PASSWORD_INVALID');
+      if (email.length !== 100) throw new Error('EMAIL_SECRET_INVALID');
+      if (website.length !== 100) throw new Error('WEBSITE_SECRET_INVALID');
+      return utf8(canonical({
+        version: bundle.version,
+        password: password,
+        email_secret: email,
+        website_secret: website,
+        salt: bundle.salt,
+        vault_id: bundle.vault_id
+      }));
+    }
+
+    function verifyInnerPayload(plaintextBytes) {
+      var text = fromUtf8(plaintextBytes).trim();
+      if (!text) throw new Error('PLAINTEXT_EMPTY');
+      try {
+        var parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.magic && parsed.magic !== 'DIRAC_LOST_PASSKEY_RECOVERY') throw new Error('INNER_MAGIC_INVALID');
+          if (parsed.purpose && parsed.purpose !== 'lost_passkey_recovery') throw new Error('INNER_PURPOSE_INVALID');
+          if (parsed.request_id && parsed.request_id !== state.fragment.rid) throw new Error('INNER_RID_INVALID');
+          if (parsed.expires_at && Date.parse(parsed.expires_at) <= Date.now()) throw new Error('INNER_EXPIRED');
+          return parsed.recovery_material || parsed.recovery_code || parsed.code || text;
+        }
+      } catch (error) {
+        if (/^INNER_/.test(String(error && error.message || ''))) throw error;
+      }
+      if (text.length < 16 || text.length > 5000) throw new Error('PLAINTEXT_SHAPE_INVALID');
+      return text;
+    }
+
+    async function decryptSubmit(event) {
+      event.preventDefault();
+      el.decryptButton.disabled = true;
+      setStatus('Decrypt lokal sedang diproses. Jangan tutup halaman.', '');
+      try {
+        var bundle = state.vaultBundle;
+        var params = normalizedArgonParams(bundle.argon2id_params);
+        var manifest = state.manifestPayload || {};
+        var activationRequired = Boolean(manifest.activation_required || manifest.activationRequired);
+        if (activationRequired && normalizeSecret(el.activationCode.value).length < 16) throw new Error('ACTIVATION_REQUIRED');
+
+        var saltBytes = rememberBuffer(b64ToBytes(bundle.salt));
+        var nonceBytes = rememberBuffer(b64ToBytes(bundle.aes_nonce));
+        var ciphertextBytes = rememberBuffer(b64ToBytes(bundle.ciphertext));
+        var tagBytes = rememberBuffer(b64ToBytes(bundle.auth_tag));
+        var aadBytes = rememberBuffer(utf8(canonical(bundle.metadata)));
+        var vaultMaterial = rememberBuffer(buildVaultMaterial(el.passwordMaterial.value, el.emailSecret.value, el.websiteSecret.value, bundle));
+        var argonRaw = await runArgon2idRaw(vaultMaterial, saltBytes, params);
+        var aesKey = await hkdfSha256(argonRaw, saltBytes, bundle.hkdf_info, 32);
+        var plaintext = await decryptAesGcm(aesKey, nonceBytes, ciphertextBytes, tagBytes, aadBytes);
+        var recoveryMaterial = verifyInnerPayload(plaintext);
+        el.recoveryOutput.value = String(recoveryMaterial);
+        el.resultBox.classList.add('show');
+        setStatus('Decrypt berhasil. Recovery material tampil lokal. Segera lanjutkan pembuatan passkey baru di Server 1.', 'ok');
+      } catch (_) {
+        failClosed();
+      } finally {
+        if (!el.form.hidden) el.decryptButton.disabled = false;
+      }
+    }
+
+    async function bootstrap() {
+      hardenStorageAccess();
+      requireSecureContext();
+      assertOfficialOrigin();
+      assertArgon2idReady();
+      state.fragment = parseFragment();
+      setStatus('Mengambil encrypted vault dari Server 2...', '');
+      var raw = await fetchVaultOnce(state.fragment);
+      state.vaultResponse = raw;
+      state.vaultBundle = normalizeVaultBundle(raw);
+      var signedManifest = extractSignedManifest(raw);
+      state.manifestPayload = signedManifest.payload;
+      await verifyManifestAndVault(raw, state.vaultBundle, signedManifest);
+      disableAllNetwork();
+      el.form.hidden = false;
+      setStatus('Vault terenkripsi valid. Network sudah dimatikan. Masukkan secret untuk decrypt lokal.', 'ok');
+    }
+
+    el.form.addEventListener('submit', decryptSubmit);
+    el.clearButton.addEventListener('click', function () {
+      wipeMemory();
+      setStatus('Memori halaman sudah dibersihkan. Jika belum selesai recovery, buka ulang link dari email.', '');
+    });
+    window.addEventListener('pagehide', wipeMemory, { once: false });
+    window.addEventListener('beforeunload', wipeMemory, { once: false });
+
+    bootstrap().catch(function (error) {
+      var msg = String(error && error.message || '');
+      if (msg === 'ARGON2ID_WASM_MISSING') return deploymentFailClosed('Argon2id WASM belum dibundel lokal/inline. Halaman berhenti secara aman.');
+      if (msg === 'ED25519_PUBLIC_KEY_MISSING') return deploymentFailClosed('Ed25519 public key belum diisi. Halaman berhenti secara aman.');
+      return failClosed();
+    });
+  }());
+  </script>
+</body>
+</html>
