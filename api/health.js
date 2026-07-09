@@ -6170,8 +6170,10 @@ function customerSecurityRecoveryWorkerServer2EnvDiagnosticsV158() {
   const rawAllowedCaller = String(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER || '').trim();
   const rawCaller = String(process.env.DIRAC_RECOVERY_WORKER_CALLER || '').trim();
   const secretBytes = Buffer.byteLength(rawSecret, 'utf8');
-  const rootSecretBytes = Buffer.byteLength(String(process.env.DIRAC_LOST_PASSKEY_ROOT_SECRET || ''), 'utf8');
-  const pepperBytes = Buffer.byteLength(String(process.env.DIRAC_LOST_PASSKEY_DB_PEPPER || ''), 'utf8');
+  const securityRootSecretText = String(process.env.DIRAC_SECURITY_ROOT_SECRET || '').normalize('NFC');
+  const rootSecretBytes = Buffer.byteLength(securityRootSecretText, 'utf8');
+  const lostPasskeyDbPepperText = String(process.env.DIRAC_LOST_PASSKEY_DB_PEPPER || '').normalize('NFC');
+  const pepperBytes = Buffer.byteLength(lostPasskeyDbPepperText || securityRootSecretText, 'utf8');
   return {
     role: 'server2_recovery_worker_receiver',
     local_worker_enabled: customerSecurityRecoveryWorkerLocalEnabled(),
@@ -6182,8 +6184,8 @@ function customerSecurityRecoveryWorkerServer2EnvDiagnosticsV158() {
       DIRAC_RECOVERY_WORKER_SECRET: rawSecret ? 'present' : 'missing',
       DIRAC_RECOVERY_WORKER_ALLOWED_CALLER: rawAllowedCaller ? 'present' : 'missing',
       DIRAC_RECOVERY_WORKER_CALLER: rawCaller ? 'present_on_server2_remove_it' : 'absent_ok',
-      DIRAC_LOST_PASSKEY_ROOT_SECRET: rootSecretBytes ? 'present' : 'missing',
-      DIRAC_LOST_PASSKEY_DB_PEPPER: pepperBytes ? 'present' : 'missing'
+      DIRAC_SECURITY_ROOT_SECRET: rootSecretBytes ? 'present' : 'missing',
+      DIRAC_LOST_PASSKEY_DB_PEPPER: lostPasskeyDbPepperText ? 'present' : (rootSecretBytes ? 'derived_from_DIRAC_SECURITY_ROOT_SECRET' : 'missing')
     },
     validity: {
       worker_url_absent_required_on_server2: !rawUrl,
@@ -6230,7 +6232,7 @@ function diracCentralRecoveryWorkerGuardDebugV158(req, ctx, stage, reason, extra
   const now = Date.now();
   const body = ctx && ctx.body && typeof ctx.body === 'object' ? ctx.body : null;
   const debug = {
-    diagnostic_version: 'recovery-worker-central-guard-debug-v158',
+    diagnostic_version: 'recovery-worker-central-guard-debug-v160',
     stage: String(stage || 'unknown').slice(0, 80),
     reason: String(reason || 'unknown').slice(0, 120),
     action: String(ctx && ctx.action || '').slice(0, 80),
@@ -6252,7 +6254,7 @@ function diracCentralRecoveryWorkerGuardDebugV158(req, ctx, stage, reason, extra
     extra: extra && typeof extra === 'object' ? extra : {}
   };
   if (ctx) ctx.__diracRecoveryWorkerDebugV158 = debug;
-  try { console.error('[dirac-recovery-worker-central-guard-v158]', JSON.stringify(debug)); } catch (_) {}
+  try { console.error('[dirac-recovery-worker-central-guard-v160]', JSON.stringify(debug)); } catch (_) {}
   return debug;
 }
 
@@ -6325,20 +6327,24 @@ function customerSecurityLostPasskeyAesGcmEncryptWithNonceV157(key, nonce, plain
 }
 
 function customerSecurityLostPasskeyRootSecretV157() {
-  const secret = String(process.env.DIRAC_LOST_PASSKEY_ROOT_SECRET || '').normalize('NFC');
+  const secret = String(process.env.DIRAC_SECURITY_ROOT_SECRET || '').normalize('NFC');
   if (Buffer.byteLength(secret, 'utf8') < LOST_PASSKEY_ROOT_SECRET_MIN_BYTES_V157) return '';
   return secret;
 }
 
 function customerSecurityLostPasskeyRootSecretVersionV157() {
-  const clean = String(process.env.DIRAC_LOST_PASSKEY_ROOT_SECRET_VERSION || 'v1').trim();
+  const clean = String(process.env.DIRAC_SECURITY_ROOT_SECRET_VERSION || process.env.DIRAC_LOST_PASSKEY_ROOT_SECRET_VERSION || 'v1').trim();
   return /^[A-Za-z0-9_.-]{1,80}$/.test(clean) ? clean : 'v1';
 }
 
 function customerSecurityLostPasskeyDbPepperV157() {
   const pepper = String(process.env.DIRAC_LOST_PASSKEY_DB_PEPPER || '').normalize('NFC');
-  if (Buffer.byteLength(pepper, 'utf8') < LOST_PASSKEY_DB_PEPPER_MIN_BYTES_V157) return '';
-  return pepper;
+  if (Buffer.byteLength(pepper, 'utf8') >= LOST_PASSKEY_DB_PEPPER_MIN_BYTES_V157) return pepper;
+  const rootSecret = customerSecurityLostPasskeyRootSecretV157();
+  if (!rootSecret) return '';
+  return crypto.createHmac('sha512', rootSecret)
+    .update('dirac-lost-passkey-db-pepper-v157')
+    .digest('base64url');
 }
 
 function customerSecurityLostPasskeyRequireVaultSecretsV157() {
