@@ -6966,9 +6966,19 @@ function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata) {
       hkdf_info: String(vaultBundle.hkdf_info || '')
     },
     aad_hash: String(row.aad_hash || manifestPayload.aad_sha256),
-    signed_manifest: { payload: manifestPayload, signature_b64: ed25519SignatureB64 },
+    signed_manifest: {
+      payload: manifestPayload,
+      signature_b64: ed25519SignatureB64,
+      signatureB64: ed25519SignatureB64
+    },
+    manifest_signed: {
+      payload: manifestPayload,
+      signature_b64: ed25519SignatureB64,
+      signatureB64: ed25519SignatureB64
+    },
     manifest: manifestPayload,
-    signature_b64: ed25519SignatureB64
+    signature_b64: ed25519SignatureB64,
+    ed25519_signature_b64: ed25519SignatureB64
   });
 }
 
