@@ -5985,6 +5985,7 @@ const LOST_PASSKEY_RECOVERY_EXTRA_NONCE_BYTES_V157 = 2500;
 const LOST_PASSKEY_RECOVERY_TTL_MINUTES_V157 = 7;
 const LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157 = 524288; // 512 MB.
 const LOST_PASSKEY_ARGON2_MEMORY_MAX_KIB_V163 = 5242880; // 5 GB clamp for DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB.
+const LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_MIN_KIB_V171 = 65536; // Link-open token verification still MUST use Argon2id; this env can lower only this hash cost.
 const LOST_PASSKEY_ROOT_SECRET_MIN_BYTES_V157 = 3000;
 const LOST_PASSKEY_DB_PEPPER_MIN_BYTES_V157 = 64;
 const LOST_PASSKEY_SECRET_100_ALPHABET_V157 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
@@ -6598,6 +6599,23 @@ function customerSecurityLostPasskeyArgon2ParamsV157(hashLength) {
   };
 }
 
+function customerSecurityLostPasskeyLinkOpenArgon2ParamsV171(hashLength) {
+  // PATCH V171: link-open token verification remains Argon2id, but its encoded
+  // token hash gets an isolated ENV cost so Vercel 2 can avoid OOM without
+  // lowering vault, email-secret, website-secret, recovery-code, or binding hashes.
+  // If these ENV values are absent, it falls back to the existing main Argon2id cost.
+  const main = customerSecurityLostPasskeyArgon2ParamsV157(hashLength);
+  const memoryRaw = Number(process.env.DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_KIB || main.memoryCost);
+  const timeRaw = Number(process.env.DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_TIME_COST || main.timeCost);
+  const parallelRaw = Number(process.env.DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_PARALLELISM || main.parallelism);
+  return {
+    memoryCost: Math.max(LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_MIN_KIB_V171, Math.min(LOST_PASSKEY_ARGON2_MEMORY_MAX_KIB_V163, Number.isFinite(memoryRaw) ? Math.floor(memoryRaw) : main.memoryCost)),
+    timeCost: Math.max(2, Math.min(10, Number.isFinite(timeRaw) ? Math.floor(timeRaw) : main.timeCost)),
+    parallelism: Math.max(1, Math.min(8, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : main.parallelism)),
+    hashLength: Math.max(32, Math.min(128, Number(hashLength || 32)))
+  };
+}
+
 async function customerSecurityLostPasskeyArgon2Raw(input, salt, hashLength) {
   const argon2 = customerSecurityGetArgon2();
   const params = customerSecurityLostPasskeyArgon2ParamsV157(hashLength);
@@ -6697,28 +6715,6 @@ function customerSecurityLostPasskeyHmacHexV157(secret, label, value) {
     .digest('hex');
 }
 
-
-// PATCH V170: link-open must never run the 1700MB Argon2id verifier.
-// The 2000-bit link token is verified with a server-only HMAC commitment here.
-// Heavy Argon2id remains only in generate/secret-hardening paths, protected by queue.
-function customerSecurityLostPasskeyFastLinkTokenHashV170(rootSecret, requestId, linkToken) {
-  return customerSecurityLostPasskeyHmacHexV157(
-    rootSecret,
-    'link_token_fast_v170',
-    String(requestId || '') + ':' + String(linkToken || '')
-  );
-}
-
-function customerSecurityLostPasskeySafeEqualHexV170(left, right) {
-  const a = String(left || '').trim().toLowerCase();
-  const b = String(right || '').trim().toLowerCase();
-  if (!/^[a-f0-9]{64}$/.test(a) || !/^[a-f0-9]{64}$/.test(b)) return false;
-  const ab = Buffer.from(a, 'hex');
-  const bb = Buffer.from(b, 'hex');
-  if (ab.length !== bb.length) return false;
-  try { return crypto.timingSafeEqual(ab, bb); } catch (_) { return false; }
-}
-
 function customerSecurityLostPasskeyVaultMaterialV157(passwordMaterial, emailSecret, websiteSecret, salt, vaultId) {
   return Buffer.from(customerSecurityLostPasskeyCanonical({
     version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
@@ -6752,6 +6748,31 @@ async function customerSecurityLostPasskeyArgon2EncodedHashV157(label, value, sa
     salt: Buffer.from(salt),
     raw: false
   });
+}
+
+async function customerSecurityLostPasskeyArgon2EncodedHashLinkOpenV171(label, value, salt, pepper, rootSecret) {
+  const argon2 = customerSecurityGetArgon2();
+  const params = customerSecurityLostPasskeyLinkOpenArgon2ParamsV171(64);
+  return await argon2.hash(customerSecurityLostPasskeySensitiveHashInputV157(label, value, pepper, rootSecret), {
+    type: argon2.argon2id,
+    memoryCost: params.memoryCost,
+    timeCost: params.timeCost,
+    parallelism: params.parallelism,
+    hashLength: 64,
+    salt: Buffer.from(salt),
+    raw: false
+  });
+}
+
+function customerSecurityLostPasskeyArgon2EncodedParamsV171(encodedHash) {
+  const hash = String(encodedHash || '');
+  const match = hash.match(/\$m=(\d+),t=(\d+),p=(\d+)\$/);
+  if (!match) return null;
+  return {
+    memoryCost: Number(match[1] || 0),
+    timeCost: Number(match[2] || 0),
+    parallelism: Number(match[3] || 0)
+  };
 }
 
 async function customerSecurityLostPasskeyArgon2VerifyHashV157(label, value, encodedHash, pepper, rootSecret) {
@@ -7004,16 +7025,12 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   if (!result.ok) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   const row = Array.isArray(result.data) ? result.data[0] : null;
   const metadata = row && row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
-  const linkTokenFastHash = String(metadata.link_token_fast_hash || '');
-  if (!row || !row.id || !/^[a-f0-9]{64}$/i.test(linkTokenFastHash)) {
-    try { console.warn('[dirac-lost-passkey-link-v170]', JSON.stringify({ event: 'missing_fast_link_token_hash_regenerate_required', request_id_hash: customerSecurityLostPasskeySha256HexV157(parsed.requestId), time: diracNowIso() })); } catch (_) {}
-    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
-  }
+  const linkTokenHash = String(metadata.link_token_hash || '');
+  if (!row || !row.id || !linkTokenHash.startsWith('$argon2id$')) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
 
-  const expectedFastHash = customerSecurityLostPasskeyFastLinkTokenHashV170(vaultSecrets.rootSecret, parsed.requestId, parsed.linkToken);
-  const tokenOk = customerSecurityLostPasskeySafeEqualHexV170(linkTokenFastHash, expectedFastHash);
+  const tokenOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('link_token', parsed.linkToken, linkTokenHash, vaultSecrets.pepper, vaultSecrets.rootSecret).catch(() => false);
   if (!tokenOk) {
-    try { console.warn('[dirac-lost-passkey-link-v170]', JSON.stringify({ event: 'invalid_link_token_fast_hash', request_id_hash: customerSecurityLostPasskeySha256HexV157(parsed.requestId), time: diracNowIso() })); } catch (_) {}
+    try { console.warn('[dirac-lost-passkey-link-v162]', JSON.stringify({ event: 'invalid_link_token', request_id_hash: customerSecurityLostPasskeySha256HexV157(parsed.requestId), time: diracNowIso() })); } catch (_) {}
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
 
@@ -8028,7 +8045,8 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const bindingSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
 
   const bindingsCanonical = customerSecurityLostPasskeyCanonical(bindings);
-  const linkTokenHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('link_token', linkToken, linkTokenSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  const linkTokenHash = await customerSecurityLostPasskeyArgon2EncodedHashLinkOpenV171('link_token', linkToken, linkTokenSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  const linkTokenArgon2Params = customerSecurityLostPasskeyArgon2EncodedParamsV171(linkTokenHash) || customerSecurityLostPasskeyLinkOpenArgon2ParamsV171(64);
   const emailSecretHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('email_secret', emailSecret100, emailSecretSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const websiteSecretHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('website_secret', websiteSecret100, websiteSecretSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const recoveryCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('recovery_code', recoveryCode, recoveryCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
@@ -8086,7 +8104,8 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
       password_formula: 'password_latest_material_plus_secret_email_100_char_plus_secret_website_100_char_plus_salt_plus_vault_id',
       official_recovery_link_hash: customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'official_recovery_link', recoveryLink),
       link_token_hash: linkTokenHash,
-      link_token_fast_hash: customerSecurityLostPasskeyFastLinkTokenHashV170(vaultSecrets.rootSecret, requestId, linkToken),
+      link_token_argon2id_params: linkTokenArgon2Params,
+      link_token_argon2id_cost_source: 'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_*',
       email_secret_hash: emailSecretHash,
       website_secret_hash: websiteSecretHash,
       recovery_code_hash_label: 'recovery_code',
