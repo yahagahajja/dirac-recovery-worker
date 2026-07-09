@@ -5961,6 +5961,7 @@ const LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT = 5;
 const DIRAC_RECOVERY_WORKER_ACTION = 'dirac_recovery_worker_generate';
 const DIRAC_RECOVERY_WORKER_TASK_GENERATE = 'lost_passkey_generate';
 const DIRAC_RECOVERY_WORKER_TASK_VERIFY = 'lost_passkey_verify';
+const DIRAC_RECOVERY_WORKER_TASK_FINALIZE = 'lost_passkey_finalize';
 
 // Lost-passkey recovery vault v157: SERVER 2 only, called by signed SERVER 1 payload.
 // No PDF, no per-user HTML file, no plaintext recovery material persisted.
@@ -5976,6 +5977,8 @@ const LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157 = 524288; // 512 MB.
 const LOST_PASSKEY_ROOT_SECRET_MIN_BYTES_V157 = 3000;
 const LOST_PASSKEY_DB_PEPPER_MIN_BYTES_V157 = 64;
 const LOST_PASSKEY_SECRET_100_ALPHABET_V157 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const DIRAC_LOST_PASSKEY_LINK_RATE_V162 = globalThis.__DIRAC_LOST_PASSKEY_LINK_RATE_V162__ || new Map();
+globalThis.__DIRAC_LOST_PASSKEY_LINK_RATE_V162__ = DIRAC_LOST_PASSKEY_LINK_RATE_V162;
 
 function customerSecurityNormalizeLostPasskeyRequestId(value) {
   const clean = String(value || '').trim();
@@ -6215,7 +6218,7 @@ function customerSecurityRecoveryWorkerBodyDiagnosticsV158(body, caller) {
   return {
     required_fields: present,
     missing_fields: required.filter((key) => present[key] === 'missing'),
-    worker_action_valid: [DIRAC_RECOVERY_WORKER_TASK_GENERATE, DIRAC_RECOVERY_WORKER_TASK_VERIFY].includes(workerAction),
+    worker_action_valid: [DIRAC_RECOVERY_WORKER_TASK_GENERATE, DIRAC_RECOVERY_WORKER_TASK_VERIFY, DIRAC_RECOVERY_WORKER_TASK_FINALIZE].includes(workerAction),
     body_action_valid: body && body.action === DIRAC_RECOVERY_WORKER_ACTION,
     caller_id_matches_header: String(body && body.caller_id || '') === String(caller || ''),
     nonce_shape_valid: /^[a-zA-Z0-9_-]{32,120}$/.test(nonce),
@@ -6439,11 +6442,157 @@ function customerSecurityLostPasskeyOfficialBaseUrlV157() {
   const raw = String(process.env.DIRAC_LOST_PASSKEY_RECOVERY_BASE_URL || 'https://diracgroup.store').trim().replace(/\/+$/, '');
   try {
     const url = new URL(raw);
+    const host = String(url.hostname || '').toLowerCase();
     if (url.protocol !== 'https:') return 'https://diracgroup.store';
+    if (host !== 'diracgroup.store' && host !== 'www.diracgroup.store') return 'https://diracgroup.store';
     return url.origin;
   } catch (_) {
     return 'https://diracgroup.store';
   }
+}
+
+function customerSecurityLostPasskeyLinkTokenShapeV162(value) {
+  return /^[A-Za-z0-9_-]{320,360}$/.test(String(value || '').trim());
+}
+
+function customerSecurityLostPasskeyIsRecoveryLinkPathV162(req) {
+  const parsed = customerSecurityLostPasskeyParseRecoveryLinkV162(req);
+  return Boolean(parsed && parsed.matched);
+}
+
+function customerSecurityLostPasskeyParseRecoveryLinkV162(req) {
+  try {
+    const host = String(req && req.headers && (req.headers.host || req.headers['x-forwarded-host']) || 'diracgroup.store').split(',')[0].trim() || 'diracgroup.store';
+    const url = new URL(String(req && req.url || '/'), 'https://' + host);
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts.length !== 4 || parts[0] !== 'recovery' || parts[1] !== 'r') return { matched: false };
+    const requestIdRaw = decodeURIComponent(parts[2] || '');
+    const linkTokenRaw = decodeURIComponent(parts[3] || '');
+    return {
+      matched: true,
+      requestId: customerSecurityNormalizeLostPasskeyRequestId(requestIdRaw),
+      linkToken: String(linkTokenRaw || '').trim(),
+      requestIdRaw,
+      linkTokenRaw
+    };
+  } catch (_) {
+    return { matched: false };
+  }
+}
+
+function customerSecurityLostPasskeySetLinkSecurityHeadersV162(res) {
+  try { res.setHeader('Content-Type', 'text/html; charset=utf-8'); } catch (_) {}
+  try { res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0'); } catch (_) {}
+  try { res.setHeader('Pragma', 'no-cache'); } catch (_) {}
+  try { res.setHeader('Expires', '0'); } catch (_) {}
+  try { res.setHeader('Referrer-Policy', 'no-referrer'); } catch (_) {}
+  try { res.setHeader('X-Content-Type-Options', 'nosniff'); } catch (_) {}
+  try { res.setHeader('X-Frame-Options', 'DENY'); } catch (_) {}
+  try {
+    res.setHeader('Content-Security-Policy', [
+      "default-src 'none'",
+      "connect-src 'none'",
+      "form-action 'none'",
+      "frame-ancestors 'none'",
+      "base-uri 'none'",
+      "object-src 'none'",
+      "img-src data:",
+      "style-src 'unsafe-inline'",
+      "script-src 'none'"
+    ].join('; ') + ';');
+  } catch (_) {}
+}
+
+function customerSecurityLostPasskeyGenericLinkHtmlV162(message) {
+  const safe = String(message || 'Link recovery tidak valid atau sudah tidak berlaku.').replace(/[<>&"']/g, (ch) => ({'<':'&lt;','>':'&gt;','&':'&amp;','\"':'&quot;',"'":'&#39;'}[ch] || ch));
+  return '<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dirac Recovery</title></head><body><main><h1>Dirac Recovery</h1><p>' + safe + '</p></main></body></html>';
+}
+
+function customerSecurityLostPasskeyEndHtmlV162(res, status, html) {
+  customerSecurityLostPasskeySetLinkSecurityHeadersV162(res);
+  try { res.statusCode = Number(status || 200); } catch (_) {}
+  try { if (typeof res.status === 'function') res.status(Number(status || 200)); } catch (_) {}
+  return res.end(String(html || ''));
+}
+
+function customerSecurityLostPasskeyGenericLinkErrorV162(res, status) {
+  return customerSecurityLostPasskeyEndHtmlV162(res, status || 404, customerSecurityLostPasskeyGenericLinkHtmlV162('Link recovery tidak valid atau sudah tidak berlaku.'));
+}
+
+function customerSecurityLostPasskeyLinkRateKeyV162(req, requestId) {
+  const ip = typeof getLoginSecurityIp === 'function' ? getLoginSecurityIp(req || {}) : String(req && req.headers && (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) || 'unknown').split(',')[0].trim();
+  const ua = typeof requestUserAgent === 'function' ? requestUserAgent(req || {}) : String(req && req.headers && req.headers['user-agent'] || '');
+  return customerSecurityLostPasskeySha256HexV157(['lost-passkey-link-v162', ip, String(ua || '').slice(0, 160), String(requestId || '')].join('|'));
+}
+
+function customerSecurityLostPasskeyLinkRateLimitV162(req, requestId) {
+  const now = Date.now();
+  const windowMs = 7 * 60 * 1000;
+  for (const [key, item] of DIRAC_LOST_PASSKEY_LINK_RATE_V162.entries()) {
+    if (!item || Number(item.resetAt || 0) <= now) DIRAC_LOST_PASSKEY_LINK_RATE_V162.delete(key);
+    if (DIRAC_LOST_PASSKEY_LINK_RATE_V162.size <= 5000) break;
+  }
+  const key = customerSecurityLostPasskeyLinkRateKeyV162(req, requestId);
+  const item = DIRAC_LOST_PASSKEY_LINK_RATE_V162.get(key) || { count: 0, resetAt: now + windowMs };
+  item.count = Number(item.count || 0) + 1;
+  if (Number(item.resetAt || 0) <= now) { item.count = 1; item.resetAt = now + windowMs; }
+  DIRAC_LOST_PASSKEY_LINK_RATE_V162.set(key, item);
+  if (item.count > 12) return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil((item.resetAt - now) / 1000)) };
+  return { ok: true };
+}
+
+async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
+  const method = String(req && req.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+
+  try {
+    if (typeof diracV107CheckActiveBan === 'function') {
+      const existing = await diracV107CheckActiveBan(req).catch(() => ({ blocked: false }));
+      if (existing && existing.blocked) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 403);
+    }
+  } catch (_) {}
+
+  const parsed = customerSecurityLostPasskeyParseRecoveryLinkV162(req);
+  if (!parsed || !parsed.matched || !parsed.requestId || !customerSecurityLostPasskeyLinkTokenShapeV162(parsed.linkToken)) {
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
+
+  const rate = customerSecurityLostPasskeyLinkRateLimitV162(req, parsed.requestId);
+  if (!rate.ok) {
+    try { res.setHeader('Retry-After', String(rate.retryAfterSeconds || 60)); } catch (_) {}
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 429);
+  }
+
+  const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
+  if (!vaultSecrets.ok) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
+
+  const select = 'id,request_id,customer_id,auth_user_id,status,expires_at,used_at,revoked_at,locked_at,metadata,encrypted_file_key_text,file_key_wrap_nonce,file_key_wrap_tag,salt,file_sha256,aad_hash,server_signature';
+  const result = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?select=' + encodeURIComponent(select) + '&request_id=eq.' + encodeURIComponent(parsed.requestId) + '&limit=1', { method: 'GET', auth: 'service' });
+  if (!result.ok) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  const row = Array.isArray(result.data) ? result.data[0] : null;
+  const metadata = row && row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  const linkTokenHash = String(metadata.link_token_hash || '');
+  if (!row || !row.id || !linkTokenHash.startsWith('$argon2id$')) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+
+  const tokenOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('link_token', parsed.linkToken, linkTokenHash, vaultSecrets.pepper, vaultSecrets.rootSecret).catch(() => false);
+  if (!tokenOk) {
+    try { console.warn('[dirac-lost-passkey-link-v162]', JSON.stringify({ event: 'invalid_link_token', request_id_hash: customerSecurityLostPasskeySha256HexV157(parsed.requestId), time: diracNowIso() })); } catch (_) {}
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
+
+  const nowMs = Date.now();
+  const expiresMs = new Date(row.expires_at).getTime();
+  if (String(row.status || '') !== 'pending' || row.used_at || row.revoked_at || row.locked_at || !Number.isFinite(expiresMs) || expiresMs <= nowMs) {
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
+
+  customerSecurityLostPasskeySetLinkSecurityHeadersV162(res);
+  if (method === 'HEAD') {
+    try { res.statusCode = 200; } catch (_) {}
+    try { if (typeof res.status === 'function') res.status(200); } catch (_) {}
+    return res.end();
+  }
+  return customerSecurityLostPasskeyEndHtmlV162(res, 200, customerSecurityLostPasskeyGenericLinkHtmlV162('Link recovery valid. Template HTML offline akan dipasang pada tahap desain berikutnya.'));
 }
 
 function customerSecurityLostPasskeySecurityReportPayloadV157(reason, body) {
@@ -25396,6 +25545,75 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
 }
 
 
+async function customerSecurityFinalizeRecoveryLocalWorkerV162(req, res, action, override = {}) {
+  const owner = override && override.owner;
+  const bindings = override && override.bindings;
+  const access = override && override.access || { customerId: owner && owner.customerId };
+  const requestId = customerSecurityNormalizeLostPasskeyRequestId(override && override.requestId || '');
+  if (!owner || !owner.ok || !bindings || !requestId) {
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 400, 'invalid_recovery_worker_finalize_payload', { request_id: requestId, customer_id: owner && owner.customerId, auth_user_id: owner && owner.authUserId, email: owner && owner.email });
+  }
+  const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
+  if (!vaultSecrets.ok) return res.status(503).json({ ok: false, code: vaultSecrets.code, message: vaultSecrets.message });
+
+  const select = 'id,request_id,customer_id,auth_user_id,email_hash,customer_binding_hash,auth_user_binding_hash,device_binding_hash,ip_hash,user_agent_hash,status,expires_at,used_at,revoked_at,locked_at,metadata';
+  const result = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?select=' + encodeURIComponent(select) + '&request_id=eq.' + encodeURIComponent(requestId) + '&limit=1', { method: 'GET', auth: 'service' });
+  if (!result.ok) return res.status(result.status || 500).json({ ok: false, message: 'Gagal membaca recovery request.' });
+  const row = Array.isArray(result.data) ? result.data[0] : null;
+  if (!row || !row.id) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 404, 'recovery_request_not_found', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+
+  const expiresMs = new Date(row.expires_at).getTime();
+  if (row.used_at || row.revoked_at || row.locked_at || !Number.isFinite(expiresMs) || expiresMs <= Date.now() || !['pending', 'verified'].includes(String(row.status || ''))) {
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_finalize_inactive', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+  }
+  if (String(owner.customerId) !== String(row.customer_id) || String(owner.authUserId) !== String(row.auth_user_id)) {
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_finalize_owner_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+  }
+  if (!safeEqual(String(row.email_hash || ''), bindings.emailBindingHash)
+    || !safeEqual(String(row.customer_binding_hash || ''), bindings.customerBindingHash)
+    || !safeEqual(String(row.auth_user_binding_hash || ''), bindings.authUserBindingHash)
+    || !safeEqual(String(row.device_binding_hash || ''), bindings.deviceBindingHash)
+    || !safeEqual(String(row.ip_hash || ''), bindings.ipHash)
+    || !safeEqual(String(row.user_agent_hash || ''), bindings.userAgentHash)) {
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_finalize_binding_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+  }
+
+  const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  const bindingOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('binding', customerSecurityLostPasskeyCanonical(bindings), metadata.binding_hash_commitment, vaultSecrets.pepper, vaultSecrets.rootSecret).catch(() => false);
+  if (!bindingOk) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_finalize_binding_commitment_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+
+  const now = diracNowIso();
+  const finalMetadata = {
+    ...metadata,
+    finalized_at: now,
+    finalized_by: 'server1_signed_worker_payload',
+    finalized_patch: 'lost-passkey-link-guard-finalize-v162',
+    link_token_revoked: true,
+    email_secret_revoked: true,
+    website_secret_revoked: true,
+    recovery_code_revoked: true
+  };
+  const patched = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
+    method: 'PATCH',
+    auth: 'service',
+    prefer: 'return=representation',
+    body: { status: 'used', used_at: now, revoked_at: now, metadata: finalMetadata }
+  });
+  if (!patched.ok) return res.status(patched.status || 500).json({ ok: false, message: 'Gagal finalisasi recovery request.' });
+
+  await customerSecurityWriteGuardEvent(access.customerId, {
+    event_type: 'lost_passkey_recovery_finalized',
+    status: 'success',
+    risk_level: 'high',
+    description: 'Server 2 menandai recovery lost passkey sebagai used/revoked setelah signed SERVER 1 finalize payload.',
+    req,
+    metadata: { action, request_id: requestId, patch: 'lost-passkey-link-guard-finalize-v162' }
+  }).catch(() => null);
+
+  return res.status(200).json({ ok: true, finalized: true, request_id: requestId, status: 'used', used_at: now, revoked_at: now, message: 'Recovery request sudah difinalisasi.' });
+}
+
+
 async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
   if (!customerSecurityRecoveryWorkerLocalEnabled()) {
     return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_DISABLED', message: 'Recovery worker tidak aktif di deployment ini.' });
@@ -25442,11 +25660,23 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
     });
   }
 
+  if (workerTask === DIRAC_RECOVERY_WORKER_TASK_FINALIZE) {
+    return customerSecurityFinalizeRecoveryLocalWorkerV162(req, res, 'customer_security_recovery_code_finalize', {
+      access: { customerId: owner.customerId },
+      owner,
+      bindings,
+      requestId: String(body.request_id || '')
+    });
+  }
+
   return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_TASK_INVALID', message: 'Worker task recovery tidak valid.' });
 }
 
 const __diracRecoveryWorkerPreviousHandler = module.exports;
 module.exports = async function diracRecoveryWorkerWrapper(req, res) {
+  if (customerSecurityLostPasskeyIsRecoveryLinkPathV162(req)) {
+    return customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
+  }
   const rawAction = String(req && req.query && req.query.action || '').trim().toLowerCase();
   const action = rawAction === DIRAC_RECOVERY_WORKER_ACTION ? DIRAC_RECOVERY_WORKER_ACTION : rawAction;
   if (action === DIRAC_RECOVERY_WORKER_ACTION) {
@@ -25817,6 +26047,13 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     }
     diracCentralStampV146(ctx, 'persistent_ban_checked');
     diracCentralSetNegativeCacheV146(identity);
+
+    if (customerSecurityLostPasskeyIsRecoveryLinkPathV162(req)) {
+      ctx.action = 'lost_passkey_recovery_link_open';
+      ctx.classification = 'recovery_link';
+      diracCentralStampV146(ctx, 'recovery_link_route_checked');
+      return customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
+    }
 
     const rawAction = String(req && req.query && req.query.action || '');
     const lowerAction = rawAction.toLowerCase();
@@ -26303,7 +26540,7 @@ function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
   }
   const body = ctx.body || {};
   if (body.action !== DIRAC_RECOVERY_WORKER_ACTION
-    || ![DIRAC_RECOVERY_WORKER_TASK_GENERATE, DIRAC_RECOVERY_WORKER_TASK_VERIFY].includes(String(body.worker_action || ''))) {
+    || ![DIRAC_RECOVERY_WORKER_TASK_GENERATE, DIRAC_RECOVERY_WORKER_TASK_VERIFY, DIRAC_RECOVERY_WORKER_TASK_FINALIZE].includes(String(body.worker_action || ''))) {
     return diracCentralRecoveryWorkerGuardFailV158(req, ctx, 'body_action', 'recovery_worker_body_action_invalid');
   }
   if (String(body.caller_id || '') !== caller) {
