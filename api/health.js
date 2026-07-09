@@ -6564,8 +6564,13 @@ function customerSecurityRecoveryWorkerLocalEnabled() {
     || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE') === 'vercel2';
   return server2Enabled
     && !customerSecurityRecoveryWorkerUrl()
+    && !customerSecurityRecoveryWorkerCaller()
     && Boolean(customerSecurityRecoveryWorkerSecret())
     && Boolean(customerSecurityRecoveryWorkerAllowedCaller());
+}
+
+function diracCentralGuardPassedForHandlerV168(req) {
+  return Boolean(req && req.__diracCentralSecurityGuardPassedV146 === true);
 }
 
 function customerSecurityLostPasskeyCanonical(value) {
@@ -6846,6 +6851,7 @@ function customerSecurityLostPasskeyLinkRateLimitV162(req, requestId) {
 async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   const method = String(req && req.method || 'GET').toUpperCase();
   if (method !== 'GET' && method !== 'HEAD') return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  if (!diracCentralGuardPassedForHandlerV168(req)) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
 
   try {
     if (typeof diracV107CheckActiveBan === 'function') {
@@ -25920,6 +25926,9 @@ async function customerSecurityFinalizeRecoveryLocalWorkerV162(req, res, action,
 async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
   if (!customerSecurityRecoveryWorkerLocalEnabled()) {
     return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_DISABLED', message: 'Recovery worker tidak aktif di deployment ini.' });
+  }
+  if (!diracCentralGuardPassedForHandlerV168(req)) {
+    return res.status(403).json({ ok: false, code: 'CENTRAL_GUARD_REQUIRED', message: 'Permintaan wajib melewati Central Guard.' });
   }
   if (req.__diracRecoveryWorkerVerified !== true) {
     return res.status(403).json({ ok: false, code: 'RECOVERY_WORKER_SIGNATURE_REQUIRED', message: 'Worker signature tidak valid.' });
