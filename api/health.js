@@ -5852,6 +5852,10 @@ function customerSecurityGenerateLostPasskeyRecoveryCode() {
   return out;
 }
 
+function customerSecurityGenerateLostPasskeyActivationCodeV166() {
+  return crypto.randomBytes(LOST_PASSKEY_ACTIVATION_CODE_BYTES_V166).toString('base64url');
+}
+
 function customerSecurityNormalizeRecoveryCodeInput(code) {
   // Recovery code alphabet intentionally excludes whitespace.
   // PDF/mobile copy can turn the ASCII hyphen from the encrypted PDF into look-alike dash glyphs.
@@ -5970,6 +5974,7 @@ const DIRAC_LOST_PASSKEY_VAULT_PATCH_V157 = 'lost-passkey-html-vault-aes256gcm-a
 const LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157 = 1200;
 const LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157 = 100;
 const LOST_PASSKEY_LINK_TOKEN_BYTES_V157 = 250; // 2000-bit link token.
+const LOST_PASSKEY_ACTIVATION_CODE_BYTES_V166 = 32; // Website-only activation code for offline package gate.
 const LOST_PASSKEY_RECOVERY_SALT_BYTES_V157 = 2500;
 const LOST_PASSKEY_RECOVERY_VAULT_ID_BYTES_V157 = 2500;
 const LOST_PASSKEY_RECOVERY_EXTRA_NONCE_BYTES_V157 = 2500;
@@ -7688,6 +7693,8 @@ async function customerSecurityGenerateRecoveryCodesViaWorker(req, res, action, 
       expires_at: String(data.expires_at || ''),
       delivery: 'official_recovery_html_link',
       website_recovery_code: String(data.website_recovery_code || ''),
+      activation_code: String(data.activation_code || ''),
+      activation_code_delivery: data.activation_code ? 'shown_on_website_only' : '',
       email_code_delivery: 'included_in_email_100_char',
       message: data.message || 'Link recovery resmi sudah dikirim ke email resmi akun.',
       time: data.time || diracNowIso()
@@ -7783,6 +7790,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const expiresAt = new Date(nowMs + LOST_PASSKEY_RECOVERY_TTL_MINUTES_V157 * 60 * 1000).toISOString();
   const requestId = customerSecurityLostPasskeyRequestId();
   const linkToken = crypto.randomBytes(LOST_PASSKEY_LINK_TOKEN_BYTES_V157).toString('base64url');
+  const activationCode = customerSecurityGenerateLostPasskeyActivationCodeV166();
   const emailSecret100 = customerSecurityLostPasskeyRandomTextV157(LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157);
   const websiteSecret100 = customerSecurityLostPasskeyRandomTextV157(LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157);
   const recoveryCode = customerSecurityGenerateLostPasskeyRecoveryCode();
@@ -7808,6 +7816,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const encrypted = customerSecurityLostPasskeyAesGcmEncryptWithNonceV157(aesKey, aesNonce, Buffer.from(recoveryCode, 'utf8'), aad);
 
   const linkTokenSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
+  const activationCodeSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
   const emailSecretSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
   const websiteSecretSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
   const recoveryCodeSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
@@ -7815,6 +7824,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
 
   const bindingsCanonical = customerSecurityLostPasskeyCanonical(bindings);
   const linkTokenHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('link_token', linkToken, linkTokenSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  const activationCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('activation_code', activationCode, activationCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const emailSecretHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('email_secret', emailSecret100, emailSecretSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const websiteSecretHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('website_secret', websiteSecret100, websiteSecretSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const recoveryCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('recovery_code', recoveryCode, recoveryCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
@@ -7872,6 +7882,8 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
       password_formula: 'password_latest_material_plus_secret_email_100_char_plus_secret_website_100_char_plus_salt_plus_vault_id',
       official_recovery_link_hash: customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'official_recovery_link', recoveryLink),
       link_token_hash: linkTokenHash,
+      activation_code_hash: activationCodeHash,
+      activation_code_delivery: 'shown_on_website_only',
       email_secret_hash: emailSecretHash,
       website_secret_hash: websiteSecretHash,
       recovery_code_hash_label: 'recovery_code',
@@ -7879,6 +7891,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
       binding_hashes: bindings,
       hash_salts: {
         link_token: customerSecurityLostPasskeyB64(linkTokenSalt),
+        activation_code: customerSecurityLostPasskeyB64(activationCodeSalt),
         email_secret: customerSecurityLostPasskeyB64(emailSecretSalt),
         website_secret: customerSecurityLostPasskeyB64(websiteSecretSalt),
         recovery_code: customerSecurityLostPasskeyB64(recoveryCodeSalt),
@@ -7889,6 +7902,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
       root_secret_version: vaultSecrets.rootSecretVersion,
       passkey_count: activePasskeys.length,
       link_token_bits: LOST_PASSKEY_LINK_TOKEN_BYTES_V157 * 8,
+      activation_code_bits: LOST_PASSKEY_ACTIVATION_CODE_BYTES_V166 * 8,
       secret_email_length: LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157,
       secret_website_length: LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157,
       recovery_code_length: LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157,
@@ -7942,7 +7956,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     risk_level: 'high',
     description: 'Link recovery passkey resmi dan email secret dikirim ke email resmi customer.',
     req,
-    metadata: { action, request_id: requestId, vault_bundle_sha256: vaultBundleSha256, delivery_provider: sent.provider || null, delivery: 'official_recovery_html_link' }
+    metadata: { action, request_id: requestId, vault_bundle_sha256: vaultBundleSha256, delivery_provider: sent.provider || null, delivery: 'official_recovery_html_link', activation_code_delivery: 'shown_on_website_only' }
   });
 
   return res.status(200).json({
@@ -7951,6 +7965,8 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     expires_at: expiresAt,
     delivery: 'official_recovery_html_link',
     website_recovery_code: websiteSecret100,
+    activation_code: activationCode,
+    activation_code_delivery: 'shown_on_website_only',
     email_code_delivery: 'included_in_email_100_char',
     message: 'Link recovery resmi sudah dikirim ke email resmi akun.',
     time: nowIso
