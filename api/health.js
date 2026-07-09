@@ -7047,7 +7047,22 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
     return res.end();
   }
 
-  if (parsed.api || String(req && req.query && req.query.format || '').trim().toLowerCase() === 'json') {
+  const responseFormat = String(req && req.query && req.query.format || '').trim().toLowerCase();
+  if (responseFormat === 'redirect') {
+    const redirectUrl = customerSecurityLostPasskeyOfficialBaseUrlV157()
+      + '/lost-passkey.html#rid=' + encodeURIComponent(parsed.requestId)
+      + '&token=' + encodeURIComponent(parsed.linkToken);
+    try { res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0'); } catch (_) {}
+    try { res.setHeader('Pragma', 'no-cache'); } catch (_) {}
+    try { res.setHeader('Expires', '0'); } catch (_) {}
+    try { res.setHeader('Referrer-Policy', 'no-referrer'); } catch (_) {}
+    try { res.setHeader('X-Content-Type-Options', 'nosniff'); } catch (_) {}
+    try { res.setHeader('X-Frame-Options', 'DENY'); } catch (_) {}
+    try { res.setHeader('Location', redirectUrl); } catch (_) {}
+    return res.status(302).end();
+  }
+
+  if (parsed.api || responseFormat === 'json') {
     return customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata);
   }
 
@@ -8052,7 +8067,13 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const recoveryCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('recovery_code', recoveryCode, recoveryCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const bindingHashCommitment = await customerSecurityLostPasskeyArgon2EncodedHashV157('binding', bindingsCanonical, bindingSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
 
-  const recoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157() + '/lost-passkey.html#rid=' + encodeURIComponent(requestId) + '&token=' + encodeURIComponent(linkToken);
+  // Recovery email link must enter SERVER 2 first so Central Guard + Argon2id can return a real HTTP 404 before the static HTML opens.
+  // Endpoint is unchanged: /api/health?action=lost_passkey_recovery_link_open
+  const recoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157()
+    + '/api/health?action=' + encodeURIComponent(DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165)
+    + '&rid=' + encodeURIComponent(requestId)
+    + '&token=' + encodeURIComponent(linkToken)
+    + '&format=redirect';
   const vaultBundle = {
     version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
     salt: customerSecurityLostPasskeyB64(vaultSalt),
