@@ -6816,22 +6816,13 @@ function customerSecurityLostPasskeyParseRecoveryLinkV162(req) {
   try {
     const host = String(req && req.headers && (req.headers.host || req.headers['x-forwarded-host']) || 'secure.diracgroup.store').split(',')[0].trim() || 'secure.diracgroup.store';
     const url = new URL(String(req && req.url || '/'), 'https://' + host);
-    const body = req && (req.__diracCentralParsedBodyV146 || req.__parsedBody) && typeof (req.__diracCentralParsedBodyV146 || req.__parsedBody) === 'object'
-      ? (req.__diracCentralParsedBodyV146 || req.__parsedBody)
-      : {};
-    const method = String(req && req.method || 'GET').toUpperCase();
-    const action = String(url.searchParams.get('action') || req && req.query && req.query.action || body.action || '').trim().toLowerCase();
+    const action = String(url.searchParams.get('action') || req && req.query && req.query.action || '').trim().toLowerCase();
 
     // Static HTML API shape:
-    // POST /api/health?action=lost_passkey_recovery_link_open  body: { rid, token, format: 'json' }
-    // Legacy GET query remains parseable only for old links/generic-invalid compatibility.
+    // /api/health?action=lost_passkey_recovery_link_open&rid=...&token=...
     if (action === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
-      const requestIdRaw = method === 'POST'
-        ? String(body.rid || body.request_id || '').trim()
-        : String(url.searchParams.get('rid') || req && req.query && req.query.rid || '').trim();
-      const linkTokenRaw = method === 'POST'
-        ? String(body.token || body.link_token || '').trim()
-        : String(url.searchParams.get('token') || req && req.query && req.query.token || '').trim();
+      const requestIdRaw = String(url.searchParams.get('rid') || req && req.query && req.query.rid || '').trim();
+      const linkTokenRaw = String(url.searchParams.get('token') || req && req.query && req.query.token || '').trim();
       return {
         matched: true,
         requestId: customerSecurityNormalizeLostPasskeyRequestId(requestIdRaw),
@@ -7005,7 +6996,7 @@ function customerSecurityLostPasskeyLinkRateLimitV162(req, requestId) {
 
 async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   const method = String(req && req.method || 'GET').toUpperCase();
-  if (method !== 'POST') return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  if (method !== 'GET' && method !== 'HEAD') return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   if (!diracCentralGuardPassedForHandlerV168(req)) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
 
   try {
@@ -7049,10 +7040,14 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
 
-  const bodyForFormat = req && (req.__diracCentralParsedBodyV146 || req.__parsedBody) && typeof (req.__diracCentralParsedBodyV146 || req.__parsedBody) === 'object'
-    ? (req.__diracCentralParsedBodyV146 || req.__parsedBody)
-    : {};
-  const responseFormat = String(bodyForFormat.format || req && req.query && req.query.format || '').trim().toLowerCase();
+  customerSecurityLostPasskeySetLinkSecurityHeadersV162(res);
+  if (method === 'HEAD') {
+    try { res.statusCode = 200; } catch (_) {}
+    try { if (typeof res.status === 'function') res.status(200); } catch (_) {}
+    return res.end();
+  }
+
+  const responseFormat = String(req && req.query && req.query.format || '').trim().toLowerCase();
   if (responseFormat === 'redirect') {
     const redirectUrl = customerSecurityLostPasskeyOfficialBaseUrlV157()
       + '/lost-passkey.html#rid=' + encodeURIComponent(parsed.requestId)
@@ -7068,29 +7063,7 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   }
 
   if (parsed.api || responseFormat === 'json') {
-    const openedAt = String(metadata.vault_opened_at || metadata.opened_at || '').trim();
-    if (openedAt) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
-
-    const openedMetadata = {
-      ...metadata,
-      vault_opened_at: new Date(nowMs).toISOString(),
-      vault_opened_once: true,
-      vault_opened_patch: 'lost-passkey-one-time-vault-open-v174',
-      vault_opened_ip_hash: customerSecurityLostPasskeySha256HexV157(getLoginSecurityIp(req)),
-      vault_opened_ua_hash: customerSecurityLostPasskeySha256HexV157(String(req && req.headers && req.headers['user-agent'] || '').slice(0, 500))
-    };
-    const openedPatch = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(parsed.requestId) + '&status=eq.pending', {
-      method: 'PATCH',
-      auth: 'service',
-      prefer: 'return=representation',
-      body: { metadata: openedMetadata }
-    });
-    if (!openedPatch.ok || !Array.isArray(openedPatch.data) || !openedPatch.data.length) {
-      return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
-    }
-    const openedRow = openedPatch.data[0] || row;
-    const openedRowMetadata = openedRow && openedRow.metadata && typeof openedRow.metadata === 'object' ? openedRow.metadata : openedMetadata;
-    return customerSecurityLostPasskeyReturnVaultJsonV169(res, openedRow, openedRowMetadata);
+    return customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata);
   }
 
   return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
@@ -8296,11 +8269,13 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const recoveryCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('recovery_code', recoveryCode, recoveryCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const bindingHashCommitment = await customerSecurityLostPasskeyArgon2EncodedHashV157('binding', bindingsCanonical, bindingSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
 
-  // Recovery email link keeps rid/token in URL fragment only.
-  // The static HTML sends the token to the unchanged Server 2 endpoint through POST body.
+  // Recovery email link must enter SERVER 2 first so Central Guard + Argon2id can return a real HTTP 404 before the static HTML opens.
+  // Endpoint is unchanged: /api/health?action=lost_passkey_recovery_link_open
   const recoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157()
-    + '/lost-passkey.html#rid=' + encodeURIComponent(requestId)
-    + '&token=' + encodeURIComponent(linkToken);
+    + '/api/health?action=' + encodeURIComponent(DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165)
+    + '&rid=' + encodeURIComponent(requestId)
+    + '&token=' + encodeURIComponent(linkToken)
+    + '&format=redirect';
   const vaultBundle = {
     version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
     salt: customerSecurityLostPasskeyB64(vaultSalt),
@@ -27423,39 +27398,7 @@ async function diracCentralServerToServerGuardV146(req, res, ctx) {
   return { ok: true };
 }
 
-async function diracCentralRecoveryWorkerPersistentNonceGuardV174(caller, nonce, ttlMs) {
-  const cleanCaller = String(caller || '').trim();
-  const cleanNonce = String(nonce || '').trim();
-  const ttlSeconds = Math.max(60, Math.ceil(Number(ttlMs || customerSecurityRecoveryWorkerClockSkewMs() + 60000) / 1000));
-  const securityKey = 'recovery-worker-nonce:' + loginSecurityHash(['v174', cleanCaller, cleanNonce].join('|'));
-  const now = Date.now();
-
-  if (typeof readPersistentSecurityJson === 'function') {
-    const existing = await readPersistentSecurityJson(securityKey).catch(() => null);
-    if (existing && typeof existing === 'object') {
-      const expiresAtMs = Number(existing.expires_at_ms || existing.expiresAtMs || 0);
-      if (!expiresAtMs || expiresAtMs > now) return { ok: false, reason: 'recovery_worker_nonce_replay_persistent' };
-    }
-  }
-
-  if (LOGIN_SECURITY_PERSIST_TABLE && typeof writePersistentSecurityJson === 'function') {
-    const written = await writePersistentSecurityJson(securityKey, {
-      used: true,
-      nonce_hash: loginSecurityHash(cleanNonce),
-      caller_hash: loginSecurityHash(cleanCaller),
-      created_at_ms: now,
-      expires_at_ms: now + ttlSeconds * 1000,
-      patch: 'recovery-worker-persistent-nonce-v174'
-    }, 0, ttlSeconds + 60).catch(() => false);
-    if (!written && diracCentralIsProductionV146()) return { ok: false, reason: 'recovery_worker_nonce_persistent_write_failed' };
-  } else if (diracCentralIsProductionV146()) {
-    return { ok: false, reason: 'recovery_worker_nonce_persistent_store_missing' };
-  }
-
-  return { ok: true };
-}
-
-async function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
+function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
   if (!customerSecurityRecoveryWorkerLocalEnabled()) {
     return diracCentralRecoveryWorkerGuardFailV158(req, ctx, 'env_local_worker', 'recovery_worker_not_enabled');
   }
@@ -27507,10 +27450,6 @@ async function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
       canonical_body_sha256_22: customerSecurityRecoveryWorkerSha256ShortV158(canonical),
       signature_length: String(signature || '').length
     });
-  }
-  const persistentNonce = await diracCentralRecoveryWorkerPersistentNonceGuardV174(caller, nonce, customerSecurityRecoveryWorkerClockSkewMs() + 60000);
-  if (!persistentNonce.ok) {
-    return diracCentralRecoveryWorkerGuardFailV158(req, ctx, 'body_nonce', persistentNonce.reason || 'recovery_worker_nonce_replay_persistent');
   }
   DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.set(nonceKey, now + customerSecurityRecoveryWorkerClockSkewMs() + 60000);
   req.__diracRecoveryWorkerVerified = true;
@@ -29047,7 +28986,7 @@ function diracCentralStableMfaReadGateV146(req, res, ctx) {
 function diracCentralContractForActionV146(action) {
   const clean = String(action || '');
   if (DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean)) {
-    return { methods: ['POST'], allowed: ['action', 'rid', 'request_id', 'token', 'link_token', 'format'], required: ['rid', 'token'], maxBodyBytes: 8192, maxFieldBytes: 4096, mutation: false };
+    return { methods: ['GET', 'HEAD'], allowed: ['action', 'rid', 'token', 'format'], required: ['rid', 'token'], maxBodyBytes: 0, maxFieldBytes: 4096, mutation: false };
   }
   if (!DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)) {
     return { methods: [], allowed: [], required: [], maxBodyBytes: 0, maxFieldBytes: 0, mutation: false };
