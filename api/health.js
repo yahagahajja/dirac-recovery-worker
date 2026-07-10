@@ -26218,11 +26218,103 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
   if (!activePasskeys.length) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 409, 'active_passkey_not_found', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, metadata, bindingCommitmentOk: expectedBinding, recoveryCodeOk: codeOk, activePasskeyCount: 0, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
 
   const now = diracNowIso();
+  const recoverySessionToken = crypto.randomBytes(32).toString('base64url');
+  const recoverySessionHash = customerSecurityLostPasskeyRecoverySessionHash(recoverySessionToken);
+  const sessionExpiresAt = new Date(Date.now() + Math.max(5, Math.min(30, Number(process.env.DIRAC_LOST_PASSKEY_SESSION_MINUTES || 10))) * 60 * 1000).toISOString();
+  const sessionCreated = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_SESSION_TABLE, {
+    method: 'POST',
+    auth: 'service',
+    prefer: 'return=representation',
+    body: [{
+      request_id: requestId,
+      customer_id: owner.customerId,
+      auth_user_id: owner.authUserId,
+      recovery_session_hash: recoverySessionHash,
+      purpose: LOST_PASSKEY_RECOVERY_PURPOSE,
+      status: 'verified',
+      created_at: now,
+      expires_at: sessionExpiresAt,
+      metadata: {
+        source: action,
+        worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY,
+        old_passkey_count: activePasskeys.length,
+        patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157
+      }
+    }]
+  });
+
+  if (!sessionCreated.ok) {
+    const failedBody = { ok: false, code: 'RECOVERY_SESSION_CREATE_FAILED', message: 'Gagal membuat recovery session.' };
+    const failedTrace = customerSecurityLostPasskeyWorkerVerifyTraceV174('verify_session_create_failed', 'recovery_session_create_failed', {
+      owner,
+      bindings,
+      requestId,
+      code,
+      row,
+      metadata,
+      bindingCommitmentOk: expectedBinding,
+      recoveryCodeOk: codeOk,
+      activePasskeyCount: activePasskeys.length,
+      supabaseStatus: sessionCreated.status,
+      workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY,
+      httpStatus: sessionCreated.status || 500,
+      responseBody: failedBody,
+      sessionInsertAttempted: true,
+      debugHint: 'Recovery code valid, tetapi insert security_lost_passkey_recovery_sessions gagal.'
+    });
+    if (customerSecurityLostPasskeyRootCauseDebugEnabledV173()) failedBody.worker_verify_debug = failedTrace;
+    return res.status(sessionCreated.status || 500).json(failedBody);
+  }
+
+  const verifiedMetadata = {
+    ...metadata,
+    source: 'lost_passkey_recovery_code_verify',
+    verified_by_endpoint: action,
+    verified_by_worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY,
+    verified_at: now,
+    recovery_session_created_at: now,
+    recovery_session_expires_at: sessionExpiresAt,
+    patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157
+  };
+
+  const patched = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
+    method: 'PATCH',
+    auth: 'service',
+    prefer: 'return=representation',
+    body: {
+      status: 'verified',
+      metadata: verifiedMetadata
+    }
+  });
+
+  if (!patched.ok) {
+    const failedBody = { ok: false, code: 'RECOVERY_REQUEST_VERIFY_PATCH_FAILED', message: 'Gagal menandai recovery request sebagai verified.' };
+    const failedTrace = customerSecurityLostPasskeyWorkerVerifyTraceV174('verify_request_patch_failed', 'recovery_request_verify_patch_failed', {
+      owner,
+      bindings,
+      requestId,
+      code,
+      row,
+      metadata,
+      bindingCommitmentOk: expectedBinding,
+      recoveryCodeOk: codeOk,
+      activePasskeyCount: activePasskeys.length,
+      supabaseStatus: patched.status,
+      workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY,
+      httpStatus: patched.status || 500,
+      responseBody: failedBody,
+      sessionInsertAttempted: true,
+      debugHint: 'Recovery session berhasil dibuat, tetapi update status recovery request ke verified gagal.'
+    });
+    if (customerSecurityLostPasskeyRootCauseDebugEnabledV173()) failedBody.worker_verify_debug = failedTrace;
+    return res.status(patched.status || 500).json(failedBody);
+  }
+
   await customerSecurityWriteGuardEvent(access.customerId, {
     event_type: 'lost_passkey_recovery_verified',
     status: 'success',
     risk_level: 'high',
-    description: 'Server 2 memvalidasi recovery code lost passkey dari signed SERVER 1 payload.',
+    description: 'Server 2 memvalidasi recovery code lost passkey dari signed SERVER 1 payload dan membuat recovery session terbatas.',
     req,
     metadata: { action, request_id: requestId, patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157 }
   });
@@ -26234,27 +26326,29 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
     method: 'recovery_code',
     purpose: LOST_PASSKEY_RECOVERY_PURPOSE,
     request_id: requestId,
-    message: 'Recovery code valid.',
+    message: 'Recovery code valid. Recovery session terbatas untuk daftar Passkey baru sudah dibuat.',
+    recovery_session_token: recoverySessionToken,
+    recovery_session_expires_at: sessionExpiresAt,
     dashboard_access: false,
     recovery_code_verified: true,
     time: now
   };
 
-  const verifyTrace = customerSecurityLostPasskeyWorkerVerifyTraceV174('verify_success_response_ready', 'verify_success_without_server2_recovery_session_token', {
+  const verifyTrace = customerSecurityLostPasskeyWorkerVerifyTraceV174('verify_success_response_ready', 'verify_success_with_server2_recovery_session_token', {
     owner,
     bindings,
     requestId,
     code,
     row,
-    metadata,
+    metadata: verifiedMetadata,
     bindingCommitmentOk: expectedBinding,
     recoveryCodeOk: codeOk,
     activePasskeyCount: activePasskeys.length,
     workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY,
     httpStatus: 200,
     responseBody,
-    sessionInsertAttempted: false,
-    debugHint: 'Server 2 memvalidasi recovery code dan membalas ok:true, tetapi branch ini tidak membuat/return recovery_session_token. Jika HTML butuh token untuk buka daftar Passkey baru, mapping/session harus dicek di Server 1 atau branch session creator.'
+    sessionInsertAttempted: true,
+    debugHint: 'Server 2 memvalidasi recovery code, membuat recovery_session_token, dan response sudah bisa membuka tahap daftar Passkey baru.'
   });
 
   if (customerSecurityLostPasskeyRootCauseDebugEnabledV173()) {
