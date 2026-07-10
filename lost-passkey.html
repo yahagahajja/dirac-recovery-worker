@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-QV8uS34sod0oGV8VnvUKVFqzuuWP2TuvnTUITRSWpryHzy8mTplUdo3CwBYlrMCzhXuyAT3o17aIr8+l1Kui7A=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-ztKSptwESR64EzbdZ6wzJchd8gFaAE1D8+q869vA+haRWRfSICSyLlW3Ge230+67aAzjYpvOcDfrpbO0N+LiQQ=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-6awwdI5W3+pA59vuDqcg5jXBstigRTTMQFMLsIlr3TNb3+QIAbofZfrAgS06Qgwj3yQmNbS8gnT6PE4B2+Gb7g=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-duY2+Mz8U4P9k8Mnr3a3qJi4ThjPlW+/tNtj5ta+/pMg9U2/Hwul8eYIzuhFGw7BLZEcR0poBx7eW2zJgocPRg=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-/2hCqOyniA2mK9w+3SeR00WU7s+JdTzSffrWfy83/6gYxs9pXgU1kBxOdqL1hgmslMDNArdf/urAFOjqH09PFA=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-C2wf76j3r2d1VriLrRAi16fOkNjrRpVvKvaUk56hdzFEKYxVFB31fn1Dy0I8mH6WNuaHDh2K3Tj8Gz/o7LfBXw==' 'sha512-VhXM+3XbN8dymCsO6o7P3V77Bnki3vykL1t51BvCP/T8/6E4nh1EFalQhy1WW4edJTw0go//q4I1jYqJkL7omg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-6awwdI5W3+pA59vuDqcg5jXBstigRTTMQFMLsIlr3TNb3+QIAbofZfrAgS06Qgwj3yQmNbS8gnT6PE4B2+Gb7g=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-duY2+Mz8U4P9k8Mnr3a3qJi4ThjPlW+/tNtj5ta+/pMg9U2/Hwul8eYIzuhFGw7BLZEcR0poBx7eW2zJgocPRg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -120,6 +120,7 @@
     .result.show { display: block; animation: statusIn .42s ease-out both; }
     .danger { color: #ffd3dc; }
     .small { font-size: 12px; color: #91a3bb; }
+    .clipboard-buffer { position: fixed; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .split { display: grid; gap: 14px; grid-template-columns: 1fr; }
     @keyframes pageBackdropReveal { from { opacity: 0; filter: none; transform: scale(1.12); } to { opacity: 1; filter: none; transform: scale(1); } }
     @keyframes pageReveal { from { opacity: 0; filter: none; transform: translateY(14px); } to { opacity: 1; filter: none; transform: translateY(0); } }
@@ -190,8 +191,11 @@
 
       <section id="resultBox" class="result" aria-labelledby="resultTitle">
         <h2 id="resultTitle">Informasi pemulihan</h2>
-        <p class="danger">Salin informasi ini dengan aman, lalu segera lanjutkan pembuatan passkey baru melalui layanan resmi. Setelah selesai, lakukan konfirmasi penyelesaian agar proses pemulihan ditutup.</p>
-        <textarea id="recoveryOutput" readonly autocomplete="off" spellcheck="false"></textarea>
+        <p class="danger">Kode pemulihan tidak ditampilkan di layar. Klik tombol di bawah untuk menyalin kode satu kali; setelah diklik, seluruh data sementara di halaman ini otomatis dibersihkan.</p>
+        <div class="row" aria-label="Tindakan kode pemulihan">
+          <button id="copyCodeButton" class="primary" type="button" disabled>Salin Code</button>
+        </div>
+        <textarea id="recoveryOutput" hidden readonly autocomplete="off" spellcheck="false"></textarea>
       </section>
 
       <h2>Proses aman</h2>
@@ -250,7 +254,8 @@
       offlineUnlockSeen: false,
       expiresAtMs: 0,
       expiryTimer: null,
-      sensitiveBuffers: []
+      sensitiveBuffers: [],
+      pendingRecoveryMaterial: null
     };
 
     var el = {
@@ -263,6 +268,7 @@
       clearButton: document.getElementById('clearButton'),
       resultBox: document.getElementById('resultBox'),
       recoveryOutput: document.getElementById('recoveryOutput'),
+      copyCodeButton: document.getElementById('copyCodeButton'),
       lockNotice: document.getElementById('lockNotice'),
       steps: document.querySelectorAll('.process-step')
     };
@@ -410,13 +416,13 @@
         setCredentialFieldsLocked(false);
         setLockNotice(false);
         setProcessStep(2);
-        setStatus('Mode aman aktif. Proses pemulihan siap dilanjutkan. Jangan mengaktifkan koneksi internet sebelum selesai.', 'ok');
+        setStatus('Mode aman aktif: perangkat sudah offline. Lanjutkan proses pemulihan tanpa menyalakan Wi-Fi, data seluler, hotspot, VPN, atau koneksi internet apa pun sampai proses selesai.', 'ok');
         return;
       }
       setCredentialFieldsLocked(true);
       setLockNotice(true);
       setProcessStep(2);
-      setStatus('Data pemulihan telah tervalidasi. Untuk perlindungan maksimal, matikan koneksi internet atau aktifkan mode pesawat. Kolom verifikasi akan aktif setelah perangkat terdeteksi offline.', '');
+      setStatus('WAJIB matikan jaringan sebelum melanjutkan: aktifkan mode pesawat, lalu pastikan Wi-Fi, data seluler, hotspot, VPN, dan koneksi internet lain benar-benar mati. Kolom verifikasi baru aktif setelah perangkat terdeteksi offline.', '');
     }
 
     function armOfflineOnlyDecrypt() {
@@ -435,10 +441,12 @@
         try { state.sensitiveBuffers[i].fill(0); } catch (_) {}
       }
       state.sensitiveBuffers = [];
+      state.pendingRecoveryMaterial = null;
       try { el.passwordMaterial.value = ''; } catch (_) {}
       try { el.emailSecret.value = ''; } catch (_) {}
       try { el.websiteSecret.value = ''; } catch (_) {}
       try { el.recoveryOutput.value = ''; } catch (_) {}
+      try { el.copyCodeButton.disabled = true; } catch (_) {}
       try { el.resultBox.classList.remove('show'); } catch (_) {}
     }
 
@@ -804,6 +812,49 @@
       return text;
     }
 
+    function copyRecoveryMaterialFallback(value) {
+      var buffer = document.createElement('textarea');
+      buffer.className = 'clipboard-buffer';
+      buffer.setAttribute('readonly', '');
+      buffer.setAttribute('aria-hidden', 'true');
+      buffer.value = value;
+      document.body.appendChild(buffer);
+      buffer.focus();
+      buffer.select();
+      buffer.setSelectionRange(0, buffer.value.length);
+      var copied = false;
+      try { copied = document.execCommand('copy'); } catch (_) { copied = false; }
+      buffer.value = '';
+      try { document.body.removeChild(buffer); } catch (_) {}
+      return copied;
+    }
+
+    async function copyRecoveryMaterialOnce() {
+      var value = state.pendingRecoveryMaterial;
+      if (!value) {
+        wipeMemory();
+        setStatus('Kode pemulihan tidak tersedia. Buka ulang tautan resmi jika perlu mengulangi proses.', 'err');
+        return;
+      }
+      var copied = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(value);
+          copied = true;
+        }
+      } catch (_) {
+        copied = false;
+      }
+      if (!copied) copied = copyRecoveryMaterialFallback(value);
+      wipeMemory();
+      setProcessStep(3);
+      if (copied) {
+        setStatus('Kode berhasil disalin. Seluruh data sementara di halaman ini telah otomatis dibersihkan. Segera lanjutkan pembuatan passkey baru melalui layanan resmi.', 'ok');
+      } else {
+        setStatus('Browser tidak mengizinkan penyalinan otomatis. Demi keamanan, seluruh data sementara di halaman ini telah dibersihkan. Buka ulang tautan resmi jika perlu mengulangi proses.', 'err');
+      }
+    }
+
     async function decryptSubmit(event) {
       event.preventDefault();
       if (state.permanentLocked) return renderLockedState();
@@ -836,10 +887,12 @@
           throw new Error('AES_GCM_DECRYPT_FAILED');
         }
         var recoveryMaterial = verifyInnerPayload(plaintext);
-        el.recoveryOutput.value = String(recoveryMaterial);
+        state.pendingRecoveryMaterial = String(recoveryMaterial);
+        try { el.recoveryOutput.value = ''; } catch (_) {}
+        try { el.copyCodeButton.disabled = false; } catch (_) {}
         el.resultBox.classList.add('show');
         setProcessStep(3);
-        setStatus('Pemulihan berhasil. Informasi pemulihan telah ditampilkan di perangkat Anda. Segera lanjutkan pembuatan passkey baru melalui layanan resmi.', 'ok');
+        setStatus('Pemulihan berhasil. Kode tidak ditampilkan di layar. Klik “Salin Code” untuk menyalin satu kali; setelah diklik, data sementara otomatis dibersihkan.', 'ok');
       } catch (error) {
         var msg = String(error && error.message || '');
         if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') {
@@ -847,7 +900,7 @@
         } else failClosed(error);
       } finally {
         try { document.body.classList.remove('processing'); } catch (_) {}
-        if (!el.form.hidden && !state.permanentLocked) updateOfflineDecryptState();
+        if (!state.pendingRecoveryMaterial && !el.form.hidden && !state.permanentLocked) updateOfflineDecryptState();
       }
     }
 
@@ -873,6 +926,7 @@
     }
 
     el.form.addEventListener('submit', decryptSubmit);
+    el.copyCodeButton.addEventListener('click', copyRecoveryMaterialOnce);
     el.clearButton.addEventListener('click', function () {
       wipeMemory();
       setLockNotice(false);
