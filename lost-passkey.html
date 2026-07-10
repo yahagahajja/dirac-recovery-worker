@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'self' 'sha512-RvHDMdfOj2YkAdogadSoJjZkfXsv38IU/6NczcyVzyp85pd8X48CRJUwaeLSaQt8S68X9wW3LpLg7LTfIk1n7g=='; style-src-attr 'none'; script-src 'self' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-Fu+qaoU5s1W/KlhcUp8TxJ0E0f2sPp3gY7s61YzYuArkQfeeE+rGHiU3jxXUWlxWpvdbBhPZNOkrsWZ/SuflQQ==' 'wasm-unsafe-eval'; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests;">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://SERVER2-DOMAIN; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://SERVER2-DOMAIN; img-src 'self' data:; style-src 'self' 'sha512-G5s59q9s8WCcqEr63S/sYKBAAbf/8MBVI1PeTrIwwzlQN+4+1gv0pLTKNaKU+mQ1cyKs9iJgzkzeLxqZNoVwQA=='; style-src-attr 'none'; script-src 'self' 'sha512-C2wf76j3r2d1VriLrRAi16fOkNjrRpVvKvaUk56hdzFEKYxVFB31fn1Dy0I8mH6WNuaHDh2K3Tj8Gz/o7LfBXw==' 'sha512-qV7yiJkJCLpLuyg+fdPZ1fOttrIoEjG6ZsBjB9EnFrNt2NFD0Kb/tBAy3T6VIzwHmRReJVxB5ocWDsx2Hsn8JA==' 'wasm-unsafe-eval'; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests;
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -73,19 +73,6 @@
     .small { font-size: 12px; color: #91a3bb; }
     .split { display: grid; gap: 14px; grid-template-columns: 1fr; }
     @media (min-width: 760px) { .split { grid-template-columns: 1fr 1fr; } }
-
-    .debug-panel { margin: 16px 0 0; border: 1px solid #3a4b63; background: #0a101a; border-radius: 14px; overflow: hidden; }
-    .debug-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid #263244; color: #eaf0f8; font-weight: 800; }
-    .debug-mode { font-size: 11px; color: #ffd166; border: 1px solid rgba(255,209,102,.45); border-radius: 999px; padding: 4px 8px; background: rgba(255,209,102,.08); }
-    .debug-body { display: grid; gap: 8px; padding: 12px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.45; color: #aebbd0; }
-    .debug-line { display: grid; gap: 5px; grid-template-columns: 120px 1fr; align-items: start; padding: 7px 0; border-bottom: 1px dashed rgba(145,163,187,.22); }
-    .debug-line:last-child { border-bottom: 0; }
-    .debug-key { color: #91a3bb; font-weight: 750; }
-    .debug-val.ok { color: #8ff0b1; }
-    .debug-val.warn { color: #ffd166; }
-    .debug-val.bad { color: #ff9db0; }
-    .debug-note { margin: 0; padding: 11px 14px 13px; border-top: 1px solid #263244; color: #91a3bb; font-size: 12px; line-height: 1.55; }
-    @media (max-width: 520px) { .debug-line { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -96,15 +83,6 @@
       <p>Halaman ini adalah alat decrypt lokal. Secret hanya diproses di browser, tidak disimpan, network dimatikan setelah vault diterima, dan decrypt hanya aktif saat browser offline.</p>
 
       <div id="status" class="status" role="status" aria-live="polite">Memuat halaman recovery...</div>
-
-      <section id="debugBox" class="debug-panel" aria-labelledby="debugTitle">
-        <div class="debug-head">
-          <span id="debugTitle">Debug Recovery Lokal</span>
-          <span class="debug-mode">DEBUG HTML</span>
-        </div>
-        <div id="debugSteps" class="debug-body" aria-live="polite"></div>
-        <p class="debug-note">Debug ini tidak menampilkan password, Secret Email, Secret Website, token, ciphertext, atau recovery material. Jika panjang secret sudah benar tetapi AES-GCM gagal, artinya kombinasi password/material + Secret Email + Secret Website tidak sama dengan vault.</p>
-      </section>
 
       <form id="decryptForm" class="grid" autocomplete="off" spellcheck="false" hidden>
         <div class="split">
@@ -171,7 +149,6 @@
       }),
       expectedPurpose: 'lost_passkey_recovery',
       expectedLegacyVersion: 'lost-passkey-html-vault-aes256gcm-argon2id-v157',
-      debugMode: false,
       genericError: 'Recovery tidak valid, expired, atau sudah digunakan.'
     });
 
@@ -187,9 +164,7 @@
       offlineUnlockSeen: false,
       expiresAtMs: 0,
       expiryTimer: null,
-      sensitiveBuffers: [],
-      debugSteps: Object.create(null),
-      debugLastError: ''
+      sensitiveBuffers: []
     };
 
     var el = {
@@ -201,127 +176,21 @@
       decryptButton: document.getElementById('decryptButton'),
       clearButton: document.getElementById('clearButton'),
       resultBox: document.getElementById('resultBox'),
-      recoveryOutput: document.getElementById('recoveryOutput'),
-      debugBox: document.getElementById('debugBox'),
-      debugSteps: document.getElementById('debugSteps')
+      recoveryOutput: document.getElementById('recoveryOutput')
     };
-
-    if (!CONFIG.debugMode && el.debugBox) el.debugBox.hidden = true;
 
     function setStatus(message, type) {
       el.status.textContent = String(message || CONFIG.genericError);
       el.status.className = 'status' + (type ? ' ' + type : '');
     }
-
-
-    function debugClass(type) {
-      return type === 'ok' ? 'ok' : (type === 'bad' ? 'bad' : 'warn');
-    }
-
-    function escapeDebugText(value) {
-      return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
-        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
-      });
-    }
-
-    function setDebugStep(key, value, type) {
-      if (!CONFIG.debugMode || !el.debugSteps) return;
-      var safeKey = String(key || 'DEBUG').replace(/[^A-Za-z0-9 _.-]/g, '').slice(0, 40) || 'DEBUG';
-      state.debugSteps[safeKey] = {
-        value: String(value == null ? '' : value).slice(0, 320),
-        type: debugClass(type || 'warn')
-      };
-      renderDebugSteps();
-    }
-
-    function renderDebugSteps() {
-      if (!CONFIG.debugMode || !el.debugSteps) return;
-      var order = [
-        'Origin', 'Link', 'Argon2id', 'Vault Fetch', 'Vault Bundle', 'Manifest',
-        'Vault Expiry', 'Network', 'Input PW', 'Input Email', 'Input Website',
-        'Material', 'KDF', 'HKDF', 'AES-GCM', 'Inner Payload', 'Final'
-      ];
-      var html = '';
-      for (var i = 0; i < order.length; i += 1) {
-        var item = state.debugSteps[order[i]];
-        if (!item) continue;
-        html += '<div class="debug-line"><span class="debug-key">' + escapeDebugText(order[i]) + '</span><span class="debug-val ' + item.type + '">' + escapeDebugText(item.value) + '</span></div>';
-      }
-      el.debugSteps.innerHTML = html || '<div class="debug-line"><span class="debug-key">Status</span><span class="debug-val warn">Menunggu bootstrap...</span></div>';
-    }
-
-    function describeRecoveryError(error) {
-      var msg = String(error && error.message || error || 'UNKNOWN_ERROR');
-      state.debugLastError = msg;
-      if (/^EMAIL_SECRET_LENGTH_INVALID:(\d+)$/.test(msg)) {
-        return 'Secret Email belum tepat 100 karakter setelah spasi/enter/karakter tersembunyi dihapus. Panjang saat ini: ' + msg.split(':')[1] + '/100.';
-      }
-      if (/^WEBSITE_SECRET_LENGTH_INVALID:(\d+)$/.test(msg)) {
-        return 'Secret Website belum tepat 100 karakter setelah spasi/enter/karakter tersembunyi dihapus. Panjang saat ini: ' + msg.split(':')[1] + '/100.';
-      }
-      var map = {
-        PASSWORD_INVALID: 'Password/material akun tidak valid. Minimal 6 byte dan maksimal 1024 byte. Pastikan password/material sama persis dengan saat vault dibuat.',
-        AES_GCM_DECRYPT_FAILED: 'AES-GCM gagal. Panjang input sudah lolos, tetapi kombinasi password/material + Secret Email + Secret Website tidak cocok dengan vault, atau vault tidak sesuai request.',
-        ARGON2ID_WEBASSEMBLY_DISABLED: 'WebAssembly tidak tersedia/diblokir di browser ini, jadi Argon2id tidak bisa berjalan. Gunakan Safari/Chrome normal tanpa Lockdown Mode atau pembatas WebAssembly.',
-        ARGON2ID_WASM_MISSING: 'Argon2id WASM tidak tersedia di halaman.',
-        ARGON2ID_WASM_OUTPUT_INVALID: 'Argon2id berjalan tetapi output hash tidak valid.',
-        RECOVERY_LOCKED: 'Recovery terkunci oleh manifest/backend.',
-        EXPIRED: 'Recovery sudah expired.',
-        VAULT_FETCH_FAILED: 'Fetch vault ke Server 2 gagal. Link, token, status request, origin, atau backend perlu dicek.',
-        VAULT_RESPONSE_NOT_JSON: 'Response Server 2 bukan JSON.',
-        VAULT_RESPONSE_INVALID: 'Response Server 2 JSON tetapi ok bukan true.',
-        VAULT_BUNDLE_MISSING: 'Vault bundle tidak ditemukan di response.',
-        VAULT_BUNDLE_INCOMPLETE: 'Vault bundle tidak lengkap: salt/nonce/ciphertext/tag/vault_id ada yang kosong.',
-        VAULT_RID_MISMATCH: 'Request ID vault tidak sama dengan Request ID di link.',
-        SIGNED_MANIFEST_MISSING: 'Signed manifest tidak ada atau signature kosong.',
-        ED25519_PUBLIC_KEY_MISSING: 'Ed25519 public key belum tersedia atau key_id tidak cocok.',
-        ED25519_SIGNATURE_INVALID: 'Signature manifest Ed25519 tidak valid.',
-        PURPOSE_INVALID: 'Purpose manifest/vault bukan lost_passkey_recovery.',
-        MANIFEST_RID_MISMATCH: 'Request ID manifest tidak sama dengan Request ID link.',
-        ARGON2_MEMORY_DOWNGRADE: 'Parameter Argon2id memory lebih rendah dari batas minimum HTML.',
-        ARGON2_TIME_DOWNGRADE: 'Parameter Argon2id time lebih rendah dari batas minimum HTML.',
-        ARGON2_PARALLELISM_INVALID: 'Parameter Argon2id parallelism lebih rendah dari batas minimum HTML.',
-        ARGON2_HASHLEN_INVALID: 'Parameter Argon2id hashLength lebih rendah dari batas minimum HTML.',
-        CIPHERTEXT_HASH_INVALID: 'Hash ciphertext tidak cocok dengan manifest.',
-        AAD_HASH_INVALID: 'Hash AAD/metadata tidak cocok dengan manifest.',
-        SALT_HASH_INVALID: 'Hash salt tidak cocok dengan manifest.',
-        PLAINTEXT_EMPTY: 'Decrypt menghasilkan plaintext kosong.',
-        INNER_MAGIC_INVALID: 'Payload hasil decrypt punya magic yang tidak sesuai.',
-        INNER_PURPOSE_INVALID: 'Payload hasil decrypt punya purpose yang tidak sesuai.',
-        INNER_RID_INVALID: 'Payload hasil decrypt punya Request ID yang tidak sesuai.',
-        INNER_EXPIRED: 'Payload hasil decrypt sudah expired.',
-        PLAINTEXT_SHAPE_INVALID: 'Payload hasil decrypt bentuknya tidak valid.',
-        DIRAC_NETWORK_DISABLED: 'Network sudah dimatikan oleh halaman setelah vault diterima.'
-      };
-      return map[msg] || ('Tahap gagal: ' + msg + '.');
-    }
-
-    function setDebugFailure(error, stage) {
-      var text = describeRecoveryError(error);
-      setDebugStep(stage || 'Final', text, 'bad');
-      return text;
-    }
-
-    function inspectInputLengths() {
-      var password = String(el.passwordMaterial.value || '').normalize('NFC');
-      var pwBytes = utf8(password).byteLength;
-      var emailLen = normalizeSecret(el.emailSecret.value).length;
-      var websiteLen = normalizeSecret(el.websiteSecret.value).length;
-      setDebugStep('Input PW', pwBytes ? ('terisi, ' + pwBytes + ' byte') : 'kosong', pwBytes >= 6 && pwBytes <= 1024 ? 'ok' : 'bad');
-      setDebugStep('Input Email', emailLen + '/100 karakter setelah normalisasi', emailLen === 100 ? 'ok' : 'bad');
-      setDebugStep('Input Website', websiteLen + '/100 karakter setelah normalisasi', websiteLen === 100 ? 'ok' : 'bad');
-    }
-
     function failClosed(error) {
-      var debugMessage = CONFIG.debugMode && error ? setDebugFailure(error, 'Final') : '';
       wipeMemory();
-      setStatus(debugMessage || CONFIG.genericError, 'err');
+      setStatus(CONFIG.genericError, 'err');
       el.form.hidden = true;
       el.decryptButton.disabled = true;
     }
 
     function deploymentFailClosed(message) {
-      setDebugStep('Final', message || 'Konfigurasi recovery belum siap. Hubungi admin.', 'bad');
       wipeMemory();
       setStatus(message || 'Konfigurasi recovery belum siap. Hubungi admin.', 'err');
       el.form.hidden = true;
@@ -342,8 +211,7 @@
           + '<main class="notfound-wrap" aria-labelledby="nf-title">'
           + '  <section class="notfound-box">'
           + '    <p class="notfound-code">404</p>'
-          + '    <h1 id="nf-title" class="notfound-title">Recovery link terkunci</h1>'
-          + '    <p class="notfound-text">Halaman tidak tersedia, token tidak valid, sudah expired, sudah digunakan, atau mode keamanan mengunci sesi recovery.' + (CONFIG.debugMode && state.debugLastError ? '<br><br>Debug: ' + escapeDebugText(describeRecoveryError(state.debugLastError)) : '') + '</p>'
+          + '    <h1 id="nf-title" class="notfound-title">Recovery link terkunci</h1>'          + '    <p class="notfound-text">Halaman tidak tersedia, token tidak valid, sudah expired, sudah digunakan, atau mode keamanan mengunci sesi recovery.</p>'
           + '  </section>'
           + '</main>';
       } catch (_) {}
@@ -380,12 +248,10 @@
       if (navigator.onLine === false) {
         state.offlineUnlockSeen = true;
         el.decryptButton.disabled = false;
-        setDebugStep('Network', 'Browser offline, decrypt lokal aktif', 'ok');
         setStatus('Mode offline aktif. Decrypt lokal siap. Jangan nyalakan internet sebelum recovery selesai.', 'ok');
         return;
       }
       el.decryptButton.disabled = true;
-      setDebugStep('Network', 'Vault valid, menunggu browser offline', 'warn');
       setStatus('Vault valid. Untuk keamanan maksimal, matikan internet / aktifkan airplane mode. Decrypt lokal akan aktif hanya saat browser terdeteksi offline. Jika halaman kembali online setelah offline, recovery dikunci total.', '');
     }
 
@@ -434,7 +300,6 @@
       try { navigator.sendBeacon = function () { return false; }; } catch (_) {}
       try { window.Worker = blockedCtor; } catch (_) {}
       try { window.SharedWorker = blockedCtor; } catch (_) {}
-      setDebugStep('Network', 'Network API dimatikan setelah vault diterima', 'ok');
     }
 
     function requireSecureContext() {
@@ -444,10 +309,8 @@
 
     function assertOfficialOrigin() {
       if (CONFIG.officialServer2Origins.indexOf(location.origin) === -1) {
-        setDebugStep('Origin', location.origin + ' tidak diizinkan', 'bad');
         throw new Error('ORIGIN_NOT_ALLOWED');
       }
-      setDebugStep('Origin', location.origin + ' diizinkan', 'ok');
     }
 
     function parseFragment() {
@@ -456,14 +319,11 @@
       var rid = String(params.get('rid') || '').trim();
       var token = String(params.get('token') || '').trim();
       if (!/^[A-Za-z0-9_-]{16,120}$/.test(rid)) {
-        setDebugStep('Link', 'RID invalid atau kosong. Panjang RID: ' + rid.length, 'bad');
         throw new Error('RID_INVALID');
       }
       if (!/^[A-Za-z0-9_-]{320,360}$/.test(token)) {
-        setDebugStep('Link', 'Token invalid. Panjang token: ' + token.length + ' karakter', 'bad');
         throw new Error('TOKEN_INVALID');
       }
-      setDebugStep('Link', 'RID valid, token format valid. Token tidak ditampilkan.', 'ok');
       try { history.replaceState(null, document.title, location.pathname + '#recovery'); } catch (_) {}
       return { rid: rid, token: token };
     }
@@ -539,7 +399,6 @@
       state.vaultFetched = true;
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.vaultApiAction);
-      setDebugStep('Vault Fetch', 'POST /api/health?action=' + CONFIG.vaultApiAction + ' dikirim ke Server 2', 'warn');
       var response = await fetch(url.toString(), {
         method: 'POST',
         credentials: 'omit',
@@ -550,20 +409,16 @@
         body: JSON.stringify({ rid: fragment.rid, token: fragment.token, format: 'json' })
       });
       if (!response.ok) {
-        setDebugStep('Vault Fetch', 'HTTP ' + response.status + ' dari Server 2', 'bad');
         throw new Error('VAULT_FETCH_FAILED');
       }
       var contentType = String(response.headers.get('content-type') || '').toLowerCase();
       if (contentType.indexOf('application/json') === -1) {
-        setDebugStep('Vault Fetch', 'content-type bukan JSON: ' + contentType, 'bad');
         throw new Error('VAULT_RESPONSE_NOT_JSON');
       }
       var body = await response.json();
       if (!body || body.ok !== true) {
-        setDebugStep('Vault Fetch', 'JSON diterima tetapi ok bukan true', 'bad');
         throw new Error('VAULT_RESPONSE_INVALID');
       }
-      setDebugStep('Vault Fetch', 'Vault JSON diterima dari Server 2', 'ok');
       return body;
     }
 
@@ -585,14 +440,11 @@
       };
 
       if (!normalized.salt || !normalized.aes_nonce || !normalized.ciphertext || !normalized.auth_tag || !normalized.vault_id) {
-        setDebugStep('Vault Bundle', 'Tidak lengkap: cek salt/nonce/ciphertext/tag/vault_id', 'bad');
         throw new Error('VAULT_BUNDLE_INCOMPLETE');
       }
       if (normalized.request_id !== state.fragment.rid) {
-        setDebugStep('Vault Bundle', 'Request ID vault tidak sama dengan link', 'bad');
         throw new Error('VAULT_RID_MISMATCH');
       }
-      setDebugStep('Vault Bundle', 'Lengkap dan Request ID cocok', 'ok');
       return normalized;
     }
 
@@ -604,10 +456,8 @@
         : '';
       signature = String(signature || raw.signature_b64 || raw.signatureB64 || raw.ed25519_signature_b64 || raw.ed25519SignatureB64 || '').trim();
       if (!payload || typeof payload !== 'object' || !signature) {
-        setDebugStep('Manifest', 'Signed manifest/signature tidak ditemukan', 'bad');
         throw new Error('SIGNED_MANIFEST_MISSING');
       }
-      setDebugStep('Manifest', 'Signed manifest ditemukan', 'warn');
       return { payload: payload, signatureB64: signature, signature_b64: signature, signature: signature };
     }
 
@@ -636,7 +486,6 @@
       var keyId = String(payload.key_id || payload.keyId || '');
       var publicKeyB64 = CONFIG.ed25519PublicKeysBase64[keyId];
       if (!keyId || !publicKeyB64 || publicKeyB64.indexOf('PASTE_') === 0) {
-        setDebugStep('Manifest', 'Public key Ed25519 kosong/tidak cocok untuk key_id: ' + keyId, 'bad');
         throw new Error('ED25519_PUBLIC_KEY_MISSING');
       }
       var publicKeyBytes = b64ToBytes(publicKeyB64);
@@ -644,10 +493,8 @@
       var publicKey = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
       var ok = await crypto.subtle.verify({ name: 'Ed25519' }, publicKey, signatureBytes, utf8(canonical(payload)));
       if (!ok) {
-        setDebugStep('Manifest', 'Signature Ed25519 tidak valid', 'bad');
         throw new Error('ED25519_SIGNATURE_INVALID');
       }
-      setDebugStep('Manifest', 'Signature Ed25519 valid, key_id: ' + keyId, 'ok');
     }
 
     async function verifyManifestAndVault(raw, bundle, signedManifest) {
@@ -663,11 +510,9 @@
       var expiresMs = Date.parse(expiresAt);
       if (!Number.isFinite(expiresMs) || expiresMs <= Date.now()) throw new Error('EXPIRED');
       scheduleExpiryLock(expiresMs);
-      setDebugStep('Vault Expiry', 'Aktif sampai ' + new Date(expiresMs).toISOString(), 'ok');
 
       var manifestRid = String(payload.request_id || raw.request_id || bundle.request_id || '');
       if (manifestRid !== state.fragment.rid) {
-        setDebugStep('Manifest', 'Request ID manifest tidak sama dengan link', 'bad');
         throw new Error('MANIFEST_RID_MISMATCH');
       }
 
@@ -699,26 +544,19 @@
         if (saltHash !== actualSaltB64 && saltHash !== actualSaltHex) throw new Error('SALT_HASH_INVALID');
       }
 
-      setDebugStep('Manifest', 'Manifest, hash vault, dan Argon2id params valid', 'ok');
       return params;
     }
 
     function assertArgon2idReady() {
       if (!window.WebAssembly || typeof window.WebAssembly.instantiate !== 'function') {
-        setDebugStep('WebAssembly', 'tidak tersedia/diblokir browser', 'bad');
-        setDebugStep('Argon2id', 'tidak bisa berjalan tanpa WebAssembly', 'bad');
         throw new Error('ARGON2ID_WEBASSEMBLY_DISABLED');
       }
-      setDebugStep('WebAssembly', 'tersedia', 'ok');
       if (window.DiracArgon2idWasm && typeof window.DiracArgon2idWasm.hashRaw === 'function') {
-        setDebugStep('Argon2id', 'DiracArgon2idWasm adapter tersedia', 'ok');
         return;
       }
       if (window.argon2 && typeof window.argon2.hash === 'function') {
-        setDebugStep('Argon2id', 'window.argon2.hash tersedia', 'ok');
         return;
       }
-      setDebugStep('Argon2id', 'Argon2id WASM tidak tersedia', 'bad');
       throw new Error('ARGON2ID_WASM_MISSING');
     }
 
@@ -768,11 +606,9 @@
       var password = normalizePassword(passwordMaterial);
       var email = normalizeSecret(emailSecret);
       var website = normalizeSecret(websiteSecret);
-      inspectInputLengths();
       if (!password) throw new Error('PASSWORD_INVALID');
       if (email.length !== 100) throw new Error('EMAIL_SECRET_LENGTH_INVALID:' + email.length);
       if (website.length !== 100) throw new Error('WEBSITE_SECRET_LENGTH_INVALID:' + website.length);
-      setDebugStep('Material', 'Input material valid: password terisi, Secret Email 100, Secret Website 100', 'ok');
       return utf8(canonical({
         version: bundle.version,
         password: password,
@@ -793,14 +629,12 @@
           if (parsed.purpose && parsed.purpose !== 'lost_passkey_recovery') throw new Error('INNER_PURPOSE_INVALID');
           if (parsed.request_id && parsed.request_id !== state.fragment.rid) throw new Error('INNER_RID_INVALID');
           if (parsed.expires_at && Date.parse(parsed.expires_at) <= Date.now()) throw new Error('INNER_EXPIRED');
-          setDebugStep('Inner Payload', 'JSON hasil decrypt valid', 'ok');
           return parsed.recovery_material || parsed.recovery_code || parsed.code || text;
         }
       } catch (error) {
         if (/^INNER_/.test(String(error && error.message || ''))) throw error;
       }
       if (text.length < 16 || text.length > 5000) throw new Error('PLAINTEXT_SHAPE_INVALID');
-      setDebugStep('Inner Payload', 'Plaintext non-JSON valid, panjang ' + text.length + ' karakter', 'ok');
       return text;
     }
 
@@ -824,28 +658,21 @@
         var tagBytes = rememberBuffer(b64ToBytes(bundle.auth_tag));
         var aadBytes = rememberBuffer(utf8(canonical(bundle.metadata)));
         var vaultMaterial = rememberBuffer(buildVaultMaterial(el.passwordMaterial.value, el.emailSecret.value, el.websiteSecret.value, bundle));
-        setDebugStep('KDF', 'Argon2id sedang berjalan', 'warn');
         var argonRaw = await runArgon2idRaw(vaultMaterial, saltBytes, params);
-        setDebugStep('KDF', 'Argon2id selesai, output raw valid', 'ok');
         var aesKey = await hkdfSha256(argonRaw, saltBytes, bundle.hkdf_info, 32);
-        setDebugStep('HKDF', 'HKDF-SHA256 selesai', 'ok');
         var plaintext;
         try {
           plaintext = await decryptAesGcm(aesKey, nonceBytes, ciphertextBytes, tagBytes, aadBytes);
-          setDebugStep('AES-GCM', 'Decrypt AES-GCM berhasil', 'ok');
         } catch (_) {
-          setDebugStep('AES-GCM', 'Gagal: kombinasi material tidak cocok atau vault tidak sesuai', 'bad');
           throw new Error('AES_GCM_DECRYPT_FAILED');
         }
         var recoveryMaterial = verifyInnerPayload(plaintext);
         el.recoveryOutput.value = String(recoveryMaterial);
         el.resultBox.classList.add('show');
-        setDebugStep('Final', 'Decrypt berhasil dan recovery material tampil lokal', 'ok');
         setStatus('Decrypt berhasil. Recovery material tampil lokal. Segera lanjutkan pembuatan passkey baru di Server 1.', 'ok');
       } catch (error) {
         var msg = String(error && error.message || '');
         if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') {
-          setDebugFailure(error, 'Final');
           renderLocked404();
         } else failClosed(error);
       } finally {
@@ -854,7 +681,6 @@
     }
 
     async function bootstrap() {
-      renderDebugSteps();
       hardenStorageAccess();
       requireSecureContext();
       assertOfficialOrigin();
@@ -870,12 +696,6 @@
       disableAllNetwork();
       armOfflineOnlyDecrypt();
     }
-
-    ['input', 'change'].forEach(function (eventName) {
-      el.passwordMaterial.addEventListener(eventName, inspectInputLengths);
-      el.emailSecret.addEventListener(eventName, inspectInputLengths);
-      el.websiteSecret.addEventListener(eventName, inspectInputLengths);
-    });
 
     el.form.addEventListener('submit', decryptSubmit);
     el.clearButton.addEventListener('click', function () {
@@ -893,7 +713,6 @@
 
     bootstrap().catch(function (error) {
       var msg = String(error && error.message || '');
-      setDebugFailure(error, 'Final');
       if (msg === 'ARGON2ID_WEBASSEMBLY_DISABLED') return deploymentFailClosed('WebAssembly tidak tersedia/diblokir di browser ini. Argon2id tidak bisa berjalan. Gunakan Safari/Chrome normal tanpa Lockdown Mode/pembatas WebAssembly.');
       if (msg === 'ARGON2ID_WASM_MISSING') return deploymentFailClosed('Argon2id WASM belum dibundel lokal/inline. Halaman berhenti secara aman.');
       if (msg === 'ED25519_PUBLIC_KEY_MISSING') return deploymentFailClosed('Ed25519 public key belum diisi. Halaman berhenti secara aman.');
