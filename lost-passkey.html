@@ -171,7 +171,7 @@
       }),
       expectedPurpose: 'lost_passkey_recovery',
       expectedLegacyVersion: 'lost-passkey-html-vault-aes256gcm-argon2id-v157',
-      debugMode: true,
+      debugMode: false,
       genericError: 'Recovery tidak valid, expired, atau sudah digunakan.'
     });
 
@@ -205,6 +205,8 @@
       debugBox: document.getElementById('debugBox'),
       debugSteps: document.getElementById('debugSteps')
     };
+
+    if (!CONFIG.debugMode && el.debugBox) el.debugBox.hidden = true;
 
     function setStatus(message, type) {
       el.status.textContent = String(message || CONFIG.genericError);
@@ -537,17 +539,15 @@
       state.vaultFetched = true;
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.vaultApiAction);
-      url.searchParams.set('rid', fragment.rid);
-      url.searchParams.set('token', fragment.token);
-      url.searchParams.set('format', 'json');
-      setDebugStep('Vault Fetch', 'GET /api/health?action=' + CONFIG.vaultApiAction + ' dikirim ke Server 2', 'warn');
+      setDebugStep('Vault Fetch', 'POST /api/health?action=' + CONFIG.vaultApiAction + ' dikirim ke Server 2', 'warn');
       var response = await fetch(url.toString(), {
-        method: 'GET',
+        method: 'POST',
         credentials: 'omit',
         cache: 'no-store',
         redirect: 'error',
         referrerPolicy: 'no-referrer',
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rid: fragment.rid, token: fragment.token, format: 'json' })
       });
       if (!response.ok) {
         setDebugStep('Vault Fetch', 'HTTP ' + response.status + ' dari Server 2', 'bad');
