@@ -7707,7 +7707,7 @@ function customerSecurityLostPasskeyEmailEscapeHtmlV157(value) {
 }
 
 function customerSecurityLostPasskeyRecoveryEmailBannerUrlV172() {
-  const fallback = 'https://secure.diracgroup.store/assets/mmmail.webp';
+  const fallback = 'https://secure.diracgroup.store/mmmail.webp';
   const raw = String(process.env.DIRAC_RECOVERY_EMAIL_BANNER_URL || process.env.DIRAC_LOST_PASSKEY_EMAIL_BANNER_URL || fallback).trim();
   try {
     const url = new URL(raw);
