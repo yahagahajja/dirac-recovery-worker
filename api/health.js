@@ -7069,8 +7069,122 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
 }
 
-function customerSecurityLostPasskeySecurityReportPayloadV157(reason, body) {
+const DIRAC_RECOVERY_WORKER_ROOT_CAUSE_DEBUG_V173 = 'server2-lost-passkey-worker-root-cause-debug-v173';
+
+function customerSecurityLostPasskeyBoolV173(value) {
+  return value === true || String(value || '').trim() === 'true';
+}
+
+function customerSecurityLostPasskeyRootCauseDebugEnabledV173() {
+  const value = String(process.env.DIRAC_RECOVERY_WORKER_ROOT_CAUSE_DEBUG || process.env.DIRAC_RECOVERY_WORKER_DEBUG || '').trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on';
+}
+
+function customerSecurityLostPasskeyCompareHashV173(field, stored, incoming) {
+  const storedText = String(stored || '').trim();
+  const incomingText = String(incoming || '').trim();
   return {
+    field,
+    stored_present: Boolean(storedText),
+    incoming_present: Boolean(incomingText),
+    stored_shape_64_hex: /^[a-f0-9]{64}$/i.test(storedText),
+    incoming_shape_64_hex: /^[a-f0-9]{64}$/i.test(incomingText),
+    matched: Boolean(storedText && incomingText && safeEqual(storedText, incomingText))
+  };
+}
+
+function customerSecurityLostPasskeyRowStateV173(row) {
+  if (!row || !row.id) return { found: false };
+  const expiresMs = Date.parse(String(row.expires_at || ''));
+  const nowMs = Date.now();
+  return {
+    found: true,
+    status: String(row.status || ''),
+    attempt_count: Number(row.attempt_count || 0),
+    expires_at_present: Boolean(row.expires_at),
+    expires_at_valid: Number.isFinite(expiresMs),
+    expires_in_ms: Number.isFinite(expiresMs) ? expiresMs - nowMs : null,
+    expired: Number.isFinite(expiresMs) ? expiresMs <= nowMs : true,
+    used_present: Boolean(row.used_at),
+    revoked_present: Boolean(row.revoked_at),
+    locked_present: Boolean(row.locked_at),
+    old_passkey_count: Array.isArray(row.old_passkey_ids) ? row.old_passkey_ids.length : null,
+    recovery_code_hash_present: Boolean(row.recovery_code_hash),
+    metadata_present: Boolean(row.metadata && typeof row.metadata === 'object')
+  };
+}
+
+function customerSecurityLostPasskeyWorkerRootCauseDebugV173(reason, ctx = {}) {
+  const body = ctx.body && typeof ctx.body === 'object' ? ctx.body : {};
+  const owner = ctx.owner && typeof ctx.owner === 'object' ? ctx.owner : null;
+  const bindings = ctx.bindings && typeof ctx.bindings === 'object' ? ctx.bindings : null;
+  const row = ctx.row && typeof ctx.row === 'object' ? ctx.row : null;
+  const metadata = row && row.metadata && typeof row.metadata === 'object' ? row.metadata : (ctx.metadata && typeof ctx.metadata === 'object' ? ctx.metadata : {});
+  const codeText = String(ctx.code || '');
+  const rowState = customerSecurityLostPasskeyRowStateV173(row);
+  const binding_compare = row && bindings ? [
+    customerSecurityLostPasskeyCompareHashV173('email_hash', row.email_hash, bindings.emailBindingHash),
+    customerSecurityLostPasskeyCompareHashV173('customer_binding_hash', row.customer_binding_hash, bindings.customerBindingHash),
+    customerSecurityLostPasskeyCompareHashV173('auth_user_binding_hash', row.auth_user_binding_hash, bindings.authUserBindingHash),
+    customerSecurityLostPasskeyCompareHashV173('device_binding_hash', row.device_binding_hash, bindings.deviceBindingHash),
+    customerSecurityLostPasskeyCompareHashV173('ip_hash', row.ip_hash, bindings.ipHash),
+    customerSecurityLostPasskeyCompareHashV173('user_agent_hash', row.user_agent_hash, bindings.userAgentHash)
+  ] : [];
+
+  const rootCauseCandidates = [];
+  const cleanReason = String(reason || '').slice(0, 120);
+  if (cleanReason) rootCauseCandidates.push(cleanReason);
+  if (!owner || owner.ok !== true) rootCauseCandidates.push('owner_not_resolved_or_invalid');
+  if (!bindings) rootCauseCandidates.push('worker_binding_payload_invalid_or_owner_core_binding_mismatch');
+  if (!customerSecurityNormalizeLostPasskeyRequestId(ctx.requestId || body.request_id || '')) rootCauseCandidates.push('request_id_missing_or_invalid');
+  if (codeText && Array.from(codeText).length !== LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157) rootCauseCandidates.push('recovery_code_length_not_1200_after_normalization');
+  if (rowState.found === false && (ctx.rowChecked === true || cleanReason.includes('not_found'))) rootCauseCandidates.push('request_row_not_found_in_security_lost_passkey_recovery_requests');
+  if (rowState.found && rowState.status !== 'pending') rootCauseCandidates.push('request_status_not_pending');
+  if (rowState.found && rowState.used_present) rootCauseCandidates.push('request_already_used');
+  if (rowState.found && rowState.revoked_present) rootCauseCandidates.push('request_revoked');
+  if (rowState.found && rowState.locked_present) rootCauseCandidates.push('request_locked');
+  if (rowState.found && rowState.expired) rootCauseCandidates.push('request_expired_or_expires_at_invalid');
+  if (binding_compare.some((item) => item && item.matched === false)) rootCauseCandidates.push('one_or_more_binding_hashes_do_not_match_server1_payload');
+  if (metadata && !metadata.binding_hash_commitment) rootCauseCandidates.push('metadata_binding_hash_commitment_missing');
+  if (ctx.bindingCommitmentOk === false) rootCauseCandidates.push('binding_argon2_commitment_mismatch_root_secret_or_binding_changed');
+  if (ctx.recoveryCodeOk === false) rootCauseCandidates.push('recovery_code_argon2_hash_mismatch_or_wrong_code');
+  if (ctx.activePasskeyCount === 0) rootCauseCandidates.push('active_passkey_not_found_for_owner');
+
+  return {
+    diagnostic_version: DIRAC_RECOVERY_WORKER_ROOT_CAUSE_DEBUG_V173,
+    reason: cleanReason || 'recovery_worker_rejected',
+    worker_action: String(body.worker_action || ctx.workerAction || '').slice(0, 80),
+    request_id_present: Boolean(customerSecurityNormalizeLostPasskeyRequestId(ctx.requestId || body.request_id || '')),
+    request_id_hash: customerSecurityLostPasskeySha256HexV157(customerSecurityNormalizeLostPasskeyRequestId(ctx.requestId || body.request_id || '')),
+    code_length_after_normalization: codeText ? Array.from(codeText).length : 0,
+    expected_code_length: LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157,
+    owner: {
+      ok: Boolean(owner && owner.ok === true),
+      customer_match_row: Boolean(owner && row && String(owner.customerId || '') === String(row.customer_id || '')),
+      auth_user_match_row: Boolean(owner && row && String(owner.authUserId || '') === String(row.auth_user_id || '')),
+      email_present: Boolean(owner && owner.email)
+    },
+    row: rowState,
+    binding_compare,
+    metadata: {
+      binding_hash_commitment_present: Boolean(metadata && metadata.binding_hash_commitment),
+      vault_bundle_present: Boolean(metadata && metadata.vault_bundle && typeof metadata.vault_bundle === 'object'),
+      root_secret_version_present: Boolean(metadata && metadata.root_secret_version),
+      hash_salts_present: Boolean(metadata && metadata.hash_salts && typeof metadata.hash_salts === 'object')
+    },
+    checks: {
+      binding_commitment_ok: ctx.bindingCommitmentOk === undefined ? null : Boolean(ctx.bindingCommitmentOk),
+      recovery_code_ok: ctx.recoveryCodeOk === undefined ? null : Boolean(ctx.recoveryCodeOk),
+      active_passkey_count: ctx.activePasskeyCount === undefined ? null : Number(ctx.activePasskeyCount || 0),
+      supabase_status: ctx.supabaseStatus === undefined ? null : Number(ctx.supabaseStatus || 0)
+    },
+    root_cause_candidates: Array.from(new Set(rootCauseCandidates)).slice(0, 12),
+    time: diracNowIso()
+  };
+}
+
+function customerSecurityLostPasskeySecurityReportPayloadV157(reason, body, debugContext) {
+  const payload = {
     source: 'server2_lost_passkey_worker',
     version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
     reason: String(reason || 'recovery_worker_rejected').slice(0, 120),
@@ -7080,15 +7194,25 @@ function customerSecurityLostPasskeySecurityReportPayloadV157(reason, body) {
     email_hash: customerSecurityLostPasskeySha256HexV157(normalizeAuthEmail(body && body.email)),
     time: diracNowIso()
   };
+  if (debugContext && typeof debugContext === 'object') {
+    payload.root_cause_debug = customerSecurityLostPasskeyWorkerRootCauseDebugV173(reason, { ...debugContext, body });
+  }
+  return payload;
 }
 
-function customerSecurityLostPasskeyGenericWorkerErrorV157(res, status, reason, body) {
-  return res.status(status || 403).json({
+function customerSecurityLostPasskeyGenericWorkerErrorV157(res, status, reason, body, debugContext) {
+  const securityReportPayload = customerSecurityLostPasskeySecurityReportPayloadV157(reason, body, debugContext);
+  try { console.error('[dirac-recovery-worker-root-cause-v173]', JSON.stringify(securityReportPayload.root_cause_debug || securityReportPayload)); } catch (_) {}
+  const responseBody = {
     ok: false,
     code: 'RECOVERY_WORKER_REJECTED',
     message: 'Permintaan recovery ditolak.',
-    security_report_payload: customerSecurityLostPasskeySecurityReportPayloadV157(reason, body)
-  });
+    security_report_payload: securityReportPayload
+  };
+  if (customerSecurityLostPasskeyRootCauseDebugEnabledV173() && securityReportPayload.root_cause_debug) {
+    responseBody.worker_root_cause_debug = securityReportPayload.root_cause_debug;
+  }
+  return res.status(status || 403).json(responseBody);
 }
 
 
@@ -25977,11 +26101,11 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
 
   if (!owner || !owner.ok || !bindings || !requestId) {
     await customerSecurityRegisterFailedVerification(req, action, 'invalid_recovery_worker_verify_payload', access && access.customerId).catch(() => null);
-    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 400, 'invalid_recovery_worker_verify_payload', { request_id: requestId, customer_id: owner && owner.customerId, auth_user_id: owner && owner.authUserId, email: owner && owner.email });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 400, 'invalid_recovery_worker_verify_payload', { request_id: requestId, customer_id: owner && owner.customerId, auth_user_id: owner && owner.authUserId, email: owner && owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
   }
   if (Array.from(code).length !== LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157) {
     await customerSecurityRegisterFailedVerification(req, action, 'invalid_recovery_code_length', access.customerId).catch(() => null);
-    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 400, 'invalid_recovery_code_length', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 400, 'invalid_recovery_code_length', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
   }
 
   const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
@@ -25993,22 +26117,22 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
     '&limit=1';
 
   const result = await supabaseFetch(path, { method: 'GET', auth: 'service' });
-  if (!result.ok) return res.status(500).json({ ok: false, message: 'Gagal membaca recovery request.' });
+  if (!result.ok) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 500, 'recovery_request_read_failed', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, supabaseStatus: result.status, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
 
   const row = Array.isArray(result.data) ? result.data[0] : null;
   if (!row || !row.id) {
     await customerSecurityRegisterFailedVerification(req, action, 'recovery_request_not_found', access.customerId).catch(() => null);
-    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 404, 'recovery_request_not_found', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 404, 'recovery_request_not_found', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, rowChecked: true, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
   }
 
   const nowMs = Date.now();
   if (row.status !== 'pending' || row.used_at || row.revoked_at || row.locked_at || new Date(row.expires_at).getTime() <= nowMs) {
-    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, row.status === 'used' || row.used_at ? 'used' : 'expired_or_inactive', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, row.status === 'used' || row.used_at ? 'used' : 'expired_or_inactive', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
   }
 
   if (String(owner.customerId) !== String(row.customer_id) || String(owner.authUserId) !== String(row.auth_user_id)) {
     await customerSecurityRegisterFailedVerification(req, action, 'recovery_owner_mismatch', access.customerId).catch(() => null);
-    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_owner_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_owner_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
   }
   if (!safeEqual(String(row.email_hash || ''), bindings.emailBindingHash)
     || !safeEqual(String(row.customer_binding_hash || ''), bindings.customerBindingHash)
@@ -26017,14 +26141,14 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
     || !safeEqual(String(row.ip_hash || ''), bindings.ipHash)
     || !safeEqual(String(row.user_agent_hash || ''), bindings.userAgentHash)) {
     await customerSecurityRegisterFailedVerification(req, action, 'recovery_binding_mismatch', access.customerId).catch(() => null);
-    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_binding_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_binding_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
   }
 
   const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
   const expectedBinding = await customerSecurityLostPasskeyArgon2VerifyHashV157('binding', customerSecurityLostPasskeyCanonical(bindings), metadata.binding_hash_commitment, vaultSecrets.pepper, vaultSecrets.rootSecret);
   if (!expectedBinding) {
     await customerSecurityRegisterFailedVerification(req, action, 'recovery_binding_commitment_mismatch', access.customerId).catch(() => null);
-    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_binding_commitment_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_binding_commitment_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, metadata, bindingCommitmentOk: expectedBinding, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
   }
 
   const codeOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('recovery_code', code, row.recovery_code_hash, vaultSecrets.pepper, vaultSecrets.rootSecret);
@@ -26042,11 +26166,11 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
       }
     }).catch(() => null);
     await customerSecurityRegisterFailedVerification(req, action, lock ? 'recovery_code_locked' : 'recovery_code_not_matched', access.customerId).catch(() => null);
-    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, lock ? 423 : 403, lock ? 'recovery_code_locked' : 'recovery_code_not_matched', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, lock ? 423 : 403, lock ? 'recovery_code_locked' : 'recovery_code_not_matched', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, metadata, bindingCommitmentOk: expectedBinding, recoveryCodeOk: codeOk, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
   }
 
   const activePasskeys = await customerSecurityLostPasskeyActivePasskeys(owner);
-  if (!activePasskeys.length) return res.status(409).json({ ok: false, message: 'Passkey lama tidak ditemukan untuk akun ini.' });
+  if (!activePasskeys.length) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 409, 'active_passkey_not_found', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, metadata, bindingCommitmentOk: expectedBinding, recoveryCodeOk: codeOk, activePasskeyCount: 0, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
 
   const now = diracNowIso();
   await customerSecurityWriteGuardEvent(access.customerId, {
@@ -26161,9 +26285,9 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
   }
 
   const owner = await customerSecurityResolveLostPasskeyWorkerOwner(body);
-  if (!owner.ok) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, owner.status || 403, 'worker_owner_invalid', body);
+  if (!owner.ok) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, owner.status || 403, 'worker_owner_invalid', body, { body, owner, workerAction: String(body.worker_action || '') });
   const bindings = customerSecurityLostPasskeyWorkerBindings(body, owner);
-  if (!bindings) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'worker_binding_invalid', body);
+  if (!bindings) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'worker_binding_invalid', body, { body, owner, bindings, requestId: String(body.request_id || ''), code: customerSecurityNormalizeRecoveryCodeInput(body.recovery_code || body.code || ''), workerAction: String(body.worker_action || '') });
 
   const workerTask = String(body.worker_action || '');
   if (workerTask === DIRAC_RECOVERY_WORKER_TASK_GENERATE) {
