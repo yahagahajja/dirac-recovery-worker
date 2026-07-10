@@ -7216,6 +7216,40 @@ function customerSecurityLostPasskeyGenericWorkerErrorV157(res, status, reason, 
 }
 
 
+// Server 2 verify trace v174: debug-only observability for lost-passkey worker verify.
+// Tidak menyimpan / menampilkan recovery code, token, cookie, Argon2id hash, atau secret.
+// Tujuan: saat HTTP 200 tetapi HTML tidak lanjut, log ini membedakan sukses verify
+// dari pembuatan recovery_session_token yang memang bukan dilakukan branch lama Server 2 ini.
+const DIRAC_RECOVERY_WORKER_VERIFY_DEBUG_V174 = 'server2-lost-passkey-worker-verify-debug-v174';
+
+function customerSecurityLostPasskeyWorkerVerifyTraceV174(stage, reason, ctx = {}) {
+  const safeCtx = ctx && typeof ctx === 'object' ? ctx : {};
+  const responseBody = safeCtx.responseBody && typeof safeCtx.responseBody === 'object' ? safeCtx.responseBody : {};
+  const debug = customerSecurityLostPasskeyWorkerRootCauseDebugV173(reason || stage || 'verify_trace', safeCtx);
+  const trace = {
+    ...debug,
+    diagnostic_version: DIRAC_RECOVERY_WORKER_VERIFY_DEBUG_V174,
+    stage: String(stage || 'unknown').slice(0, 80),
+    http_status: safeCtx.httpStatus === undefined ? null : Number(safeCtx.httpStatus || 0),
+    verify_contract: {
+      server2_worker_task: DIRAC_RECOVERY_WORKER_TASK_VERIFY,
+      recovery_request_table: LOST_PASSKEY_RECOVERY_REQUEST_TABLE,
+      recovery_session_table: LOST_PASSKEY_RECOVERY_SESSION_TABLE,
+      code_length_expected: LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157,
+      session_insert_attempted_by_this_branch: Boolean(safeCtx.sessionInsertAttempted),
+      response_includes_recovery_session_token: Boolean(responseBody && responseBody.recovery_session_token),
+      response_includes_recovery_session_expires_at: Boolean(responseBody && responseBody.recovery_session_expires_at),
+      response_ok: responseBody.ok === undefined ? null : Boolean(responseBody.ok),
+      response_valid: responseBody.valid === undefined ? null : Boolean(responseBody.valid),
+      html_can_open_passkey_stage_from_this_response: Boolean(responseBody && responseBody.ok === true && responseBody.recovery_session_token)
+    },
+    debug_hint: String(safeCtx.debugHint || '').slice(0, 220)
+  };
+  try { console.error('[dirac-recovery-worker-verify-v174]', JSON.stringify(trace)); } catch (_) {}
+  return trace;
+}
+
+
 // PDF recovery patch v156: encrypted PDF is the user-facing recovery container.
 // The complete PDF password is never stored and never returned; website shows only website_recovery_code.
 const DIRAC_RECOVERY_PDF_PATCH = 'lost-passkey-pdf-password-v156';
@@ -26109,7 +26143,18 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
   }
 
   const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
-  if (!vaultSecrets.ok) return res.status(503).json({ ok: false, code: vaultSecrets.code, message: vaultSecrets.message });
+  if (!vaultSecrets.ok) {
+    customerSecurityLostPasskeyWorkerVerifyTraceV174('vault_secret_check_failed', vaultSecrets.code || 'vault_secret_invalid', {
+      owner,
+      bindings,
+      requestId,
+      code,
+      workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY,
+      httpStatus: 503,
+      debugHint: 'Server 2 env Argon2id/root secret/pepper belum valid, jadi verify berhenti sebelum baca recovery request.'
+    });
+    return res.status(503).json({ ok: false, code: vaultSecrets.code, message: vaultSecrets.message });
+  }
 
   const path = '/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?select=' +
     encodeURIComponent('id,request_id,customer_id,auth_user_id,email_hash,customer_binding_hash,auth_user_binding_hash,device_binding_hash,ip_hash,user_agent_hash,recovery_code_hash,status,attempt_count,expires_at,used_at,revoked_at,locked_at,old_passkey_ids,metadata') +
@@ -26182,7 +26227,7 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
     metadata: { action, request_id: requestId, patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157 }
   });
 
-  return res.status(200).json({
+  const responseBody = {
     ok: true,
     valid: true,
     active: true,
@@ -26193,7 +26238,30 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
     dashboard_access: false,
     recovery_code_verified: true,
     time: now
+  };
+
+  const verifyTrace = customerSecurityLostPasskeyWorkerVerifyTraceV174('verify_success_response_ready', 'verify_success_without_server2_recovery_session_token', {
+    owner,
+    bindings,
+    requestId,
+    code,
+    row,
+    metadata,
+    bindingCommitmentOk: expectedBinding,
+    recoveryCodeOk: codeOk,
+    activePasskeyCount: activePasskeys.length,
+    workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY,
+    httpStatus: 200,
+    responseBody,
+    sessionInsertAttempted: false,
+    debugHint: 'Server 2 memvalidasi recovery code dan membalas ok:true, tetapi branch ini tidak membuat/return recovery_session_token. Jika HTML butuh token untuk buka daftar Passkey baru, mapping/session harus dicek di Server 1 atau branch session creator.'
   });
+
+  if (customerSecurityLostPasskeyRootCauseDebugEnabledV173()) {
+    responseBody.worker_verify_debug = verifyTrace;
+  }
+
+  return res.status(200).json(responseBody);
 }
 
 
