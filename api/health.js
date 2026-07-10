@@ -8446,11 +8446,11 @@ async function customerSecurityVerifyRecoveryCode(req, res, action) {
     await customerSecurityRegisterFailedVerification(req, action, 'invalid_recovery_request_id', access.customerId);
     return res.status(400).json({ ok: false, message: 'Request recovery tidak valid.' });
   }
-  if (Array.from(code).length !== CUSTOMER_SECURITY_RECOVERY_CODE_LENGTH) {
+  if (Array.from(code).length !== LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157) {
     await customerSecurityRegisterFailedVerification(req, action, 'invalid_recovery_code_length', access.customerId);
     return res.status(400).json({
       ok: false,
-      message: 'Recovery code tidak valid. Masukkan tepat 500 karakter dari file recovery terenkripsi.'
+      message: 'Recovery code tidak valid. Masukkan tepat ' + LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157 + ' karakter dari file recovery terenkripsi.'
     });
   }
 
@@ -26460,11 +26460,17 @@ const DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165 = new Set([
   DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
 ]);
 
+const DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174 = new Set([
+  ...diracCentralEnvCsvV150('DIRAC_CENTRAL_VERCEL2_ONLY_ACTIONS'),
+  ...diracCentralEnvCsvV150('DIRAC_VERCEL2_ONLY_ACTIONS')
+]);
+
 const DIRAC_CENTRAL_ACTION_ALIASES_V146 = Object.freeze({});
 
 const DIRAC_CENTRAL_ACTIVE_ACTIONS_V146 = new Set([
   ...DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157,
-  ...DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165
+  ...DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165,
+  ...DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174
 ]);
 
 const DIRAC_CENTRAL_DISABLED_ACTIONS_V146 = new Set([]);
@@ -27125,7 +27131,8 @@ function diracCentralIsServer2RecoveryOnlyActionV166(action) {
   const clean = String(action || '').trim().toLowerCase();
   if (!clean) return false;
   return DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)
-    || DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean);
+    || DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean)
+    || DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.has(clean);
 }
 
 function diracCentralServer2SecureHostGuardV169(req, ctx) {
@@ -27140,14 +27147,11 @@ function diracCentralServer2SecureHostGuardV169(req, ctx) {
 }
 
 function diracCentralVercel2OnlyActionsV150() {
-  const actions = new Set([
+  return new Set([
     ...DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157,
-    ...DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165
+    ...DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165,
+    ...DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174
   ]);
-
-  for (const item of diracCentralEnvCsvV150('DIRAC_CENTRAL_VERCEL2_ONLY_ACTIONS')) actions.add(item);
-  for (const item of diracCentralEnvCsvV150('DIRAC_VERCEL2_ONLY_ACTIONS')) actions.add(item);
-  return actions;
 }
 
 function diracCentralEnvCsvV150(name) {
