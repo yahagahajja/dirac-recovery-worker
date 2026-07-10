@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-QV8uS34sod0oGV8VnvUKVFqzuuWP2TuvnTUITRSWpryHzy8mTplUdo3CwBYlrMCzhXuyAT3o17aIr8+l1Kui7A=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-y7ZEq4hoCR4pL+dFTPIJ3aR5eYw5+xVaO2RV/Hp5xmrK1bI2Lo/BbUC1pN6B1ikg7guTYkvCXt1+iQESEzeo2A=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-QV8uS34sod0oGV8VnvUKVFqzuuWP2TuvnTUITRSWpryHzy8mTplUdo3CwBYlrMCzhXuyAT3o17aIr8+l1Kui7A=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-ztKSptwESR64EzbdZ6wzJchd8gFaAE1D8+q869vA+haRWRfSICSyLlW3Ge230+67aAzjYpvOcDfrpbO0N+LiQQ=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -224,18 +224,6 @@
       ]),
       vaultApiPath: '/api/health',
       vaultApiAction: 'lost_passkey_recovery_link_open',
-      allowedServerActions: Object.freeze([
-        'lost_passkey_recovery_link_open'
-      ]),
-      allowedLocalActions: Object.freeze([
-        'bootstrap.start',
-        'vault.fetch',
-        'decrypt.submit',
-        'memory.clear',
-        'lifecycle.wipe',
-        'network.online',
-        'network.offline'
-      ]),
       ed25519PublicKeysBase64: Object.freeze({
         'dirac-recovery-ed25519-2026-01': 'Q1j1EngkPw4Ec9ZB3cWhP91B/UhJt9GQVtCCoQxMIqk='
       }),
@@ -344,10 +332,6 @@
         CIPHERTEXT_HASH_INVALID: 'Validasi data pemulihan tidak sesuai.',
         AAD_HASH_INVALID: 'Validasi metadata pemulihan tidak sesuai.',
         SALT_HASH_INVALID: 'Validasi parameter pemulihan tidak sesuai.',
-        CENTRAL_GUARD_ACTION_DENIED: 'Permintaan ditolak oleh sistem perlindungan pusat.',
-        CENTRAL_GUARD_SERVER_ACTION_DENIED: 'Permintaan layanan ditolak oleh sistem perlindungan pusat.',
-        CENTRAL_GUARD_SERVER_ORIGIN_DENIED: 'Tujuan layanan tidak sesuai kanal resmi.',
-        CENTRAL_GUARD_SERVER_PATH_DENIED: 'Jalur layanan tidak sesuai daftar resmi.',
         PLAINTEXT_EMPTY: 'Hasil pemulihan kosong.',
         INNER_MAGIC_INVALID: 'Hasil pemulihan tidak sesuai standar validasi.',
         INNER_PURPOSE_INVALID: 'Tujuan hasil pemulihan tidak sesuai.',
@@ -493,28 +477,6 @@
       }
     }
 
-    function centralGuard(actionName, options) {
-      var action = String(actionName || '');
-      var opts = options || {};
-      if (CONFIG.allowedLocalActions.indexOf(action) === -1) {
-        throw new Error('CENTRAL_GUARD_ACTION_DENIED');
-      }
-      if (!opts.allowLocked) assertNotPermanentlyLocked();
-      if (!opts.skipExpiry) assertNotExpired();
-      if (!opts.skipOrigin) assertOfficialOrigin();
-    }
-
-    function assertServer2FetchUrl(url, action) {
-      if (CONFIG.allowedServerActions.indexOf(String(action || '')) === -1) {
-        throw new Error('CENTRAL_GUARD_SERVER_ACTION_DENIED');
-      }
-      if (CONFIG.officialServer2Origins.indexOf(url.origin) === -1 || url.origin !== location.origin) {
-        throw new Error('CENTRAL_GUARD_SERVER_ORIGIN_DENIED');
-      }
-      if (url.pathname !== CONFIG.vaultApiPath) {
-        throw new Error('CENTRAL_GUARD_SERVER_PATH_DENIED');
-      }
-    }
 
     function parseFragment() {
       var hash = String(location.hash || '').replace(/^#/, '');
@@ -598,12 +560,10 @@
     }
 
     async function fetchVaultOnce(fragment) {
-      centralGuard('vault.fetch');
       if (state.vaultFetched) throw new Error('VAULT_FETCH_ALREADY_USED');
       state.vaultFetched = true;
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.vaultApiAction);
-      assertServer2FetchUrl(url, CONFIG.vaultApiAction);
       url.searchParams.set('rid', fragment.rid);
       url.searchParams.set('token', fragment.token);
       url.searchParams.set('format', 'json');
@@ -846,8 +806,9 @@
 
     async function decryptSubmit(event) {
       event.preventDefault();
-      centralGuard('decrypt.submit');
+      if (state.permanentLocked) return renderLockedState();
       if (state.offlineDecryptRequired && navigator.onLine !== false) return renderLockedState();
+      assertNotExpired();
       el.decryptButton.disabled = true;
       setLockNotice(false);
       setProcessStep(3);
@@ -893,7 +854,7 @@
     async function bootstrap() {
       hardenStorageAccess();
       requireSecureContext();
-      centralGuard('bootstrap.start');
+      assertOfficialOrigin();
       assertArgon2idReady();
       state.fragment = parseFragment();
       setLockNotice(false);
@@ -913,26 +874,21 @@
 
     el.form.addEventListener('submit', decryptSubmit);
     el.clearButton.addEventListener('click', function () {
-      centralGuard('memory.clear', { allowLocked: true, skipExpiry: true });
       wipeMemory();
       setLockNotice(false);
       setProcessStep(1);
       setStatus('Formulir telah dibersihkan. Jika proses belum selesai, buka ulang tautan resmi dari email.', '');
     });
     window.addEventListener('pagehide', function () {
-      centralGuard('lifecycle.wipe', { allowLocked: true, skipExpiry: true, skipOrigin: true });
       wipeMemory();
     }, { once: false });
     window.addEventListener('beforeunload', function () {
-      centralGuard('lifecycle.wipe', { allowLocked: true, skipExpiry: true, skipOrigin: true });
       wipeMemory();
     }, { once: false });
     window.addEventListener('online', function () {
-      centralGuard('network.online', { allowLocked: true, skipExpiry: true });
       if (state.offlineDecryptRequired || state.vaultFetched) renderLockedState();
     }, { once: false });
     window.addEventListener('offline', function () {
-      centralGuard('network.offline', { allowLocked: true, skipExpiry: true });
       if (state.offlineDecryptRequired && !state.permanentLocked) updateOfflineDecryptState();
     }, { once: false });
 
@@ -941,7 +897,7 @@
       if (msg === 'ARGON2ID_WEBASSEMBLY_DISABLED') return deploymentFailClosed('Fitur keamanan perangkat tidak tersedia pada browser ini. Gunakan browser resmi tanpa mode pembatas tambahan.');
       if (msg === 'ARGON2ID_WASM_MISSING') return deploymentFailClosed('Komponen keamanan halaman belum tersedia. Proses dihentikan secara aman.');
       if (msg === 'ED25519_PUBLIC_KEY_MISSING') return deploymentFailClosed('Konfigurasi validasi layanan belum tersedia. Proses dihentikan secara aman.');
-      if (/^(RID_INVALID|TOKEN_INVALID|ORIGIN_NOT_ALLOWED|VAULT_FETCH_FAILED|VAULT_RESPONSE_|EXPIRED|MANIFEST_RID_MISMATCH|RECOVERY_LOCKED|CENTRAL_GUARD_)/.test(msg)) return renderLockedState();
+      if (/^(RID_INVALID|TOKEN_INVALID|ORIGIN_NOT_ALLOWED|VAULT_FETCH_FAILED|VAULT_RESPONSE_|EXPIRED|MANIFEST_RID_MISMATCH|RECOVERY_LOCKED)/.test(msg)) return renderLockedState();
       return failClosed(error);
     });
   }());
