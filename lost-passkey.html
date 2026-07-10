@@ -260,6 +260,7 @@
       var map = {
         PASSWORD_INVALID: 'Password/material akun tidak valid. Minimal 6 byte dan maksimal 1024 byte. Pastikan password/material sama persis dengan saat vault dibuat.',
         AES_GCM_DECRYPT_FAILED: 'AES-GCM gagal. Panjang input sudah lolos, tetapi kombinasi password/material + Secret Email + Secret Website tidak cocok dengan vault, atau vault tidak sesuai request.',
+        ARGON2ID_WEBASSEMBLY_DISABLED: 'WebAssembly tidak tersedia/diblokir di browser ini, jadi Argon2id tidak bisa berjalan. Gunakan Safari/Chrome normal tanpa Lockdown Mode atau pembatas WebAssembly.',
         ARGON2ID_WASM_MISSING: 'Argon2id WASM tidak tersedia di halaman.',
         ARGON2ID_WASM_OUTPUT_INVALID: 'Argon2id berjalan tetapi output hash tidak valid.',
         RECOVERY_LOCKED: 'Recovery terkunci oleh manifest/backend.',
@@ -703,6 +704,12 @@
     }
 
     function assertArgon2idReady() {
+      if (!window.WebAssembly || typeof window.WebAssembly.instantiate !== 'function') {
+        setDebugStep('WebAssembly', 'tidak tersedia/diblokir browser', 'bad');
+        setDebugStep('Argon2id', 'tidak bisa berjalan tanpa WebAssembly', 'bad');
+        throw new Error('ARGON2ID_WEBASSEMBLY_DISABLED');
+      }
+      setDebugStep('WebAssembly', 'tersedia', 'ok');
       if (window.DiracArgon2idWasm && typeof window.DiracArgon2idWasm.hashRaw === 'function') {
         setDebugStep('Argon2id', 'DiracArgon2idWasm adapter tersedia', 'ok');
         return;
@@ -887,6 +894,7 @@
     bootstrap().catch(function (error) {
       var msg = String(error && error.message || '');
       setDebugFailure(error, 'Final');
+      if (msg === 'ARGON2ID_WEBASSEMBLY_DISABLED') return deploymentFailClosed('WebAssembly tidak tersedia/diblokir di browser ini. Argon2id tidak bisa berjalan. Gunakan Safari/Chrome normal tanpa Lockdown Mode/pembatas WebAssembly.');
       if (msg === 'ARGON2ID_WASM_MISSING') return deploymentFailClosed('Argon2id WASM belum dibundel lokal/inline. Halaman berhenti secara aman.');
       if (msg === 'ED25519_PUBLIC_KEY_MISSING') return deploymentFailClosed('Ed25519 public key belum diisi. Halaman berhenti secara aman.');
       if (/^(RID_INVALID|TOKEN_INVALID|ORIGIN_NOT_ALLOWED|VAULT_FETCH_FAILED|VAULT_RESPONSE_|EXPIRED|MANIFEST_RID_MISMATCH|RECOVERY_LOCKED)/.test(msg)) return renderLocked404();
