@@ -29382,3 +29382,741 @@ function diracCentralCurrentContextPassedV146() {
   const ctx = diracCentralCurrentContextV149();
   return Boolean(ctx && ctx.req && ctx.req.__diracCentralSecurityGuardPassedV146);
 }
+
+/* ============================================================
+   LOST PASSKEY HPKE VERIFY WORKER v159 - APPEND ONLY
+   - Browser mengirim recovery code hanya sebagai HPKE ciphertext.
+   - Vercel 2 membuka HPKE, memverifikasi Argon2id + salt + pepper,
+     lalu mengirim proof HMAC-SHA384 ke Server 1.
+   - Action hanya aktif melalui ENV allowlist Vercel 2 dan tetap wajib
+     melewati seluruh Central Guard v146.
+   - Tidak mengubah login, A2F/MFA, payment, email, cookie, atau endpoint lama.
+   ============================================================ */
+
+const DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159 = 'customer_security_recovery_hpke_verify';
+const DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159 = 'customer_security_recovery_hpke_submit';
+const DIRAC_RECOVERY_HPKE_ENVELOPE_VERSION_V159 = 'dirac-recovery-hpke-envelope-v1';
+const DIRAC_RECOVERY_HPKE_PLAINTEXT_VERSION_V159 = 'dirac-recovery-hpke-plaintext-v1';
+const DIRAC_RECOVERY_HPKE_PROOF_VERSION_V159 = 'dirac-recovery-hpke-proof-v2';
+const DIRAC_RECOVERY_HPKE_SUITE_V159 = 'DHKEM-X25519-HKDF-SHA256+HKDF-SHA384+AES-256-GCM';
+const DIRAC_RECOVERY_HPKE_ARGON2_PROFILE_V159 = 'argon2id-salt-pepper-v1';
+const DIRAC_RECOVERY_HPKE_PURPOSE_V159 = 'lost_passkey_recovery';
+const DIRAC_RECOVERY_HPKE_ORIGIN_V159 = 'https://secure.diracgroup.store';
+const DIRAC_RECOVERY_HPKE_REPLAY_V159 = globalThis.__DIRAC_RECOVERY_HPKE_REPLAY_V159__ || new Map();
+globalThis.__DIRAC_RECOVERY_HPKE_REPLAY_V159__ = DIRAC_RECOVERY_HPKE_REPLAY_V159;
+
+CUSTOMER_SECURITY_GUARDED_ACTIONS.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
+DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
+DIRAC_CENTRAL_KNOWN_ACTION_INPUTS_V146.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
+
+const __diracRecoveryHpkePreviousContractV159 = diracCentralContractForActionV146;
+diracCentralContractForActionV146 = function diracCentralContractForActionRecoveryHpkeV159(action) {
+  if (String(action || '') === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) {
+    return {
+      methods: ['POST'],
+      allowed: [
+        'action',
+        'version',
+        'request_id',
+        'hpke_suite',
+        'hpke_key_id',
+        'enc',
+        'ciphertext',
+        'sent_at_ms',
+        'expires_at_ms',
+        'csrf',
+        'nonce',
+        'idempotency_key'
+      ],
+      required: [
+        'action',
+        'version',
+        'request_id',
+        'hpke_suite',
+        'hpke_key_id',
+        'enc',
+        'ciphertext',
+        'sent_at_ms',
+        'expires_at_ms'
+      ],
+      maxBodyBytes: 12 * 1024,
+      maxFieldBytes: 8 * 1024,
+      mutation: true,
+      allowProtectedFields: false
+    };
+  }
+  return __diracRecoveryHpkePreviousContractV159(action);
+};
+Object.defineProperty(diracCentralContractForActionV146, '__diracRecoveryHpkeVerifyV159', { value: true, enumerable: false });
+
+const __diracRecoveryHpkePreviousDistributedNeedV159 = diracCentralNeedsDistributedRateLimitV146;
+diracCentralNeedsDistributedRateLimitV146 = function diracCentralNeedsDistributedRateLimitRecoveryHpkeV159(action) {
+  if (String(action || '') === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) return true;
+  return __diracRecoveryHpkePreviousDistributedNeedV159(action);
+};
+Object.defineProperty(diracCentralNeedsDistributedRateLimitV146, '__diracRecoveryHpkeVerifyV159', { value: true, enumerable: false });
+
+const __diracRecoveryHpkePreviousDistributedMaxV159 = diracCentralDistributedRateLimitMaxV146;
+diracCentralDistributedRateLimitMaxV146 = function diracCentralDistributedRateLimitMaxRecoveryHpkeV159(action) {
+  if (String(action || '') === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) return 6;
+  return __diracRecoveryHpkePreviousDistributedMaxV159(action);
+};
+Object.defineProperty(diracCentralDistributedRateLimitMaxV146, '__diracRecoveryHpkeVerifyV159', { value: true, enumerable: false });
+
+const __diracRecoveryHpkePreviousGuardedHandlerV159 = customerSecurityHandleGuardedAction;
+customerSecurityHandleGuardedAction = async function customerSecurityHandleGuardedActionRecoveryHpkeV159(action, req, res) {
+  if (String(action || '') === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) {
+    return diracRecoveryHpkeVerifyEnvelopeV159(req, res);
+  }
+  return __diracRecoveryHpkePreviousGuardedHandlerV159(action, req, res);
+};
+Object.defineProperty(customerSecurityHandleGuardedAction, '__diracRecoveryHpkeVerifyV159', { value: true, enumerable: false });
+
+function diracRecoveryHpkeEnvTextV159(name) {
+  return String(process.env[String(name || '')] || '').trim();
+}
+
+function diracRecoveryHpkeEnvIntegerV159(name, minimum, maximum) {
+  const value = Number(diracRecoveryHpkeEnvTextV159(name));
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) return 0;
+  return value;
+}
+
+function diracRecoveryHpkeAsciiV159(value, minLength, maxLength) {
+  const clean = String(value || '').trim();
+  if (clean.length < minLength || clean.length > maxLength) return '';
+  return /^[A-Za-z0-9_.-]+$/.test(clean) ? clean : '';
+}
+
+function diracRecoveryHpkeB64UrlV159(value, byteLength, maximumTextLength) {
+  const clean = String(value || '').trim();
+  if (!clean || clean.length > maximumTextLength || !/^[A-Za-z0-9_-]+$/.test(clean)) return null;
+  let decoded;
+  try { decoded = Buffer.from(clean, 'base64url'); } catch (_) { return null; }
+  if (byteLength !== null && decoded.length !== byteLength) return null;
+  if (decoded.toString('base64url') !== clean) return null;
+  return decoded;
+}
+
+function diracRecoveryHpkeI2ospV159(value, length) {
+  if (!Number.isSafeInteger(value) || value < 0 || value >= (2 ** (8 * length))) throw new Error('HPKE_I2OSP_INVALID');
+  const output = Buffer.alloc(length);
+  let remaining = value;
+  for (let index = length - 1; index >= 0; index -= 1) {
+    output[index] = remaining & 255;
+    remaining = Math.floor(remaining / 256);
+  }
+  return output;
+}
+
+function diracRecoveryHpkeExtractV159(hash, salt, ikm) {
+  const digestLength = hash === 'sha384' ? 48 : 32;
+  const realSalt = Buffer.from(salt || Buffer.alloc(0));
+  const key = realSalt.length ? realSalt : Buffer.alloc(digestLength, 0);
+  return crypto.createHmac(hash, key).update(Buffer.from(ikm || Buffer.alloc(0))).digest();
+}
+
+function diracRecoveryHpkeExpandV159(hash, prk, info, length) {
+  const digestLength = hash === 'sha384' ? 48 : 32;
+  if (!Number.isSafeInteger(length) || length < 0 || length > 255 * digestLength) throw new Error('HPKE_EXPAND_LENGTH_INVALID');
+  const blocks = [];
+  let previous = Buffer.alloc(0);
+  for (let index = 1; Buffer.concat(blocks).length < length; index += 1) {
+    previous = crypto.createHmac(hash, Buffer.from(prk))
+      .update(previous)
+      .update(Buffer.from(info || Buffer.alloc(0)))
+      .update(Buffer.from([index]))
+      .digest();
+    blocks.push(previous);
+  }
+  const output = Buffer.concat(blocks).subarray(0, length);
+  previous.fill(0);
+  for (const block of blocks) block.fill(0);
+  return Buffer.from(output);
+}
+
+function diracRecoveryHpkeLabeledExtractV159(hash, suiteId, salt, label, ikm) {
+  const labeledIkm = Buffer.concat([
+    Buffer.from('HPKE-v1', 'ascii'),
+    Buffer.from(suiteId),
+    Buffer.from(String(label || ''), 'ascii'),
+    Buffer.from(ikm || Buffer.alloc(0))
+  ]);
+  try {
+    return diracRecoveryHpkeExtractV159(hash, salt, labeledIkm);
+  } finally {
+    labeledIkm.fill(0);
+  }
+}
+
+function diracRecoveryHpkeLabeledExpandV159(hash, suiteId, prk, label, info, length) {
+  const labeledInfo = Buffer.concat([
+    diracRecoveryHpkeI2ospV159(length, 2),
+    Buffer.from('HPKE-v1', 'ascii'),
+    Buffer.from(suiteId),
+    Buffer.from(String(label || ''), 'ascii'),
+    Buffer.from(info || Buffer.alloc(0))
+  ]);
+  try {
+    return diracRecoveryHpkeExpandV159(hash, prk, labeledInfo, length);
+  } finally {
+    labeledInfo.fill(0);
+  }
+}
+
+function diracRecoveryHpkePrivateKeyV159() {
+  const raw = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_PRIVATE_KEY');
+  if (!raw) throw new Error('RECOVERY_HPKE_PRIVATE_KEY_MISSING');
+  const normalized = raw.includes('-----BEGIN') ? raw.replace(/\\n/g, '\n') : Buffer.from(raw, 'base64').toString('utf8');
+  const key = crypto.createPrivateKey(normalized);
+  if (key.asymmetricKeyType !== 'x25519') throw new Error('RECOVERY_HPKE_PRIVATE_KEY_TYPE_INVALID');
+  return key;
+}
+
+function diracRecoveryHpkeRawPublicKeyV159(keyObject) {
+  const der = crypto.createPublicKey(keyObject).export({ format: 'der', type: 'spki' });
+  const prefix = Buffer.from('302a300506032b656e032100', 'hex');
+  if (der.length !== prefix.length + 32 || !der.subarray(0, prefix.length).equals(prefix)) {
+    throw new Error('RECOVERY_HPKE_PUBLIC_KEY_ENCODING_INVALID');
+  }
+  return Buffer.from(der.subarray(prefix.length));
+}
+
+function diracRecoveryHpkePublicKeyObjectV159(rawPublicKey) {
+  const prefix = Buffer.from('302a300506032b656e032100', 'hex');
+  return crypto.createPublicKey({ key: Buffer.concat([prefix, Buffer.from(rawPublicKey)]), format: 'der', type: 'spki' });
+}
+
+function diracRecoveryHpkeAadObjectV159(body) {
+  return {
+    action: DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159,
+    version: DIRAC_RECOVERY_HPKE_ENVELOPE_VERSION_V159,
+    purpose: DIRAC_RECOVERY_HPKE_PURPOSE_V159,
+    origin: DIRAC_RECOVERY_HPKE_ORIGIN_V159,
+    request_id: String(body && body.request_id || ''),
+    hpke_suite: DIRAC_RECOVERY_HPKE_SUITE_V159,
+    hpke_key_id: String(body && body.hpke_key_id || ''),
+    sent_at_ms: Number(body && body.sent_at_ms),
+    expires_at_ms: Number(body && body.expires_at_ms)
+  };
+}
+
+function diracRecoveryHpkeInfoV159(body) {
+  return Buffer.from(customerSecurityLostPasskeyCanonical({
+    version: DIRAC_RECOVERY_HPKE_ENVELOPE_VERSION_V159,
+    purpose: DIRAC_RECOVERY_HPKE_PURPOSE_V159,
+    request_id: String(body && body.request_id || ''),
+    hpke_suite: DIRAC_RECOVERY_HPKE_SUITE_V159,
+    hpke_key_id: String(body && body.hpke_key_id || '')
+  }), 'utf8');
+}
+
+function diracRecoveryHpkeDecryptV159(body) {
+  const enc = diracRecoveryHpkeB64UrlV159(body && body.enc, 32, 64);
+  const sealed = diracRecoveryHpkeB64UrlV159(body && body.ciphertext, null, 8192);
+  if (!enc || !sealed || sealed.length < 17 || sealed.length > 6144) throw new Error('RECOVERY_HPKE_ENVELOPE_ENCODING_INVALID');
+
+  const privateKey = diracRecoveryHpkePrivateKeyV159();
+  const receiverPublicRaw = diracRecoveryHpkeRawPublicKeyV159(privateKey);
+  const ephemeralPublicKey = diracRecoveryHpkePublicKeyObjectV159(enc);
+  const dh = crypto.diffieHellman({ privateKey, publicKey: ephemeralPublicKey });
+  const allZeroDh = Buffer.alloc(dh.length, 0);
+  if (crypto.timingSafeEqual(dh, allZeroDh)) {
+    dh.fill(0);
+    allZeroDh.fill(0);
+    throw new Error('RECOVERY_HPKE_DH_ALL_ZERO');
+  }
+  allZeroDh.fill(0);
+
+  const kemSuiteId = Buffer.concat([Buffer.from('KEM', 'ascii'), diracRecoveryHpkeI2ospV159(0x0020, 2)]);
+  const kemContext = Buffer.concat([enc, receiverPublicRaw]);
+  const eaePrk = diracRecoveryHpkeLabeledExtractV159('sha256', kemSuiteId, Buffer.alloc(0), 'eae_prk', dh);
+  const sharedSecret = diracRecoveryHpkeLabeledExpandV159('sha256', kemSuiteId, eaePrk, 'shared_secret', kemContext, 32);
+
+  const hpkeSuiteId = Buffer.concat([
+    Buffer.from('HPKE', 'ascii'),
+    diracRecoveryHpkeI2ospV159(0x0020, 2),
+    diracRecoveryHpkeI2ospV159(0x0002, 2),
+    diracRecoveryHpkeI2ospV159(0x0002, 2)
+  ]);
+  const info = diracRecoveryHpkeInfoV159(body);
+  const pskIdHash = diracRecoveryHpkeLabeledExtractV159('sha384', hpkeSuiteId, Buffer.alloc(0), 'psk_id_hash', Buffer.alloc(0));
+  const infoHash = diracRecoveryHpkeLabeledExtractV159('sha384', hpkeSuiteId, Buffer.alloc(0), 'info_hash', info);
+  const keyScheduleContext = Buffer.concat([Buffer.from([0]), pskIdHash, infoHash]);
+  const secret = diracRecoveryHpkeLabeledExtractV159('sha384', hpkeSuiteId, sharedSecret, 'secret', Buffer.alloc(0));
+  const key = diracRecoveryHpkeLabeledExpandV159('sha384', hpkeSuiteId, secret, 'key', keyScheduleContext, 32);
+  const nonce = diracRecoveryHpkeLabeledExpandV159('sha384', hpkeSuiteId, secret, 'base_nonce', keyScheduleContext, 12);
+  const aad = Buffer.from(customerSecurityLostPasskeyCanonical(diracRecoveryHpkeAadObjectV159(body)), 'utf8');
+  const ciphertext = sealed.subarray(0, sealed.length - 16);
+  const tag = sealed.subarray(sealed.length - 16);
+
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 });
+    decipher.setAAD(aad, { plaintextLength: ciphertext.length });
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  } finally {
+    dh.fill(0);
+    receiverPublicRaw.fill(0);
+    kemContext.fill(0);
+    eaePrk.fill(0);
+    sharedSecret.fill(0);
+    info.fill(0);
+    pskIdHash.fill(0);
+    infoHash.fill(0);
+    keyScheduleContext.fill(0);
+    secret.fill(0);
+    key.fill(0);
+    nonce.fill(0);
+    aad.fill(0);
+  }
+}
+
+function diracRecoveryHpkeValidateEnvelopeV159(body) {
+  const source = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+  const requestId = customerSecurityNormalizeLostPasskeyRequestId(source.request_id);
+  const keyId = diracRecoveryHpkeAsciiV159(source.hpke_key_id, 1, 80);
+  const expectedKeyId = diracRecoveryHpkeAsciiV159(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_KEY_ID'), 1, 80);
+  const sentAtMs = Number(source.sent_at_ms);
+  const expiresAtMs = Number(source.expires_at_ms);
+  const now = Date.now();
+
+  if (source.action !== DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) return { ok: false, reason: 'action_invalid' };
+  if (source.version !== DIRAC_RECOVERY_HPKE_ENVELOPE_VERSION_V159) return { ok: false, reason: 'version_invalid' };
+  if (source.hpke_suite !== DIRAC_RECOVERY_HPKE_SUITE_V159) return { ok: false, reason: 'suite_invalid' };
+  if (!requestId || !keyId || !expectedKeyId || !safeEqual(keyId, expectedKeyId)) return { ok: false, reason: 'key_id_invalid' };
+  if (!Number.isSafeInteger(sentAtMs) || !Number.isSafeInteger(expiresAtMs)) return { ok: false, reason: 'time_invalid' };
+  if (sentAtMs > now + 30 * 1000 || now - sentAtMs > 2 * 60 * 1000) return { ok: false, reason: 'sent_at_invalid' };
+  if (expiresAtMs <= now || expiresAtMs <= sentAtMs || expiresAtMs - sentAtMs > 2 * 60 * 1000) return { ok: false, reason: 'expires_at_invalid' };
+  if (!diracRecoveryHpkeB64UrlV159(source.enc, 32, 64)) return { ok: false, reason: 'enc_invalid' };
+  if (!diracRecoveryHpkeB64UrlV159(source.ciphertext, null, 8192)) return { ok: false, reason: 'ciphertext_invalid' };
+  return { ok: true, requestId, keyId, sentAtMs, expiresAtMs };
+}
+
+function diracRecoveryHpkeValidatePlaintextV159(plaintext, requestId) {
+  if (!plaintext || plaintext.length < 2 || plaintext.length > 4096) return { ok: false };
+  let parsed;
+  try { parsed = JSON.parse(plaintext.toString('utf8')); } catch (_) { return { ok: false }; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false };
+  const keys = Object.keys(parsed).sort();
+  const expectedKeys = ['recovery_code', 'request_id', 'version'];
+  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) return { ok: false };
+  if (parsed.version !== DIRAC_RECOVERY_HPKE_PLAINTEXT_VERSION_V159) return { ok: false };
+  if (customerSecurityNormalizeLostPasskeyRequestId(parsed.request_id) !== requestId) return { ok: false };
+  const recoveryCode = customerSecurityNormalizeRecoveryCodeInput(parsed.recovery_code || '');
+  if (Array.from(recoveryCode).length !== LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157) return { ok: false };
+  return { ok: true, recoveryCode };
+}
+
+function diracRecoveryHpkeEnvGuardV159() {
+  const allowlist = DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174;
+  const role = diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE');
+  const workerSecret = customerSecurityRecoveryWorkerSecret();
+  const privateKey = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_PRIVATE_KEY');
+  const keyId = diracRecoveryHpkeAsciiV159(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_KEY_ID'), 1, 80);
+  const pepper = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_PEPPER');
+  const server1Url = diracRecoveryHpkeServer1UrlV159();
+  const minimumMemory = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB', 65536, 2097152);
+  const minimumTime = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST', 3, 10);
+  const server1OnlyEnv = [
+    'DIRAC_RECOVERY_WORKER_URL',
+    'DIRAC_RECOVERY_WORKER_CALLER',
+    'DIRAC_RECOVERY_HPKE_ALLOWED_CALLER'
+  ].filter((name) => diracRecoveryHpkeEnvTextV159(name));
+
+  if (!allowlist.has(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159)) return { ok: false, reason: 'vercel2_action_env_allowlist_missing' };
+  if (role !== 'vercel2') return { ok: false, reason: 'vercel2_role_invalid' };
+  if (server1OnlyEnv.length) return { ok: false, reason: 'server1_env_present_on_vercel2' };
+  if (!workerSecret) return { ok: false, reason: 'worker_secret_invalid' };
+  if (!privateKey || !keyId) return { ok: false, reason: 'hpke_key_env_invalid' };
+  if (Buffer.byteLength(pepper, 'utf8') < 64) return { ok: false, reason: 'hpke_pepper_invalid' };
+  if (!server1Url) return { ok: false, reason: 'server1_url_invalid' };
+  if (!minimumMemory || !minimumTime) return { ok: false, reason: 'argon2_policy_invalid' };
+  try { diracRecoveryHpkePrivateKeyV159(); } catch (_) { return { ok: false, reason: 'hpke_private_key_invalid' }; }
+  return { ok: true, workerSecret, pepper, keyId, server1Url, minimumMemory, minimumTime };
+}
+
+function diracRecoveryHpkeServer1UrlV159() {
+  const raw = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_SERVER1_URL');
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.username || url.password || url.hash) return '';
+    if (typeof diracCentralIsUnsafeHostV146 === 'function' && diracCentralIsUnsafeHostV146(url.hostname)) return '';
+    if (url.pathname.replace(/\/+$/, '') !== '/api/health') return '';
+    url.pathname = '/api/health';
+    url.search = '';
+    return url.toString();
+  } catch (_) {
+    return '';
+  }
+}
+
+function diracRecoveryHpkeArgon2PolicyV159(encodedHash, minimumMemory, minimumTime) {
+  const value = String(encodedHash || '');
+  const matched = /^\$argon2id\$v=19\$m=(\d+),t=(\d+),p=(\d+)\$/.exec(value);
+  if (!matched) return { ok: false };
+  const memory = Number(matched[1]);
+  const time = Number(matched[2]);
+  const parallelism = Number(matched[3]);
+  return {
+    ok: Number.isSafeInteger(memory) && Number.isSafeInteger(time) && Number.isSafeInteger(parallelism)
+      && memory >= minimumMemory && time >= minimumTime && parallelism >= 1 && parallelism <= 8,
+    memory,
+    time,
+    parallelism
+  };
+}
+
+async function diracRecoveryHpkeReadRequestV159(requestId) {
+  const fields = 'id,request_id,customer_id,auth_user_id,recovery_code_hash,salt,status,attempt_count,expires_at,used_at,revoked_at,locked_at,old_passkey_ids,metadata';
+  const path = '/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE
+    + '?select=' + encodeURIComponent(fields)
+    + '&request_id=eq.' + encodeURIComponent(requestId)
+    + '&limit=1';
+  const result = await supabaseFetch(path, { method: 'GET', auth: 'service' });
+  return {
+    ok: Boolean(result && result.ok),
+    status: Number(result && result.status || 0),
+    row: result && result.ok && Array.isArray(result.data) ? result.data[0] || null : null
+  };
+}
+
+function diracRecoveryHpkeRequestActiveV159(row) {
+  const expiresAtMs = Date.parse(row && row.expires_at || '');
+  return Boolean(row && row.id
+    && row.status === 'pending'
+    && !row.used_at
+    && !row.revoked_at
+    && !row.locked_at
+    && Number.isFinite(expiresAtMs)
+    && expiresAtMs > Date.now()
+    && customerSecurityLooksLikeUuid(row.customer_id)
+    && customerSecurityLooksLikeUuid(row.auth_user_id)
+    && Array.isArray(row.old_passkey_ids)
+    && row.old_passkey_ids.length > 0);
+}
+
+function diracRecoveryHpkeClaimEnvelopeV159(body) {
+  const now = Date.now();
+  for (const [key, value] of DIRAC_RECOVERY_HPKE_REPLAY_V159.entries()) {
+    if (Number(value && value.expiresAtMs || 0) <= now) DIRAC_RECOVERY_HPKE_REPLAY_V159.delete(key);
+  }
+  const key = crypto.createHash('sha384')
+    .update(String(body.request_id || ''))
+    .update('|')
+    .update(String(body.enc || ''))
+    .update('|')
+    .update(String(body.ciphertext || ''))
+    .digest('base64url');
+  if (DIRAC_RECOVERY_HPKE_REPLAY_V159.has(key)) return { ok: false };
+  DIRAC_RECOVERY_HPKE_REPLAY_V159.set(key, { state: 'processing', expiresAtMs: now + 10 * 60 * 1000 });
+  if (DIRAC_RECOVERY_HPKE_REPLAY_V159.size > 5000) {
+    for (const oldKey of DIRAC_RECOVERY_HPKE_REPLAY_V159.keys()) {
+      DIRAC_RECOVERY_HPKE_REPLAY_V159.delete(oldKey);
+      if (DIRAC_RECOVERY_HPKE_REPLAY_V159.size <= 3000) break;
+    }
+  }
+  return { ok: true, key };
+}
+
+function diracRecoveryHpkeReleaseEnvelopeV159(claim) {
+  if (claim && claim.key) DIRAC_RECOVERY_HPKE_REPLAY_V159.delete(claim.key);
+}
+
+function diracRecoveryHpkeConsumeEnvelopeV159(claim) {
+  if (!claim || !claim.key) return;
+  DIRAC_RECOVERY_HPKE_REPLAY_V159.set(claim.key, { state: 'consumed', expiresAtMs: Date.now() + 30 * 60 * 1000 });
+}
+
+async function diracRecoveryHpkeRegisterCodeFailureV159(req, row, requestId) {
+  const nextAttempts = Number(row && row.attempt_count || 0) + 1;
+  const lock = nextAttempts >= LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT;
+  await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE
+    + '?request_id=eq.' + encodeURIComponent(requestId)
+    + '&status=eq.pending', {
+    method: 'PATCH',
+    auth: 'service',
+    body: {
+      attempt_count: nextAttempts,
+      status: lock ? 'locked' : 'pending',
+      locked_at: lock ? diracNowIso() : row && row.locked_at || null,
+      metadata: {
+        ...(row && row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata) ? row.metadata : {}),
+        last_failed_verify_at: diracNowIso(),
+        failed_verify_source: DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159
+      }
+    }
+  }).catch(() => null);
+  await customerSecurityRegisterFailedVerification(req, DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159, lock ? 'recovery_code_locked' : 'recovery_code_not_matched', row && row.customer_id).catch(() => null);
+  return { locked: lock };
+}
+
+function diracRecoveryHpkeContextHashV159(row, keyId, verifiedAtMs, proofExpiresAtMs) {
+  const context = {
+    action: DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159,
+    version: DIRAC_RECOVERY_HPKE_PROOF_VERSION_V159,
+    request_id: String(row && row.request_id || ''),
+    customer_id: String(row && row.customer_id || ''),
+    auth_user_id: String(row && row.auth_user_id || ''),
+    request_salt_hash: crypto.createHash('sha384').update(String(row && row.salt || '')).digest('base64url'),
+    hpke_suite: DIRAC_RECOVERY_HPKE_SUITE_V159,
+    hpke_key_id: keyId,
+    argon2_profile: DIRAC_RECOVERY_HPKE_ARGON2_PROFILE_V159,
+    verified_at_ms: verifiedAtMs,
+    proof_expires_at_ms: proofExpiresAtMs
+  };
+  return crypto.createHash('sha384')
+    .update(customerSecurityLostPasskeyCanonical(context))
+    .digest('base64url');
+}
+
+function diracRecoveryHpkeArgon2ProofV159(env, row, proofNonce, contextHash) {
+  const material = customerSecurityLostPasskeyCanonical({
+    version: DIRAC_RECOVERY_HPKE_ARGON2_PROFILE_V159,
+    request_id: String(row && row.request_id || ''),
+    recovery_code_hash_sha384: crypto.createHash('sha384').update(String(row && row.recovery_code_hash || '')).digest('base64url'),
+    proof_nonce: proofNonce,
+    verification_context_hash: contextHash,
+    hpke_key_id: env.keyId,
+    pepper_key_id: diracRecoveryHpkeAsciiV159(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_PEPPER_KEY_ID'), 1, 80) || 'recovery-pepper-v1'
+  });
+  const pepper = Buffer.from(env.pepper, 'utf8');
+  try {
+    return crypto.createHmac('sha384', pepper)
+      .update('dirac-recovery-hpke-argon2-proof-v159\n')
+      .update(material)
+      .digest('base64url');
+  } finally {
+    pepper.fill(0);
+  }
+}
+
+function diracRecoveryHpkeProofBodyV159(env, row) {
+  const verifiedAtMs = Date.now();
+  const proofExpiresAtMs = verifiedAtMs + 90 * 1000;
+  const proofNonce = crypto.randomBytes(48).toString('base64url');
+  const contextHash = diracRecoveryHpkeContextHashV159(row, env.keyId, verifiedAtMs, proofExpiresAtMs);
+  const argon2Proof = diracRecoveryHpkeArgon2ProofV159(env, row, proofNonce, contextHash);
+  return {
+    action: DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159,
+    version: DIRAC_RECOVERY_HPKE_PROOF_VERSION_V159,
+    request_id: String(row.request_id || ''),
+    proof_nonce: proofNonce,
+    verified_at_ms: verifiedAtMs,
+    proof_expires_at_ms: proofExpiresAtMs,
+    hpke_suite: DIRAC_RECOVERY_HPKE_SUITE_V159,
+    hpke_key_id: env.keyId,
+    argon2_profile: DIRAC_RECOVERY_HPKE_ARGON2_PROFILE_V159,
+    argon2_proof: argon2Proof,
+    verification_context_hash: contextHash
+  };
+}
+
+function diracRecoveryHpkeProofSignatureV159(caller, timestamp, body) {
+  const secretText = customerSecurityRecoveryWorkerSecret();
+  if (!secretText) return '';
+  const secret = Buffer.from(secretText, 'utf8');
+  try {
+    return crypto.createHmac('sha384', secret)
+      .update('dirac-recovery-hpke-proof-v159')
+      .update('\n')
+      .update(caller)
+      .update('\n')
+      .update(timestamp)
+      .update('\n')
+      .update(customerSecurityLostPasskeyCanonical(body))
+      .digest('base64url');
+  } finally {
+    secret.fill(0);
+  }
+}
+
+async function diracRecoveryHpkeSendProofV159(env, proofBody) {
+  const target = new URL(env.server1Url);
+  target.searchParams.set('action', DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159);
+  const caller = 'vercel2';
+  const timestamp = String(Date.now());
+  const signature = diracRecoveryHpkeProofSignatureV159(caller, timestamp, proofBody);
+  if (!signature) return { ok: false, status: 503, code: 'proof_signature_unavailable' };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(target.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Dirac-HPKE-Caller': caller,
+        'X-Dirac-HPKE-Timestamp': timestamp,
+        'X-Dirac-HPKE-Signature': signature
+      },
+      body: JSON.stringify(proofBody),
+      redirect: 'error',
+      signal: controller.signal
+    });
+    const length = Number(response.headers && response.headers.get && response.headers.get('content-length') || 0);
+    if (Number.isFinite(length) && length > 64 * 1024) return { ok: false, status: 502, code: 'server1_response_too_large' };
+    const text = await response.text();
+    if (text.length > 64 * 1024) return { ok: false, status: 502, code: 'server1_response_too_large' };
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
+    return { ok: response.ok, status: response.status, data };
+  } catch (_) {
+    return { ok: false, status: 502, code: 'server1_unreachable' };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, message: 'Gunakan POST.' });
+  if (req.__diracCentralSecurityGuardPassedV146 !== true || !diracCentralCurrentContextPassedV146()) {
+    return res.status(403).json({ ok: false, code: 'CENTRAL_GUARD_REQUIRED', message: 'Permintaan ditolak oleh sistem keamanan.' });
+  }
+
+  const ctx = diracCentralCurrentContextV149();
+  if (!ctx || ctx.action !== DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159 || ctx.classification !== 'browser') {
+    return res.status(403).json({ ok: false, code: 'RECOVERY_HPKE_GUARD_CONTEXT_INVALID', message: 'Permintaan ditolak oleh sistem keamanan.' });
+  }
+
+  const env = diracRecoveryHpkeEnvGuardV159();
+  if (!env.ok) {
+    return res.status(503).json({ ok: false, code: 'RECOVERY_HPKE_CONFIGURATION_INVALID', message: 'Layanan recovery aman belum siap.' });
+  }
+
+  const body = ctx.body && typeof ctx.body === 'object' && !Array.isArray(ctx.body) ? ctx.body : {};
+  const envelope = diracRecoveryHpkeValidateEnvelopeV159(body);
+  if (!envelope.ok) {
+    return res.status(400).json({ ok: false, code: 'RECOVERY_HPKE_ENVELOPE_INVALID', message: 'Payload recovery tidak valid.' });
+  }
+
+  const claim = diracRecoveryHpkeClaimEnvelopeV159(body);
+  if (!claim.ok) {
+    return res.status(409).json({ ok: false, code: 'RECOVERY_HPKE_ENVELOPE_REPLAYED', message: 'Payload recovery sudah pernah dipakai.' });
+  }
+
+  let plaintext = null;
+  let recoveryCode = '';
+  let consumeClaim = false;
+  try {
+    const request = await diracRecoveryHpkeReadRequestV159(envelope.requestId);
+    if (!request.ok) return res.status(503).json({ ok: false, code: 'RECOVERY_REQUEST_STORAGE_UNAVAILABLE', message: 'Recovery request belum dapat diperiksa.' });
+    const row = request.row;
+    if (!diracRecoveryHpkeRequestActiveV159(row)) {
+      consumeClaim = true;
+      return res.status(403).json({ ok: false, code: 'RECOVERY_REQUEST_INACTIVE', message: 'Recovery request tidak aktif.' });
+    }
+
+    plaintext = diracRecoveryHpkeDecryptV159(body);
+    const parsed = diracRecoveryHpkeValidatePlaintextV159(plaintext, envelope.requestId);
+    if (!parsed.ok) {
+      consumeClaim = true;
+      await customerSecurityRegisterFailedVerification(req, DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159, 'recovery_hpke_plaintext_invalid', row.customer_id).catch(() => null);
+      return res.status(403).json({ ok: false, code: 'RECOVERY_HPKE_DECRYPT_FAILED', message: 'Payload recovery tidak dapat diverifikasi.' });
+    }
+    recoveryCode = parsed.recoveryCode;
+
+    const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
+    if (!vaultSecrets.ok) return res.status(503).json({ ok: false, code: vaultSecrets.code, message: vaultSecrets.message });
+
+    const argon2Policy = diracRecoveryHpkeArgon2PolicyV159(row.recovery_code_hash, env.minimumMemory, env.minimumTime);
+    if (!argon2Policy.ok) {
+      consumeClaim = true;
+      return res.status(503).json({ ok: false, code: 'RECOVERY_ARGON2_POLICY_INVALID', message: 'Kebijakan verifikasi recovery tidak valid.' });
+    }
+
+    const metadata = row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata) ? row.metadata : {};
+    const bindings = metadata.binding_hashes && typeof metadata.binding_hashes === 'object' && !Array.isArray(metadata.binding_hashes)
+      ? metadata.binding_hashes
+      : null;
+    if (!bindings || !metadata.binding_hash_commitment) {
+      consumeClaim = true;
+      return res.status(403).json({ ok: false, code: 'RECOVERY_BINDING_INVALID', message: 'Binding recovery tidak valid.' });
+    }
+
+    const bindingOk = await customerSecurityLostPasskeyArgon2VerifyHashV157(
+      'binding',
+      customerSecurityLostPasskeyCanonical(bindings),
+      metadata.binding_hash_commitment,
+      vaultSecrets.pepper,
+      vaultSecrets.rootSecret
+    ).catch(() => false);
+    if (!bindingOk) {
+      consumeClaim = true;
+      await customerSecurityRegisterFailedVerification(req, DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159, 'recovery_binding_commitment_mismatch', row.customer_id).catch(() => null);
+      return res.status(403).json({ ok: false, code: 'RECOVERY_BINDING_INVALID', message: 'Binding recovery tidak valid.' });
+    }
+
+    const codeOk = await customerSecurityLostPasskeyArgon2VerifyHashV157(
+      'recovery_code',
+      recoveryCode,
+      row.recovery_code_hash,
+      vaultSecrets.pepper,
+      vaultSecrets.rootSecret
+    ).catch(() => false);
+    if (!codeOk) {
+      consumeClaim = true;
+      const failed = await diracRecoveryHpkeRegisterCodeFailureV159(req, row, envelope.requestId);
+      return res.status(failed.locked ? 423 : 403).json({
+        ok: false,
+        code: failed.locked ? 'RECOVERY_CODE_LOCKED' : 'RECOVERY_CODE_INVALID',
+        message: failed.locked ? 'Recovery request dikunci.' : 'Kode pemulihan tidak valid.'
+      });
+    }
+
+    const proofBody = diracRecoveryHpkeProofBodyV159(env, row);
+    const server1 = await diracRecoveryHpkeSendProofV159(env, proofBody);
+    if (!server1.ok) {
+      if (server1.status >= 400 && server1.status < 500) consumeClaim = true;
+      return res.status(server1.status >= 400 && server1.status <= 599 ? server1.status : 502).json({
+        ok: false,
+        code: 'RECOVERY_PROOF_DELIVERY_FAILED',
+        message: 'Bukti recovery belum dapat diproses oleh server utama.'
+      });
+    }
+
+    const data = server1.data && typeof server1.data === 'object' ? server1.data : {};
+    const session = String(data.dirac_lost_passkey_recovery_session || '').trim();
+    const sessionExpiresAt = String(data.recovery_session_expires_at || '').trim();
+    if (!data.ok || !/^[A-Za-z0-9_-]{32,160}$/.test(session) || !Number.isFinite(Date.parse(sessionExpiresAt))) {
+      return res.status(502).json({ ok: false, code: 'RECOVERY_PROOF_RESPONSE_INVALID', message: 'Respons recovery dari server utama tidak valid.' });
+    }
+
+    consumeClaim = true;
+    await customerSecurityWriteGuardEvent(row.customer_id, {
+      event_type: 'lost_passkey_recovery_hpke_verified',
+      status: 'success',
+      risk_level: 'high',
+      description: 'Vercel 2 membuka HPKE, memverifikasi Argon2id + salt + pepper, lalu mengirim proof bertanda tangan ke Server 1.',
+      req,
+      metadata: {
+        action: DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159,
+        request_id: envelope.requestId,
+        hpke_key_id: env.keyId,
+        plaintext_recovery_code_forwarded: false
+      }
+    }).catch(() => null);
+
+    return res.status(200).json({
+      ok: true,
+      active: true,
+      method: 'hpke_argon2id_proof',
+      message: 'Kode pemulihan berhasil dikirim dan diverifikasi secara aman. Silakan lanjutkan tombol Verify.',
+      dirac_lost_passkey_recovery_session: session,
+      recovery_session_expires_at: sessionExpiresAt,
+      recovery_code_verified: true,
+      plaintext_recovery_code_forwarded: false,
+      hpke_suite: DIRAC_RECOVERY_HPKE_SUITE_V159,
+      time: diracNowIso()
+    });
+  } catch (_) {
+    return res.status(403).json({ ok: false, code: 'RECOVERY_HPKE_VERIFY_FAILED', message: 'Payload recovery tidak dapat diverifikasi.' });
+  } finally {
+    recoveryCode = '';
+    if (plaintext) plaintext.fill(0);
+    if (consumeClaim) diracRecoveryHpkeConsumeEnvelopeV159(claim);
+    else diracRecoveryHpkeReleaseEnvelopeV159(claim);
+  }
+}
