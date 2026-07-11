@@ -28936,7 +28936,7 @@ function diracCentralAllowedEgressHostV146(host) {
     'whoisjsonapi.com'
   ]);
   try {
-    ['DOMAIN_SUPABASE_URL', 'SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'DIRAC_RECOVERY_WORKER_URL'].forEach((name) => {
+    ['DOMAIN_SUPABASE_URL', 'SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'DIRAC_RECOVERY_WORKER_URL', 'DIRAC_RECOVERY_SERVER1_URL'].forEach((name) => {
       const value = String(process.env[name] || '').trim();
       if (value) allowed.add(new URL(value).hostname.toLowerCase());
     });
