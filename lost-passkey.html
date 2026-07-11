@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-jRKHX8JINtDIa29N/3FQa+Cos6qRrhwvDhsUHyt5iRrq2TkG6ogZt1BBFFq+NncAkkTJTpwQkwymIktp4pZTRw=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-+6Igb5ujN+JgAqXKPWWBCNOL3aAHQOrq1YgfZir95IS1aOr5g4JBOEo05SSXNRS8ffCyPunDDmn0ZrXtKT8kHg=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-jRKHX8JINtDIa29N/3FQa+Cos6qRrhwvDhsUHyt5iRrq2TkG6ogZt1BBFFq+NncAkkTJTpwQkwymIktp4pZTRw=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-+6Igb5ujN+JgAqXKPWWBCNOL3aAHQOrq1YgfZir95IS1aOr5g4JBOEo05SSXNRS8ffCyPunDDmn0ZrXtKT8kHg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -175,6 +175,8 @@
             <div class="debug-item"><span>Tahap HTML</span><strong id="debugClientStage">bootstrap_start</strong></div>
             <div class="debug-item"><span>Tahap Server 2</span><strong id="debugServerStage">Belum tersedia</strong></div>
             <div class="debug-item"><span>Alasan Server</span><strong id="debugServerReason">Belum tersedia</strong></div>
+            <div class="debug-item"><span>Kode Server</span><strong id="debugServerCode">Belum tersedia</strong></div>
+            <div class="debug-item"><span>Pesan Server</span><strong id="debugServerMessage">Belum tersedia</strong></div>
             <div class="debug-item"><span>Central Guard</span><strong id="debugGuard">Belum tersedia</strong></div>
             <div class="debug-item"><span>Request</span><strong id="debugRequest">Belum tersedia</strong></div>
             <div class="debug-item"><span>Ed25519</span><strong id="debugEd25519">Belum diperiksa</strong></div>
@@ -301,6 +303,8 @@
       debugClientStage: 'bootstrap_start',
       debugServerStage: '',
       debugServerReason: '',
+      debugServerCode: '',
+      debugServerMessage: '',
       debugHttpStatus: 0,
       debugGuard: '',
       debugRequestHash: '',
@@ -334,6 +338,8 @@
       debugClientStage: document.getElementById('debugClientStage'),
       debugServerStage: document.getElementById('debugServerStage'),
       debugServerReason: document.getElementById('debugServerReason'),
+      debugServerCode: document.getElementById('debugServerCode'),
+      debugServerMessage: document.getElementById('debugServerMessage'),
       debugGuard: document.getElementById('debugGuard'),
       debugRequest: document.getElementById('debugRequest'),
       debugEd25519: document.getElementById('debugEd25519'),
@@ -370,6 +376,8 @@
       el.debugClientStage.textContent = state.debugClientStage || 'unknown';
       el.debugServerStage.textContent = state.debugServerStage || 'Belum tersedia';
       el.debugServerReason.textContent = state.debugServerReason || 'Belum tersedia';
+      if (el.debugServerCode) el.debugServerCode.textContent = state.debugServerCode || 'Belum tersedia';
+      if (el.debugServerMessage) el.debugServerMessage.textContent = state.debugServerMessage || 'Belum tersedia';
       el.debugGuard.textContent = state.debugGuard || 'Belum tersedia';
       el.debugRequest.textContent = state.debugRequestHash || 'Belum tersedia';
       if (el.debugEd25519) el.debugEd25519.textContent = state.debugEd25519Status || 'Belum diperiksa';
@@ -1303,12 +1311,22 @@
       if (text.length > 65536) throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
       var body;
       try { body = text ? JSON.parse(text) : null; } catch (_) { body = null; }
+      var serverCode = body && (body.code || body.error_code)
+        ? debugSafeText(body.code || body.error_code, 120)
+        : 'missing';
+      var serverMessage = body && body.message
+        ? debugSafeText(body.message, 160)
+        : 'missing';
+      state.debugServerCode = serverCode === 'missing' ? '' : serverCode;
+      state.debugServerMessage = serverMessage === 'missing' ? '' : serverMessage;
       if (!response.ok || !body || body.ok !== true || body.recovery_code_verified !== true) {
+        state.debugDiagnosis = 'Server 2: ' + (state.debugServerCode || state.debugServerMessage || state.debugServerReason || state.debugServerStage || ('HTTP ' + Number(response.status || 0)));
         debugRecord('hpke_verify_response_rejected', {
           http_status: Number(response.status || 0),
           body_ok: Boolean(body && body.ok === true),
           recovery_verified: Boolean(body && body.recovery_code_verified === true),
-          error_code: body && (body.code || body.error_code) || 'missing'
+          error_code: serverCode,
+          server_message: serverMessage
         });
         throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
       }
@@ -1466,10 +1484,16 @@
       } catch (error) {
         state.debugEnabled = true;
         state.debugClientError = debugErrorCode(error);
-        state.debugDiagnosis = 'HTML/browser: ' + state.debugClientError;
+        if (state.debugResponseSeen && (state.debugServerCode || state.debugServerMessage || state.debugServerReason || state.debugServerStage)) {
+          state.debugDiagnosis = 'Server 2: ' + (state.debugServerCode || state.debugServerMessage || state.debugServerReason || state.debugServerStage);
+        } else {
+          state.debugDiagnosis = 'HTML/browser: ' + state.debugClientError;
+        }
         try { if (el.debugPanel) { el.debugPanel.hidden = false; el.debugPanel.open = true; } } catch (_) {}
         debugRecord('decrypt_submit_error', {
           error_code: state.debugClientError,
+          server_code: state.debugServerCode || 'missing',
+          server_message: state.debugServerMessage || 'missing',
           last_server_stage: state.debugServerStage || 'missing',
           last_http_status: state.debugHttpStatus || 0,
           response_seen: state.debugResponseSeen
