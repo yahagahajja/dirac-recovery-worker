@@ -6955,61 +6955,6 @@ function customerSecurityLostPasskeySetVaultJsonHeadersV169(res) {
   try { res.setHeader('Referrer-Policy', 'no-referrer'); } catch (_) {}
   try { res.setHeader('X-Content-Type-Options', 'nosniff'); } catch (_) {}
   try { res.setHeader('X-Frame-Options', 'DENY'); } catch (_) {}
-  customerSecurityLostPasskeySetEd25519DebugHeadersV176(res);
-}
-
-const DIRAC_LOST_PASSKEY_ED25519_DEBUG_V176 = 'lost-passkey-ed25519-debug-v176';
-
-function customerSecurityLostPasskeyEd25519DiagnosticsV176() {
-  const keyId = String(process.env.DIRAC_LOST_PASSKEY_ED25519_KEY_ID || 'dirac-recovery-ed25519-2026-01').trim();
-  const raw = String(process.env.DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY_PEM || process.env.DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY || '').trim();
-  if (!raw) return { key_id: keyId, key_state: 'private_key_missing', public_key_sha256: '' };
-  try {
-    const pem = raw.includes('-----BEGIN') ? raw.replace(/\\n/g, '\n') : Buffer.from(raw, 'base64').toString('utf8');
-    const privateKey = crypto.createPrivateKey(pem);
-    if (privateKey.asymmetricKeyType && privateKey.asymmetricKeyType !== 'ed25519') {
-      return { key_id: keyId, key_state: 'private_key_type_invalid', public_key_sha256: '' };
-    }
-    const publicKey = crypto.createPublicKey(privateKey);
-    const jwk = publicKey.export({ format: 'jwk' });
-    const rawPublic = jwk && jwk.x ? Buffer.from(String(jwk.x), 'base64url') : Buffer.alloc(0);
-    if (rawPublic.length !== 32) {
-      if (rawPublic.length) rawPublic.fill(0);
-      return { key_id: keyId, key_state: 'public_key_encoding_invalid', public_key_sha256: '' };
-    }
-    const fingerprint = crypto.createHash('sha256').update(rawPublic).digest('hex');
-    rawPublic.fill(0);
-    return { key_id: keyId, key_state: 'ready', public_key_sha256: fingerprint };
-  } catch (error) {
-    return {
-      key_id: keyId,
-      key_state: 'private_key_parse_invalid',
-      public_key_sha256: '',
-      error_name: String(error && error.name || '').slice(0, 80),
-      error_code: String(error && error.code || '').slice(0, 80)
-    };
-  }
-}
-
-function customerSecurityLostPasskeySetEd25519DebugHeadersV176(res) {
-  if (!customerSecurityLostPasskeyLinkOpenArgon2DebugEnabledV174()) return;
-  const diagnostic = customerSecurityLostPasskeyEd25519DiagnosticsV176();
-  try { res.setHeader('X-Dirac-Recovery-Debug-Enabled', '1'); } catch (_) {}
-  try { res.setHeader('X-Dirac-Recovery-Debug-Ed25519-Key-Id', String(diagnostic.key_id || '')); } catch (_) {}
-  try { res.setHeader('X-Dirac-Recovery-Debug-Ed25519-State', String(diagnostic.key_state || 'unknown')); } catch (_) {}
-  try { res.setHeader('X-Dirac-Recovery-Debug-Ed25519-Public-Key-Sha256', String(diagnostic.public_key_sha256 || '')); } catch (_) {}
-  try {
-    console.error('[dirac-lost-passkey-ed25519-v176]', JSON.stringify({
-      diagnostic_version: DIRAC_LOST_PASSKEY_ED25519_DEBUG_V176,
-      event: 'ed25519_key_diagnostic',
-      key_id: diagnostic.key_id || null,
-      key_state: diagnostic.key_state || 'unknown',
-      public_key_sha256: diagnostic.public_key_sha256 || null,
-      error_name: diagnostic.error_name || null,
-      error_code: diagnostic.error_code || null,
-      time: diracNowIso()
-    }));
-  } catch (_) {}
 }
 
 function customerSecurityLostPasskeyEd25519SignManifestB64V169(payload) {
@@ -26655,7 +26600,7 @@ module.exports = async function diracRecoveryWorkerWrapper(req, res) {
   if (action === DIRAC_RECOVERY_WORKER_ACTION) {
     return customerSecurityHandleRecoveryWorkerGenerate(req, res, action);
   }
-  if (customerSecurityRecoveryWorkerLocalEnabled()) {
+  if (customerSecurityRecoveryWorkerLocalEnabled() && action !== 'customer_security_recovery_hpke_verify') {
     return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_ONLY', message: 'Endpoint worker hanya menerima action internal recovery.' });
   }
   return __diracRecoveryWorkerPreviousHandler(req, res);
@@ -27060,14 +27005,6 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     if (req && req.query && !isRecoveryLinkRouteV165) req.query.action = action;
 
     if (!DIRAC_CENTRAL_ACTIVE_ACTIONS_V146.has(action) && !DIRAC_CENTRAL_DISABLED_ACTIONS_V146.has(action)) {
-      if (action === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_DIAGNOSTIC_V176) {
-        const diagnostics = diracRecoveryHpkeSafeEnvDiagnosticsV176();
-        diracRecoveryHpkeSafeEnvLogV176('central_global_whitelist_rejected', req, {
-          rejection_reason: 'action_not_in_global_whitelist',
-          diagnostics
-        });
-        diracRecoveryHpkeSetSafeDebugHeadersV177(res, req, 'central_global_whitelist', 'action_not_in_global_whitelist', diagnostics);
-      }
       return await diracCentralBanAndBlockV146(req, res, ctx, action, method, 'action_not_in_global_whitelist');
     }
     diracCentralStampV146(ctx, 'whitelist_checked');
@@ -27079,28 +27016,12 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     const vercel2OnlyGuard = diracCentralVercel2OnlyActionGuardV150(action);
     if (!vercel2OnlyGuard.ok) {
       if (action === DIRAC_RECOVERY_WORKER_ACTION) diracCentralRecoveryWorkerGuardDebugV158(req, ctx, 'vercel2_action_gate', vercel2OnlyGuard.reason);
-      if (action === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_DIAGNOSTIC_V176) {
-        const diagnostics = diracRecoveryHpkeSafeEnvDiagnosticsV176();
-        diracRecoveryHpkeSafeEnvLogV176('central_vercel2_gate_rejected', req, {
-          rejection_reason: vercel2OnlyGuard.reason,
-          diagnostics
-        });
-        diracRecoveryHpkeSetSafeDebugHeadersV177(res, req, 'central_vercel2_gate', vercel2OnlyGuard.reason, diagnostics);
-      }
       return await diracCentralBanAndBlockV146(req, res, ctx, action, method, vercel2OnlyGuard.reason);
     }
     diracCentralStampV146(ctx, 'vercel2_action_checked');
 
     const server2SecureHost = diracCentralServer2SecureHostGuardV169(req, ctx);
     if (!server2SecureHost.ok) {
-      if (action === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_DIAGNOSTIC_V176) {
-        const diagnostics = diracRecoveryHpkeSafeEnvDiagnosticsV176();
-        diracRecoveryHpkeSafeEnvLogV176('central_secure_host_rejected', req, {
-          rejection_reason: server2SecureHost.reason,
-          diagnostics
-        });
-        diracRecoveryHpkeSetSafeDebugHeadersV177(res, req, 'central_secure_host', server2SecureHost.reason, diagnostics);
-      }
       return await diracCentralBanAndBlockV146(req, res, ctx, action, method, server2SecureHost.reason);
     }
     diracCentralStampV146(ctx, 'server2_secure_host_checked');
@@ -27485,160 +27406,6 @@ function diracCentralEnvValueV150(name) {
 
 function diracCentralEnvTrueV150(name) {
   return /^(1|true|yes|on|enabled|enable)$/i.test(String(process.env[name] || '').trim());
-}
-
-/* ============================================================
-   LOST PASSKEY HPKE ENV DIAGNOSTICS v176 - DEBUG ONLY
-   - Menampilkan nama ENV/check yang gagal tanpa nilai secret.
-   - Tidak mengubah allowlist, Central Guard, endpoint, atau hasil keamanan.
-   - Aktif hanya saat DIRAC_RECOVERY_HPKE_DEBUG atau
-     DIRAC_LOST_PASSKEY_LINK_OPEN_DEBUG bernilai true.
-   ============================================================ */
-const DIRAC_RECOVERY_HPKE_ENV_DIAGNOSTIC_V176 = 'recovery-hpke-env-diagnostic-v176';
-const DIRAC_RECOVERY_HPKE_VERIFY_ACTION_DIAGNOSTIC_V176 = 'customer_security_recovery_hpke_verify';
-
-function diracRecoveryHpkeDebugEnabledV176() {
-  return diracCentralEnvTrueV150('DIRAC_RECOVERY_HPKE_DEBUG')
-    || diracCentralEnvTrueV150('DIRAC_LOST_PASSKEY_LINK_OPEN_DEBUG');
-}
-
-function diracRecoveryHpkeSafeServer1UrlCheckV176(rawValue) {
-  const raw = String(rawValue || '').trim();
-  if (!raw) return false;
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'https:' || url.username || url.password || url.hash) return false;
-    if (typeof diracCentralIsUnsafeHostV146 === 'function' && diracCentralIsUnsafeHostV146(url.hostname)) return false;
-    return url.pathname.replace(/\/+$/, '') === '/api/health';
-  } catch (_) {
-    return false;
-  }
-}
-
-function diracRecoveryHpkeSafePrivateKeyCheckV176() {
-  const raw = String(process.env.DIRAC_RECOVERY_HPKE_PRIVATE_KEY || '').trim();
-  if (!raw) return false;
-  try {
-    const normalized = raw.includes('-----BEGIN') ? raw.replace(/\\n/g, '\n') : Buffer.from(raw, 'base64').toString('utf8');
-    return crypto.createPrivateKey(normalized).asymmetricKeyType === 'x25519';
-  } catch (_) {
-    return false;
-  }
-}
-
-function diracRecoveryHpkeSafeEnvDiagnosticsV176() {
-  const action = DIRAC_RECOVERY_HPKE_VERIFY_ACTION_DIAGNOSTIC_V176;
-  const centralRole = diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE');
-  const fallbackRole = diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE');
-  const effectiveRole = centralRole || fallbackRole;
-  const allowlist = DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174;
-  const memoryRaw = Number(String(process.env.DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB || '').trim());
-  const timeRaw = Number(String(process.env.DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST || '').trim());
-  const keyId = String(process.env.DIRAC_RECOVERY_HPKE_KEY_ID || '').trim();
-  const pepper = String(process.env.DIRAC_RECOVERY_HPKE_PEPPER || '').trim();
-  const workerSecret = String(process.env.DIRAC_RECOVERY_WORKER_SECRET || '').trim();
-  const server1OnlyPresent = [
-    'DIRAC_RECOVERY_WORKER_URL',
-    'DIRAC_RECOVERY_WORKER_CALLER',
-    'DIRAC_RECOVERY_HPKE_ALLOWED_CALLER'
-  ].filter((name) => String(process.env[name] || '').trim());
-
-  const checks = {
-    action_in_env_allowlist: allowlist.has(action),
-    action_in_global_active_set: DIRAC_CENTRAL_ACTIVE_ACTIONS_V146.has(action),
-    action_in_known_set: DIRAC_CENTRAL_KNOWN_ACTION_INPUTS_V146.has(action),
-    action_in_guarded_set: CUSTOMER_SECURITY_GUARDED_ACTIONS.has(action),
-    action_in_vercel2_recovery_set: DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(action),
-    deployment_role_is_vercel2: effectiveRole === 'vercel2',
-    server1_only_env_absent: server1OnlyPresent.length === 0,
-    recovery_worker_secret_valid: Buffer.byteLength(workerSecret, 'utf8') >= 64,
-    hpke_private_key_present: Boolean(String(process.env.DIRAC_RECOVERY_HPKE_PRIVATE_KEY || '').trim()),
-    hpke_private_key_is_x25519: diracRecoveryHpkeSafePrivateKeyCheckV176(),
-    hpke_key_id_valid: /^[A-Za-z0-9_.-]{1,80}$/.test(keyId),
-    hpke_pepper_min_64_bytes: Buffer.byteLength(pepper, 'utf8') >= 64,
-    recovery_server1_url_valid: diracRecoveryHpkeSafeServer1UrlCheckV176(process.env.DIRAC_RECOVERY_SERVER1_URL),
-    argon2_memory_env_valid: Number.isSafeInteger(memoryRaw) && memoryRaw >= 65536 && memoryRaw <= 2097152,
-    argon2_time_env_valid: Number.isSafeInteger(timeRaw) && timeRaw >= 3 && timeRaw <= 10
-  };
-
-  const falseEnv = [];
-  if (!checks.action_in_env_allowlist) falseEnv.push('DIRAC_CENTRAL_VERCEL2_ONLY_ACTIONS|DIRAC_VERCEL2_ONLY_ACTIONS:missing_action');
-  if (!checks.action_in_global_active_set) falseEnv.push('CENTRAL_RUNTIME_GLOBAL_ACTION_ACTIVE=false');
-  if (!checks.action_in_known_set) falseEnv.push('CENTRAL_RUNTIME_KNOWN_ACTION=false');
-  if (!checks.action_in_guarded_set) falseEnv.push('CENTRAL_RUNTIME_GUARDED_ACTION=false');
-  if (!checks.action_in_vercel2_recovery_set) falseEnv.push('CENTRAL_RUNTIME_VERCEL2_RECOVERY_ACTION=false');
-  if (!checks.deployment_role_is_vercel2) falseEnv.push('DIRAC_CENTRAL_DEPLOYMENT_ROLE|DIRAC_DEPLOYMENT_ROLE');
-  if (!checks.server1_only_env_absent) falseEnv.push(...server1OnlyPresent.map((name) => name + ':must_be_absent_on_vercel2'));
-  if (!checks.recovery_worker_secret_valid) falseEnv.push('DIRAC_RECOVERY_WORKER_SECRET');
-  if (!checks.hpke_private_key_present || !checks.hpke_private_key_is_x25519) falseEnv.push('DIRAC_RECOVERY_HPKE_PRIVATE_KEY');
-  if (!checks.hpke_key_id_valid) falseEnv.push('DIRAC_RECOVERY_HPKE_KEY_ID');
-  if (!checks.hpke_pepper_min_64_bytes) falseEnv.push('DIRAC_RECOVERY_HPKE_PEPPER');
-  if (!checks.recovery_server1_url_valid) falseEnv.push('DIRAC_RECOVERY_SERVER1_URL');
-  if (!checks.argon2_memory_env_valid) falseEnv.push('DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB');
-  if (!checks.argon2_time_env_valid) falseEnv.push('DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST');
-
-  return {
-    diagnostic_version: DIRAC_RECOVERY_HPKE_ENV_DIAGNOSTIC_V176,
-    action,
-    effective_role: effectiveRole || 'missing',
-    checks,
-    false_env: Array.from(new Set(falseEnv)),
-    server1_only_env_present: server1OnlyPresent,
-    all_required_checks_passed: Object.values(checks).every(Boolean)
-  };
-}
-
-function diracRecoveryHpkeSafeEnvLogV176(stage, req, extra = {}) {
-  if (!diracRecoveryHpkeDebugEnabledV176()) return;
-  const diagnostics = diracRecoveryHpkeSafeEnvDiagnosticsV176();
-  const payload = {
-    ...diagnostics,
-    stage: String(stage || 'unknown').slice(0, 100),
-    method: String(req && req.method || '').toUpperCase(),
-    host: String(req && req.headers && (req.headers['x-forwarded-host'] || req.headers.host) || '').split(',')[0].trim().toLowerCase(),
-    central_guard_passed: Boolean(req && req.__diracCentralSecurityGuardPassedV146),
-    ...extra,
-    time: diracNowIso()
-  };
-  try { console.error('[dirac-recovery-hpke-env-v176]', JSON.stringify(payload)); } catch (_) {}
-}
-
-const DIRAC_RECOVERY_HPKE_ENV_HEADERS_V177 = 'recovery-hpke-env-headers-v177';
-
-function diracRecoveryHpkeDebugRequestHashV177(req) {
-  try {
-    const ctx = diracCentralCurrentContextV149();
-    const body = ctx && ctx.body && typeof ctx.body === 'object'
-      ? ctx.body
-      : req && req.__diracCentralParsedBodyV146 && typeof req.__diracCentralParsedBodyV146 === 'object'
-        ? req.__diracCentralParsedBodyV146
-        : {};
-    const requestId = customerSecurityNormalizeLostPasskeyRequestId(body.request_id || '');
-    return requestId ? customerSecurityLostPasskeySha256HexV157(requestId) : '';
-  } catch (_) {
-    return '';
-  }
-}
-
-function diracRecoveryHpkeSetSafeDebugHeadersV177(res, req, stage, reason, diagnosticsOverride) {
-  if (!diracRecoveryHpkeDebugEnabledV176() || !res || typeof res.setHeader !== 'function') return;
-  const diagnostics = diagnosticsOverride && typeof diagnosticsOverride === 'object'
-    ? diagnosticsOverride
-    : diracRecoveryHpkeSafeEnvDiagnosticsV176();
-  const falseEnv = Array.isArray(diagnostics.false_env) ? diagnostics.false_env : [];
-  const falseText = falseEnv.join(',').slice(0, 900);
-  const safeStage = String(stage || 'unknown').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 100);
-  const baseReason = String(reason || (falseEnv.length ? 'env_check_failed' : 'ok')).replace(/[\r\n\t]+/g, ' ').slice(0, 180);
-  const visibleReason = falseText ? (baseReason + ' | false=' + falseText).slice(0, 1000) : baseReason;
-  const requestHash = diracRecoveryHpkeDebugRequestHashV177(req);
-  const guardState = req && req.__diracCentralSecurityGuardPassedV146 === true ? 'passed' : 'not_completed';
-  try { res.setHeader('X-Dirac-Recovery-Debug-Enabled', '1'); } catch (_) {}
-  try { res.setHeader('X-Dirac-Recovery-Debug-Stage', safeStage); } catch (_) {}
-  try { res.setHeader('X-Dirac-Recovery-Debug-Reason', visibleReason); } catch (_) {}
-  try { res.setHeader('X-Dirac-Recovery-Debug-Guard', guardState); } catch (_) {}
-  try { res.setHeader('X-Dirac-Recovery-Debug-Request', requestHash); } catch (_) {}
-  try { res.setHeader('X-Dirac-Recovery-Debug-Env-False', falseText || 'none'); } catch (_) {}
-  try { res.setHeader('X-Dirac-Recovery-Debug-Version', DIRAC_RECOVERY_HPKE_ENV_HEADERS_V177); } catch (_) {}
 }
 
 function diracCentralStampV146(ctx, name) {
@@ -30033,19 +29800,17 @@ function diracRecoveryHpkeEnvGuardV159() {
     'DIRAC_RECOVERY_WORKER_CALLER',
     'DIRAC_RECOVERY_HPKE_ALLOWED_CALLER'
   ].filter((name) => diracRecoveryHpkeEnvTextV159(name));
-  const diagnostics = diracRecoveryHpkeSafeEnvDiagnosticsV176();
-  const fail = (reason) => ({ ok: false, reason, diagnostics });
 
-  if (!allowlist.has(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159)) return fail('vercel2_action_env_allowlist_missing');
-  if (role !== 'vercel2') return fail('vercel2_role_invalid');
-  if (server1OnlyEnv.length) return fail('server1_env_present_on_vercel2');
-  if (!workerSecret) return fail('worker_secret_invalid');
-  if (!privateKey || !keyId) return fail('hpke_key_env_invalid');
-  if (Buffer.byteLength(pepper, 'utf8') < 64) return fail('hpke_pepper_invalid');
-  if (!server1Url) return fail('server1_url_invalid');
-  if (!minimumMemory || !minimumTime) return fail('argon2_policy_invalid');
-  try { diracRecoveryHpkePrivateKeyV159(); } catch (_) { return fail('hpke_private_key_invalid'); }
-  return { ok: true, workerSecret, pepper, keyId, server1Url, minimumMemory, minimumTime, diagnostics };
+  if (!allowlist.has(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159)) return { ok: false, reason: 'vercel2_action_env_allowlist_missing' };
+  if (role !== 'vercel2') return { ok: false, reason: 'vercel2_role_invalid' };
+  if (server1OnlyEnv.length) return { ok: false, reason: 'server1_env_present_on_vercel2' };
+  if (!workerSecret) return { ok: false, reason: 'worker_secret_invalid' };
+  if (!privateKey || !keyId) return { ok: false, reason: 'hpke_key_env_invalid' };
+  if (Buffer.byteLength(pepper, 'utf8') < 64) return { ok: false, reason: 'hpke_pepper_invalid' };
+  if (!server1Url) return { ok: false, reason: 'server1_url_invalid' };
+  if (!minimumMemory || !minimumTime) return { ok: false, reason: 'argon2_policy_invalid' };
+  try { diracRecoveryHpkePrivateKeyV159(); } catch (_) { return { ok: false, reason: 'hpke_private_key_invalid' }; }
+  return { ok: true, workerSecret, pepper, keyId, server1Url, minimumMemory, minimumTime };
 }
 
 function diracRecoveryHpkeServer1UrlV159() {
@@ -30295,30 +30060,8 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
 
   const env = diracRecoveryHpkeEnvGuardV159();
   if (!env.ok) {
-    diracRecoveryHpkeSafeEnvLogV176('hpke_env_guard_rejected', req, {
-      rejection_reason: env.reason,
-      diagnostics: env.diagnostics || diracRecoveryHpkeSafeEnvDiagnosticsV176()
-    });
-    if (diracRecoveryHpkeDebugEnabledV176()) {
-      const diagnostics = env.diagnostics || diracRecoveryHpkeSafeEnvDiagnosticsV176();
-      diracRecoveryHpkeSetSafeDebugHeadersV177(res, req, 'hpke_env_guard', env.reason || 'hpke_env_invalid', diagnostics);
-      return res.status(503).json({
-        ok: false,
-        code: 'RECOVERY_HPKE_CONFIGURATION_INVALID',
-        message: 'Layanan recovery aman belum siap.',
-        debug: {
-          stage: 'hpke_env_guard',
-          reason: env.reason,
-          env: env.diagnostics || diracRecoveryHpkeSafeEnvDiagnosticsV176()
-        }
-      });
-    }
     return res.status(503).json({ ok: false, code: 'RECOVERY_HPKE_CONFIGURATION_INVALID', message: 'Layanan recovery aman belum siap.' });
   }
-  diracRecoveryHpkeSafeEnvLogV176('hpke_env_guard_passed', req, {
-    diagnostics: env.diagnostics
-  });
-  diracRecoveryHpkeSetSafeDebugHeadersV177(res, req, 'hpke_env_guard_passed', 'ok', env.diagnostics);
 
   const body = ctx.body && typeof ctx.body === 'object' && !Array.isArray(ctx.body) ? ctx.body : {};
   const envelope = diracRecoveryHpkeValidateEnvelopeV159(body);
