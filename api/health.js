@@ -6594,7 +6594,7 @@ function customerSecurityLostPasskeyArgon2ParamsV157(hashLength) {
   return {
     memoryCost: Math.max(LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157, Math.min(LOST_PASSKEY_ARGON2_MEMORY_MAX_KIB_V163, Number.isFinite(memoryRaw) ? Math.floor(memoryRaw) : 1024000)),
     timeCost: Math.max(3, Math.min(10, Number.isFinite(timeRaw) ? Math.floor(timeRaw) : 4)),
-    parallelism: Math.max(1, Math.min(8, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 4)),
+    parallelism: Math.max(1, Math.min(1, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 4)),
     hashLength: Math.max(32, Math.min(128, Number(hashLength || 32)))
   };
 }
@@ -6607,11 +6607,11 @@ function customerSecurityLostPasskeyLinkOpenArgon2ParamsV171(hashLength) {
   const main = customerSecurityLostPasskeyArgon2ParamsV157(hashLength);
   const memoryRaw = Number(process.env.DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_KIB || main.memoryCost);
   const timeRaw = Number(process.env.DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_TIME_COST || main.timeCost);
-  const parallelRaw = Number(process.env.DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_PARALLELISM || main.parallelism);
+  const parallelRaw = Number(process.env.DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_PARALLELISM || 1);
   return {
     memoryCost: Math.max(LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_MIN_KIB_V171, Math.min(LOST_PASSKEY_ARGON2_MEMORY_MAX_KIB_V163, Number.isFinite(memoryRaw) ? Math.floor(memoryRaw) : main.memoryCost)),
     timeCost: Math.max(2, Math.min(10, Number.isFinite(timeRaw) ? Math.floor(timeRaw) : main.timeCost)),
-    parallelism: Math.max(1, Math.min(8, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : main.parallelism)),
+    parallelism: Math.max(1, Math.min(1, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 1)),
     hashLength: Math.max(32, Math.min(128, Number(hashLength || 32)))
   };
 }
@@ -6773,6 +6773,57 @@ function customerSecurityLostPasskeyArgon2EncodedParamsV171(encodedHash) {
     timeCost: Number(match[2] || 0),
     parallelism: Number(match[3] || 0)
   };
+}
+
+const DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_DEBUG_V174 = 'lost-passkey-link-open-argon2-debug-v174';
+
+function customerSecurityLostPasskeyLinkOpenArgon2DebugEnabledV174() {
+  const value = String(process.env.DIRAC_LOST_PASSKEY_LINK_OPEN_DEBUG || '').trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on';
+}
+
+function customerSecurityLostPasskeyLinkOpenArgon2MemoryV174() {
+  try {
+    const usage = process.memoryUsage();
+    const toMiB = (value) => Math.round((Number(value || 0) / 1048576) * 100) / 100;
+    return {
+      rss_mib: toMiB(usage.rss),
+      heap_used_mib: toMiB(usage.heapUsed),
+      heap_total_mib: toMiB(usage.heapTotal),
+      external_mib: toMiB(usage.external),
+      array_buffers_mib: toMiB(usage.arrayBuffers)
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function customerSecurityLostPasskeyLinkOpenArgon2ErrorV174(error) {
+  const name = String(error && error.name || '').slice(0, 80);
+  const code = String(error && error.code || '').slice(0, 80);
+  const message = String(error && error.message || error || '').replace(/[\r\n\t]+/g, ' ').slice(0, 240);
+  const inspect = (name + ' ' + code + ' ' + message).toLowerCase();
+  let errorClass = 'ARGON2_RUNTIME_ERROR';
+  if (/out of memory|memory allocation|cannot allocate|allocation failed|enomem|napi_generic_failure/.test(inspect)) errorClass = 'ARGON2_MEMORY_OR_ALLOCATION_ERROR';
+  else if (/invalid hash|decoding failed|argon2.*verify|verify.*failed/.test(inspect)) errorClass = 'ARGON2_VERIFY_RUNTIME_ERROR';
+  return { error_class: errorClass, error_name: name || null, error_code: code || null, error_message: message || null };
+}
+
+function customerSecurityLostPasskeyLinkOpenArgon2DebugV174(event, req, requestId, encodedHash, startedAt, extra = {}, force = false) {
+  if (!force && !customerSecurityLostPasskeyLinkOpenArgon2DebugEnabledV174()) return;
+  const params = customerSecurityLostPasskeyArgon2EncodedParamsV171(encodedHash);
+  const payload = {
+    diagnostic_version: DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_DEBUG_V174,
+    event: String(event || 'argon2_verify_unknown').slice(0, 80),
+    request_id_hash: customerSecurityLostPasskeySha256HexV157(String(requestId || '')),
+    central_guard_passed: diracCentralGuardPassedForHandlerV168(req),
+    argon2id_params: params,
+    elapsed_ms: Number.isFinite(Number(startedAt)) ? Math.max(0, Date.now() - Number(startedAt)) : null,
+    memory: customerSecurityLostPasskeyLinkOpenArgon2MemoryV174(),
+    ...extra,
+    time: diracNowIso()
+  };
+  try { console.error('[dirac-lost-passkey-link-argon2-v174]', JSON.stringify(payload)); } catch (_) {}
 }
 
 async function customerSecurityLostPasskeyArgon2VerifyHashV157(label, value, encodedHash, pepper, rootSecret) {
@@ -7028,7 +7079,33 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   const linkTokenHash = String(metadata.link_token_hash || '');
   if (!row || !row.id || !linkTokenHash.startsWith('$argon2id$')) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
 
-  const tokenOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('link_token', parsed.linkToken, linkTokenHash, vaultSecrets.pepper, vaultSecrets.rootSecret).catch(() => false);
+  const argon2VerifyStartedAt = Date.now();
+  customerSecurityLostPasskeyLinkOpenArgon2DebugV174('argon2_verify_start', req, parsed.requestId, linkTokenHash, argon2VerifyStartedAt);
+
+  let tokenOk = false;
+  try {
+    tokenOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('link_token', parsed.linkToken, linkTokenHash, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  } catch (error) {
+    customerSecurityLostPasskeyLinkOpenArgon2DebugV174(
+      'argon2_verify_error',
+      req,
+      parsed.requestId,
+      linkTokenHash,
+      argon2VerifyStartedAt,
+      customerSecurityLostPasskeyLinkOpenArgon2ErrorV174(error),
+      true
+    );
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
+  }
+
+  customerSecurityLostPasskeyLinkOpenArgon2DebugV174(
+    tokenOk ? 'argon2_verify_match' : 'argon2_verify_mismatch',
+    req,
+    parsed.requestId,
+    linkTokenHash,
+    argon2VerifyStartedAt
+  );
+
   if (!tokenOk) {
     try { console.warn('[dirac-lost-passkey-link-v162]', JSON.stringify({ event: 'invalid_link_token', request_id_hash: customerSecurityLostPasskeySha256HexV157(parsed.requestId), time: diracNowIso() })); } catch (_) {}
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
