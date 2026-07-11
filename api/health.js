@@ -24472,6 +24472,11 @@ try {
       add(process.env.DOMAIN_SITE_URL);
       add(process.env.SITE_URL);
 
+      const server2RecoveryOnly = /^(vercel2)$/i.test(
+        String(process.env.DIRAC_CENTRAL_DEPLOYMENT_ROLE || process.env.DIRAC_DEPLOYMENT_ROLE || '').trim()
+      );
+      if (server2RecoveryOnly) add('https://secure.diracgroup.store');
+
       // Produksi paling ketat: tidak lagi menerima hardcoded preview Vercel.
       // Tambahan origin hanya diterima bila sengaja diaktifkan lewat ENV ini.
       if (diracV136EnvTrue('DIRAC_STRICT_ALLOW_EXTRA_ORIGINS')) {
@@ -25438,18 +25443,6 @@ function diracV143DetectOriginThreat(req, action, method) {
 
   const headers = (req && req.headers) || {};
   const origin = diracV143NormalizeOrigin(headers.origin || headers.Origin || '');
-  const secFetchSite = String(headers['sec-fetch-site'] || '').toLowerCase();
-
-  if (cleanAction === 'customer_security_recovery_hpke_verify') {
-    if (origin !== 'https://secure.diracgroup.store') {
-      return { detected: true, kind: 'origin_not_allowed', source: 'origin', risk: 'critical', status: 403 };
-    }
-    if (secFetchSite !== 'same-origin') {
-      return { detected: true, kind: 'cross_site_unsafe_request', source: 'sec_fetch', risk: 'critical', status: 403 };
-    }
-    return { detected: false };
-  }
-
   const refererOrigin = diracV143NormalizeOrigin(headers.referer || headers.Referer || headers.referrer || '');
   const effectiveOrigin = origin || refererOrigin;
   const allowed = diracV143AllowedOrigins();
@@ -25458,6 +25451,7 @@ function diracV143DetectOriginThreat(req, action, method) {
     return { detected: true, kind: 'origin_not_allowed', source: 'origin', risk: 'critical', status: 403 };
   }
 
+  const secFetchSite = String(headers['sec-fetch-site'] || '').toLowerCase();
   if (secFetchSite === 'cross-site' && cleanMethod !== 'GET' && cleanMethod !== 'HEAD') {
     return { detected: true, kind: 'cross_site_unsafe_request', source: 'sec_fetch', risk: 'critical', status: 403 };
   }
@@ -26611,7 +26605,7 @@ module.exports = async function diracRecoveryWorkerWrapper(req, res) {
   if (action === DIRAC_RECOVERY_WORKER_ACTION) {
     return customerSecurityHandleRecoveryWorkerGenerate(req, res, action);
   }
-  if (customerSecurityRecoveryWorkerLocalEnabled() && action !== 'customer_security_recovery_hpke_verify') {
+  if (customerSecurityRecoveryWorkerLocalEnabled()) {
     return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_ONLY', message: 'Endpoint worker hanya menerima action internal recovery.' });
   }
   return __diracRecoveryWorkerPreviousHandler(req, res);
