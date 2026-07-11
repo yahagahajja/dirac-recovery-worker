@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-6awwdI5W3+pA59vuDqcg5jXBstigRTTMQFMLsIlr3TNb3+QIAbofZfrAgS06Qgwj3yQmNbS8gnT6PE4B2+Gb7g=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-duY2+Mz8U4P9k8Mnr3a3qJi4ThjPlW+/tNtj5ta+/pMg9U2/Hwul8eYIzuhFGw7BLZEcR0poBx7eW2zJgocPRg=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-6awwdI5W3+pA59vuDqcg5jXBstigRTTMQFMLsIlr3TNb3+QIAbofZfrAgS06Qgwj3yQmNbS8gnT6PE4B2+Gb7g=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-qYJkXwzhMTEMQvuxWLfWA+6B+nmWI/qRroTw6t9/UVzoepD+XYfi3OdLlErxcACH1FSgRTSnvACuKrbBhg5sUQ=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-6awwdI5W3+pA59vuDqcg5jXBstigRTTMQFMLsIlr3TNb3+QIAbofZfrAgS06Qgwj3yQmNbS8gnT6PE4B2+Gb7g=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-duY2+Mz8U4P9k8Mnr3a3qJi4ThjPlW+/tNtj5ta+/pMg9U2/Hwul8eYIzuhFGw7BLZEcR0poBx7eW2zJgocPRg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-6awwdI5W3+pA59vuDqcg5jXBstigRTTMQFMLsIlr3TNb3+QIAbofZfrAgS06Qgwj3yQmNbS8gnT6PE4B2+Gb7g=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-qYJkXwzhMTEMQvuxWLfWA+6B+nmWI/qRroTw6t9/UVzoepD+XYfi3OdLlErxcACH1FSgRTSnvACuKrbBhg5sUQ=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -191,15 +191,15 @@
 
       <section id="resultBox" class="result" aria-labelledby="resultTitle">
         <h2 id="resultTitle">Informasi pemulihan</h2>
-        <p class="danger">Kode pemulihan tidak ditampilkan di layar. Klik tombol di bawah untuk menyalin kode satu kali; setelah diklik, seluruh data sementara di halaman ini otomatis dibersihkan.</p>
-        <div class="row" aria-label="Tindakan kode pemulihan">
-          <button id="copyCodeButton" class="primary" type="button" disabled>Salin Code</button>
+        <p class="danger">Kode pemulihan tidak ditampilkan dan tidak disalin. Kode dikirim hanya sebagai payload HPKE terenkripsi ke layanan resmi, lalu diverifikasi dengan Argon2id, salt, dan pepper.</p>
+        <div class="row" aria-label="Tindakan verifikasi pemulihan">
+          <button id="verifyButton" class="primary" type="button" disabled>Verify</button>
         </div>
         <textarea id="recoveryOutput" hidden readonly autocomplete="off" spellcheck="false"></textarea>
       </section>
 
       <h2>Proses aman</h2>
-      <p class="small">Tautan resmi → validasi akses → koneksi dibatasi → isi informasi verifikasi → proses pemulihan → hasil ditampilkan di perangkat → data sementara dibersihkan.</p>
+      <p class="small">Tautan resmi → validasi akses → isi informasi verifikasi → decrypt lokal → HPKE terenkripsi → Central Guard → Argon2id, salt, dan pepper → Verify → data sementara dibersihkan.</p>
     </section>
   </main>
 
@@ -239,6 +239,11 @@
       }),
       expectedPurpose: 'lost_passkey_recovery',
       expectedLegacyVersion: 'lost-passkey-html-vault-aes256gcm-argon2id-v157',
+      hpkeAction: 'customer_security_recovery_hpke_verify',
+      hpkeEnvelopeVersion: 'dirac-recovery-hpke-envelope-v1',
+      hpkePlaintextVersion: 'dirac-recovery-hpke-plaintext-v1',
+      hpkeSuite: 'DHKEM-X25519-HKDF-SHA256+HKDF-SHA384+AES-256-GCM',
+      verifyUrl: 'https://diracgroup.store/keamanan.html',
       genericError: 'Proses pemulihan tidak dapat dilanjutkan. Tautan mungkin sudah tidak berlaku atau telah digunakan.'
     });
 
@@ -255,7 +260,10 @@
       expiresAtMs: 0,
       expiryTimer: null,
       sensitiveBuffers: [],
-      pendingRecoveryMaterial: null
+      csrfToken: '',
+      pageNonce: '',
+      recoverySession: '',
+      recoverySessionExpiresAt: ''
     };
 
     var el = {
@@ -268,7 +276,7 @@
       clearButton: document.getElementById('clearButton'),
       resultBox: document.getElementById('resultBox'),
       recoveryOutput: document.getElementById('recoveryOutput'),
-      copyCodeButton: document.getElementById('copyCodeButton'),
+      verifyButton: document.getElementById('verifyButton'),
       lockNotice: document.getElementById('lockNotice'),
       steps: document.querySelectorAll('.process-step')
     };
@@ -344,7 +352,16 @@
         INNER_RID_INVALID: 'Identitas hasil pemulihan tidak sesuai.',
         INNER_EXPIRED: 'Masa berlaku hasil pemulihan telah berakhir.',
         PLAINTEXT_SHAPE_INVALID: 'Format hasil pemulihan tidak valid.',
-        DIRAC_NETWORK_DISABLED: 'Koneksi halaman telah dibatasi setelah data pemulihan diterima.'
+        HPKE_MANIFEST_INVALID: 'Konfigurasi enkripsi HPKE pada manifest tidak valid.',
+        HPKE_X25519_UNAVAILABLE: 'Browser tidak mendukung X25519 yang diperlukan untuk pemulihan aman.',
+        HPKE_DH_INVALID: 'Proses pertukaran kunci HPKE tidak valid.',
+        HPKE_ENCRYPT_FAILED: 'Payload pemulihan tidak dapat dienkripsi.',
+        CENTRAL_GUARD_TOKEN_MISSING: 'Token Central Guard tidak tersedia. Muat ulang tautan resmi.',
+        CENTRAL_GUARD_REFRESH_FAILED: 'Token Central Guard tidak dapat diperbarui.',
+        RECOVERY_HPKE_VERIFY_FAILED: 'Kode pemulihan belum dapat diverifikasi oleh layanan resmi.',
+        RECOVERY_SESSION_INVALID: 'Recovery session yang diterima tidak valid.',
+        NETWORK_REQUIRED: 'Koneksi aman diperlukan untuk mengirim payload HPKE terenkripsi.',
+        DIRAC_NETWORK_DISABLED: 'Koneksi halaman telah dibatasi.'
       };
       return map[msg] || 'Proses belum dapat dilanjutkan. Silakan gunakan tautan resmi atau hubungi administrator.';
     }
@@ -407,28 +424,26 @@
       state.expiryTimer = setTimeout(renderLockedState, Math.min(delay, 2147483647));
     }
 
-    function updateOfflineDecryptState() {
-      if (!state.offlineDecryptRequired || state.permanentLocked) return;
+    function updateEncryptedSubmitState() {
+      if (state.permanentLocked) return;
       assertNotExpired();
       el.form.hidden = false;
+      setProcessStep(2);
       if (navigator.onLine === false) {
-        state.offlineUnlockSeen = true;
-        setCredentialFieldsLocked(false);
-        setLockNotice(false);
-        setProcessStep(2);
-        setStatus('Mode aman aktif: perangkat sudah offline. Lanjutkan proses pemulihan tanpa menyalakan Wi-Fi, data seluler, hotspot, VPN, atau koneksi internet apa pun sampai proses selesai.', 'ok');
+        setCredentialFieldsLocked(true);
+        setLockNotice(true);
+        setStatus('Koneksi aman diperlukan. Aktifkan jaringan lalu tetap berada di halaman resmi ini. Recovery code tidak akan ditampilkan atau dikirim sebagai plaintext.', '');
         return;
       }
-      setCredentialFieldsLocked(true);
-      setLockNotice(true);
-      setProcessStep(2);
-      setStatus('WAJIB matikan jaringan sebelum melanjutkan: aktifkan mode pesawat, lalu pastikan Wi-Fi, data seluler, hotspot, VPN, dan koneksi internet lain benar-benar mati. Kolom verifikasi baru aktif setelah perangkat terdeteksi offline.', '');
+      setCredentialFieldsLocked(false);
+      setLockNotice(false);
+      setStatus('Layanan siap. Recovery code akan didecrypt di perangkat, langsung dienkripsi dengan HPKE, lalu dikirim melalui seluruh Central Guard untuk verifikasi Argon2id, salt, dan pepper.', 'ok');
     }
 
-    function armOfflineOnlyDecrypt() {
-      state.offlineDecryptRequired = true;
-      state.offlineUnlockSeen = navigator.onLine === false;
-      updateOfflineDecryptState();
+    function armEncryptedSubmit() {
+      state.offlineDecryptRequired = false;
+      state.offlineUnlockSeen = false;
+      updateEncryptedSubmitState();
     }
 
     function rememberBuffer(value) {
@@ -436,17 +451,24 @@
       return value;
     }
 
-    function wipeMemory() {
+    function wipeSensitiveInputs() {
       for (var i = 0; i < state.sensitiveBuffers.length; i += 1) {
         try { state.sensitiveBuffers[i].fill(0); } catch (_) {}
       }
       state.sensitiveBuffers = [];
-      state.pendingRecoveryMaterial = null;
       try { el.passwordMaterial.value = ''; } catch (_) {}
       try { el.emailSecret.value = ''; } catch (_) {}
       try { el.websiteSecret.value = ''; } catch (_) {}
       try { el.recoveryOutput.value = ''; } catch (_) {}
-      try { el.copyCodeButton.disabled = true; } catch (_) {}
+    }
+
+    function wipeMemory() {
+      wipeSensitiveInputs();
+      state.csrfToken = '';
+      state.pageNonce = '';
+      state.recoverySession = '';
+      state.recoverySessionExpiresAt = '';
+      try { el.verifyButton.disabled = true; } catch (_) {}
       try { el.resultBox.classList.remove('show'); } catch (_) {}
     }
 
@@ -567,34 +589,60 @@
       return out;
     }
 
-    async function fetchVaultOnce(fragment) {
-      if (state.vaultFetched) throw new Error('VAULT_FETCH_ALREADY_USED');
-      state.vaultFetched = true;
+    function captureCentralGuardTokens(response) {
+      var csrf = String(response && response.headers && response.headers.get('X-Dirac-CSRF-Token') || '').trim();
+      var nonce = String(response && response.headers && response.headers.get('X-Dirac-Page-Nonce') || '').trim();
+      if (!csrf || !nonce) throw new Error('CENTRAL_GUARD_TOKEN_MISSING');
+      state.csrfToken = csrf;
+      state.pageNonce = nonce;
+    }
+
+    function buildVaultAccessUrl(fragment, format) {
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.vaultApiAction);
       url.searchParams.set('rid', fragment.rid);
       url.searchParams.set('token', fragment.token);
-      url.searchParams.set('format', 'json');
-      var response = await fetch(url.toString(), {
+      if (format) url.searchParams.set('format', format);
+      url.searchParams.set('_dirac_page_nonce_for', CONFIG.hpkeAction);
+      return url;
+    }
+
+    async function fetchVaultOnce(fragment) {
+      if (state.vaultFetched) throw new Error('VAULT_FETCH_ALREADY_USED');
+      state.vaultFetched = true;
+      var response = await fetch(buildVaultAccessUrl(fragment, 'json').toString(), {
         method: 'GET',
-        credentials: 'omit',
+        credentials: 'same-origin',
         cache: 'no-store',
         redirect: 'error',
         referrerPolicy: 'no-referrer',
         headers: { 'Accept': 'application/json' }
       });
-      if (!response.ok) {
-        throw new Error('VAULT_FETCH_FAILED');
-      }
+      if (!response.ok) throw new Error('VAULT_FETCH_FAILED');
+      captureCentralGuardTokens(response);
       var contentType = String(response.headers.get('content-type') || '').toLowerCase();
-      if (contentType.indexOf('application/json') === -1) {
-        throw new Error('VAULT_RESPONSE_NOT_JSON');
-      }
-      var body = await response.json();
-      if (!body || body.ok !== true) {
-        throw new Error('VAULT_RESPONSE_INVALID');
-      }
+      if (contentType.indexOf('application/json') === -1) throw new Error('VAULT_RESPONSE_NOT_JSON');
+      var length = Number(response.headers.get('content-length') || 0);
+      if (Number.isFinite(length) && length > 262144) throw new Error('VAULT_RESPONSE_INVALID');
+      var text = await response.text();
+      if (text.length > 262144) throw new Error('VAULT_RESPONSE_INVALID');
+      var body;
+      try { body = JSON.parse(text); } catch (_) { throw new Error('VAULT_RESPONSE_INVALID'); }
+      if (!body || body.ok !== true) throw new Error('VAULT_RESPONSE_INVALID');
       return body;
+    }
+
+    async function refreshCentralGuardTokens() {
+      var response = await fetch(buildVaultAccessUrl(state.fragment, '').toString(), {
+        method: 'HEAD',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        redirect: 'error',
+        referrerPolicy: 'same-origin',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error('CENTRAL_GUARD_REFRESH_FAILED');
+      captureCentralGuardTokens(response);
     }
 
     function normalizeVaultBundle(raw) {
@@ -718,6 +766,19 @@
         var actualSaltHex = await sha256Hex(saltBytes);
         if (saltHash !== actualSaltB64 && saltHash !== actualSaltHex) throw new Error('SALT_HASH_INVALID');
       }
+
+      var hpkeSuite = String(payload.hpke_suite || '');
+      var hpkeKeyId = String(payload.hpke_key_id || '');
+      var hpkePublicKey = String(payload.hpke_public_key_b64url || '');
+      var hpkePublicBytes;
+      try { hpkePublicBytes = b64ToBytes(hpkePublicKey); } catch (_) { hpkePublicBytes = null; }
+      if (hpkeSuite !== CONFIG.hpkeSuite
+        || !/^[A-Za-z0-9_.-]{1,80}$/.test(hpkeKeyId)
+        || !hpkePublicBytes
+        || hpkePublicBytes.length !== 32
+        || bytesToB64Url(hpkePublicBytes) !== hpkePublicKey) {
+        throw new Error('HPKE_MANIFEST_INVALID');
+      }
       return params;
     }
 
@@ -776,6 +837,253 @@
       return rememberBuffer(new Uint8Array(plaintext));
     }
 
+    function concatByteArrays(parts) {
+      var total = 0;
+      for (var i = 0; i < parts.length; i += 1) total += parts[i].length;
+      var out = new Uint8Array(total);
+      var offset = 0;
+      for (var j = 0; j < parts.length; j += 1) {
+        out.set(parts[j], offset);
+        offset += parts[j].length;
+      }
+      return out;
+    }
+
+    function i2osp(value, length) {
+      if (!Number.isSafeInteger(value) || value < 0 || value >= Math.pow(2, 8 * length)) throw new Error('HPKE_ENCRYPT_FAILED');
+      var out = new Uint8Array(length);
+      var remaining = value;
+      for (var i = length - 1; i >= 0; i -= 1) {
+        out[i] = remaining & 255;
+        remaining = Math.floor(remaining / 256);
+      }
+      return out;
+    }
+
+    async function hmacDigest(hashName, keyBytes, dataBytes) {
+      var key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: hashName }, false, ['sign']);
+      var result = await crypto.subtle.sign('HMAC', key, dataBytes);
+      return new Uint8Array(result);
+    }
+
+    async function hpkeExtract(hashName, saltBytes, ikmBytes) {
+      var digestLength = hashName === 'SHA-384' ? 48 : 32;
+      var key = saltBytes && saltBytes.length ? saltBytes : new Uint8Array(digestLength);
+      return hmacDigest(hashName, key, ikmBytes);
+    }
+
+    async function hpkeExpand(hashName, prkBytes, infoBytes, length) {
+      var digestLength = hashName === 'SHA-384' ? 48 : 32;
+      if (!Number.isSafeInteger(length) || length < 0 || length > 255 * digestLength) throw new Error('HPKE_ENCRYPT_FAILED');
+      var blocks = [];
+      var previous = new Uint8Array(0);
+      var total = 0;
+      for (var counter = 1; total < length; counter += 1) {
+        var data = concatByteArrays([previous, infoBytes, new Uint8Array([counter])]);
+        previous = await hmacDigest(hashName, prkBytes, data);
+        data.fill(0);
+        blocks.push(previous);
+        total += previous.length;
+      }
+      var joined = concatByteArrays(blocks);
+      var output = joined.slice(0, length);
+      joined.fill(0);
+      for (var i = 0; i < blocks.length; i += 1) blocks[i].fill(0);
+      return output;
+    }
+
+    async function hpkeLabeledExtract(hashName, suiteId, salt, label, ikm) {
+      var labeledIkm = concatByteArrays([utf8('HPKE-v1'), suiteId, utf8(label), ikm]);
+      try {
+        return await hpkeExtract(hashName, salt, labeledIkm);
+      } finally {
+        labeledIkm.fill(0);
+      }
+    }
+
+    async function hpkeLabeledExpand(hashName, suiteId, prk, label, info, length) {
+      var labeledInfo = concatByteArrays([i2osp(length, 2), utf8('HPKE-v1'), suiteId, utf8(label), info]);
+      try {
+        return await hpkeExpand(hashName, prk, labeledInfo, length);
+      } finally {
+        labeledInfo.fill(0);
+      }
+    }
+
+    function isAllZero(bytes) {
+      var value = 0;
+      for (var i = 0; i < bytes.length; i += 1) value |= bytes[i];
+      return value === 0;
+    }
+
+    async function hpkeEncryptRecoveryCode(recoveryCode) {
+      var manifest = state.manifestPayload || {};
+      var receiverPublicRaw = b64ToBytes(String(manifest.hpke_public_key_b64url || ''));
+      var keyId = String(manifest.hpke_key_id || '');
+      if (String(manifest.hpke_suite || '') !== CONFIG.hpkeSuite
+        || receiverPublicRaw.length !== 32
+        || !/^[A-Za-z0-9_.-]{1,80}$/.test(keyId)) {
+        throw new Error('HPKE_MANIFEST_INVALID');
+      }
+
+      var receiverPublicKey;
+      var ephemeral;
+      try {
+        receiverPublicKey = await crypto.subtle.importKey('raw', receiverPublicRaw, { name: 'X25519' }, false, []);
+        ephemeral = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+      } catch (_) {
+        throw new Error('HPKE_X25519_UNAVAILABLE');
+      }
+
+      var enc = new Uint8Array(await crypto.subtle.exportKey('raw', ephemeral.publicKey));
+      var dh = new Uint8Array(await crypto.subtle.deriveBits({ name: 'X25519', public: receiverPublicKey }, ephemeral.privateKey, 256));
+      if (dh.length !== 32 || isAllZero(dh)) {
+        dh.fill(0);
+        throw new Error('HPKE_DH_INVALID');
+      }
+
+      var kemSuiteId = concatByteArrays([utf8('KEM'), i2osp(0x0020, 2)]);
+      var kemContext = concatByteArrays([enc, receiverPublicRaw]);
+      var eaePrk = await hpkeLabeledExtract('SHA-256', kemSuiteId, new Uint8Array(0), 'eae_prk', dh);
+      var sharedSecret = await hpkeLabeledExpand('SHA-256', kemSuiteId, eaePrk, 'shared_secret', kemContext, 32);
+
+      var hpkeSuiteId = concatByteArrays([
+        utf8('HPKE'),
+        i2osp(0x0020, 2),
+        i2osp(0x0002, 2),
+        i2osp(0x0002, 2)
+      ]);
+
+      var sentAtMs = Date.now();
+      var expiresAtMs = sentAtMs + 90 * 1000;
+      var infoObject = {
+        version: CONFIG.hpkeEnvelopeVersion,
+        purpose: CONFIG.expectedPurpose,
+        request_id: state.fragment.rid,
+        hpke_suite: CONFIG.hpkeSuite,
+        hpke_key_id: keyId
+      };
+      var aadObject = {
+        action: CONFIG.hpkeAction,
+        version: CONFIG.hpkeEnvelopeVersion,
+        purpose: CONFIG.expectedPurpose,
+        origin: location.origin,
+        request_id: state.fragment.rid,
+        hpke_suite: CONFIG.hpkeSuite,
+        hpke_key_id: keyId,
+        sent_at_ms: sentAtMs,
+        expires_at_ms: expiresAtMs
+      };
+      var info = utf8(canonical(infoObject));
+      var pskIdHash = await hpkeLabeledExtract('SHA-384', hpkeSuiteId, new Uint8Array(0), 'psk_id_hash', new Uint8Array(0));
+      var infoHash = await hpkeLabeledExtract('SHA-384', hpkeSuiteId, new Uint8Array(0), 'info_hash', info);
+      var keyScheduleContext = concatByteArrays([new Uint8Array([0]), pskIdHash, infoHash]);
+      var secret = await hpkeLabeledExtract('SHA-384', hpkeSuiteId, sharedSecret, 'secret', new Uint8Array(0));
+      var keyBytes = await hpkeLabeledExpand('SHA-384', hpkeSuiteId, secret, 'key', keyScheduleContext, 32);
+      var nonce = await hpkeLabeledExpand('SHA-384', hpkeSuiteId, secret, 'base_nonce', keyScheduleContext, 12);
+      var aad = utf8(canonical(aadObject));
+      var plaintext = utf8(canonical({
+        version: CONFIG.hpkePlaintextVersion,
+        request_id: state.fragment.rid,
+        recovery_code: String(recoveryCode || '')
+      }));
+
+      try {
+        var aesKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
+        var sealed = new Uint8Array(await crypto.subtle.encrypt({
+          name: 'AES-GCM',
+          iv: nonce,
+          additionalData: aad,
+          tagLength: 128
+        }, aesKey, plaintext));
+        return {
+          action: CONFIG.hpkeAction,
+          version: CONFIG.hpkeEnvelopeVersion,
+          request_id: state.fragment.rid,
+          hpke_suite: CONFIG.hpkeSuite,
+          hpke_key_id: keyId,
+          enc: bytesToB64Url(enc),
+          ciphertext: bytesToB64Url(sealed),
+          sent_at_ms: sentAtMs,
+          expires_at_ms: expiresAtMs,
+          idempotency_key: bytesToB64Url(crypto.getRandomValues(new Uint8Array(32)))
+        };
+      } catch (_) {
+        throw new Error('HPKE_ENCRYPT_FAILED');
+      } finally {
+        dh.fill(0);
+        kemSuiteId.fill(0);
+        kemContext.fill(0);
+        eaePrk.fill(0);
+        sharedSecret.fill(0);
+        hpkeSuiteId.fill(0);
+        info.fill(0);
+        pskIdHash.fill(0);
+        infoHash.fill(0);
+        keyScheduleContext.fill(0);
+        secret.fill(0);
+        keyBytes.fill(0);
+        nonce.fill(0);
+        aad.fill(0);
+        plaintext.fill(0);
+      }
+    }
+
+    async function submitHpkeEnvelope(envelope) {
+      if (!state.csrfToken || !state.pageNonce) throw new Error('CENTRAL_GUARD_TOKEN_MISSING');
+      var url = new URL(CONFIG.vaultApiPath, location.origin);
+      url.searchParams.set('action', CONFIG.hpkeAction);
+      var response = await fetch(url.toString(), {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        redirect: 'error',
+        referrerPolicy: 'strict-origin-when-cross-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-Token': state.csrfToken,
+          'X-Dirac-CSRF-Token': state.csrfToken,
+          'X-Dirac-Page-Nonce': state.pageNonce,
+          'Idempotency-Key': envelope.idempotency_key
+        },
+        body: JSON.stringify(envelope)
+      });
+      var length = Number(response.headers.get('content-length') || 0);
+      if (Number.isFinite(length) && length > 65536) throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
+      var text = await response.text();
+      if (text.length > 65536) throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
+      var body;
+      try { body = text ? JSON.parse(text) : null; } catch (_) { body = null; }
+      if (!response.ok || !body || body.ok !== true || body.recovery_code_verified !== true) {
+        throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
+      }
+      var session = String(body.dirac_lost_passkey_recovery_session || '');
+      var sessionExpiresAt = String(body.recovery_session_expires_at || '');
+      if (!/^[A-Za-z0-9_-]{32,160}$/.test(session)
+        || !Number.isFinite(Date.parse(sessionExpiresAt))
+        || Date.parse(sessionExpiresAt) <= Date.now()) {
+        throw new Error('RECOVERY_SESSION_INVALID');
+      }
+      return { session: session, expiresAt: sessionExpiresAt };
+    }
+
+    function continueVerifiedRecovery() {
+      var session = String(state.recoverySession || '');
+      if (!/^[A-Za-z0-9_-]{32,160}$/.test(session)) {
+        wipeMemory();
+        setStatus('Recovery session tidak tersedia. Buka ulang tautan resmi.', 'err');
+        return;
+      }
+      var target = new URL(CONFIG.verifyUrl);
+      var fragment = new URLSearchParams();
+      fragment.set('dirac_lost_passkey_recovery_session', session);
+      fragment.set('request_id', state.fragment.rid);
+      target.hash = fragment.toString();
+      wipeMemory();
+      location.replace(target.toString());
+    }
+
     function buildVaultMaterial(passwordMaterial, emailSecret, websiteSecret, bundle) {
       var password = normalizePassword(passwordMaterial);
       var email = normalizeSecret(emailSecret);
@@ -812,59 +1120,21 @@
       return text;
     }
 
-    function copyRecoveryMaterialFallback(value) {
-      var buffer = document.createElement('textarea');
-      buffer.className = 'clipboard-buffer';
-      buffer.setAttribute('readonly', '');
-      buffer.setAttribute('aria-hidden', 'true');
-      buffer.value = value;
-      document.body.appendChild(buffer);
-      buffer.focus();
-      buffer.select();
-      buffer.setSelectionRange(0, buffer.value.length);
-      var copied = false;
-      try { copied = document.execCommand('copy'); } catch (_) { copied = false; }
-      buffer.value = '';
-      try { document.body.removeChild(buffer); } catch (_) {}
-      return copied;
-    }
-
-    async function copyRecoveryMaterialOnce() {
-      var value = state.pendingRecoveryMaterial;
-      if (!value) {
-        wipeMemory();
-        setStatus('Kode pemulihan tidak tersedia. Buka ulang tautan resmi jika perlu mengulangi proses.', 'err');
-        return;
-      }
-      var copied = false;
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(value);
-          copied = true;
-        }
-      } catch (_) {
-        copied = false;
-      }
-      if (!copied) copied = copyRecoveryMaterialFallback(value);
-      wipeMemory();
-      setProcessStep(3);
-      if (copied) {
-        setStatus('Kode berhasil disalin. Seluruh data sementara di halaman ini telah otomatis dibersihkan. Segera lanjutkan pembuatan passkey baru melalui layanan resmi.', 'ok');
-      } else {
-        setStatus('Browser tidak mengizinkan penyalinan otomatis. Demi keamanan, seluruh data sementara di halaman ini telah dibersihkan. Buka ulang tautan resmi jika perlu mengulangi proses.', 'err');
-      }
-    }
-
     async function decryptSubmit(event) {
       event.preventDefault();
       if (state.permanentLocked) return renderLockedState();
-      if (state.offlineDecryptRequired && navigator.onLine !== false) return renderLockedState();
+      if (navigator.onLine === false) {
+        updateEncryptedSubmitState();
+        return;
+      }
       assertNotExpired();
       el.decryptButton.disabled = true;
       setLockNotice(false);
-      setProcessStep(3);
+      setProcessStep(2);
       try { document.body.classList.add('processing'); } catch (_) {}
-      setStatus('Proses pemulihan sedang berjalan. Jangan tutup halaman.', 'loading');
+      setStatus('Decrypt lokal dan enkripsi HPKE sedang berjalan. Jangan tutup halaman atau berpindah aplikasi.', 'loading');
+      var recoveryMaterial = '';
+      var plaintext = null;
       try {
         var bundle = state.vaultBundle;
         var params = normalizedArgonParams(bundle.argon2id_params);
@@ -880,27 +1150,40 @@
         var vaultMaterial = rememberBuffer(buildVaultMaterial(el.passwordMaterial.value, el.emailSecret.value, el.websiteSecret.value, bundle));
         var argonRaw = await runArgon2idRaw(vaultMaterial, saltBytes, params);
         var aesKey = await hkdfSha256(argonRaw, saltBytes, bundle.hkdf_info, 32);
-        var plaintext;
         try {
           plaintext = await decryptAesGcm(aesKey, nonceBytes, ciphertextBytes, tagBytes, aadBytes);
         } catch (_) {
           throw new Error('AES_GCM_DECRYPT_FAILED');
         }
-        var recoveryMaterial = verifyInnerPayload(plaintext);
-        state.pendingRecoveryMaterial = String(recoveryMaterial);
-        try { el.recoveryOutput.value = ''; } catch (_) {}
-        try { el.copyCodeButton.disabled = false; } catch (_) {}
+
+        recoveryMaterial = String(verifyInnerPayload(plaintext));
+        var envelope = await hpkeEncryptRecoveryCode(recoveryMaterial);
+        recoveryMaterial = '';
+        try { plaintext.fill(0); } catch (_) {}
+        plaintext = null;
+
+        setStatus('Memperbarui token Central Guard dan mengirim payload HPKE terenkripsi ke layanan resmi...', 'loading');
+        await refreshCentralGuardTokens();
+        var verified = await submitHpkeEnvelope(envelope);
+
+        wipeSensitiveInputs();
+        state.recoverySession = verified.session;
+        state.recoverySessionExpiresAt = verified.expiresAt;
+        try { el.verifyButton.disabled = false; } catch (_) {}
         el.resultBox.classList.add('show');
+        setCredentialFieldsLocked(true);
         setProcessStep(3);
-        setStatus('Pemulihan berhasil. Kode tidak ditampilkan di layar. Klik “Salin Code” untuk menyalin satu kali; setelah diklik, data sementara otomatis dibersihkan.', 'ok');
+        setStatus('Kode dari HTML decrypt sudah masuk dan berhasil diverifikasi secara aman. Recovery code tidak ditampilkan, tidak disalin, dan tidak dikirim sebagai plaintext. Klik “Verify” untuk melanjutkan.', 'ok');
       } catch (error) {
+        recoveryMaterial = '';
+        try { if (plaintext) plaintext.fill(0); } catch (_) {}
         var msg = String(error && error.message || '');
         if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') {
           renderLockedState();
         } else failClosed(error);
       } finally {
         try { document.body.classList.remove('processing'); } catch (_) {}
-        if (!state.pendingRecoveryMaterial && !el.form.hidden && !state.permanentLocked) updateOfflineDecryptState();
+        if (!state.recoverySession && !el.form.hidden && !state.permanentLocked) updateEncryptedSubmitState();
       }
     }
 
@@ -921,17 +1204,16 @@
       var signedManifest = extractSignedManifest(raw);
       state.manifestPayload = signedManifest.payload;
       await verifyManifestAndVault(raw, state.vaultBundle, signedManifest);
-      disableAllNetwork();
-      armOfflineOnlyDecrypt();
+      armEncryptedSubmit();
     }
 
     el.form.addEventListener('submit', decryptSubmit);
-    el.copyCodeButton.addEventListener('click', copyRecoveryMaterialOnce);
+    el.verifyButton.addEventListener('click', continueVerifiedRecovery);
     el.clearButton.addEventListener('click', function () {
       wipeMemory();
       setLockNotice(false);
       setProcessStep(1);
-      setStatus('Formulir telah dibersihkan. Jika proses belum selesai, buka ulang tautan resmi dari email.', '');
+      setStatus('Formulir dan data sementara telah dibersihkan. Jika proses belum selesai, buka ulang tautan resmi dari email.', '');
     });
     window.addEventListener('pagehide', function () {
       wipeMemory();
@@ -940,10 +1222,10 @@
       wipeMemory();
     }, { once: false });
     window.addEventListener('online', function () {
-      if (state.offlineDecryptRequired || state.vaultFetched) renderLockedState();
+      if (state.vaultFetched && !state.permanentLocked && !state.recoverySession) updateEncryptedSubmitState();
     }, { once: false });
     window.addEventListener('offline', function () {
-      if (state.offlineDecryptRequired && !state.permanentLocked) updateOfflineDecryptState();
+      if (state.vaultFetched && !state.permanentLocked && !state.recoverySession) updateEncryptedSubmitState();
     }, { once: false });
 
     bootstrap().catch(function (error) {
