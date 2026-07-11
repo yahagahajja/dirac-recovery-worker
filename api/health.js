@@ -6563,17 +6563,13 @@ function diracCentralRecoveryWorkerGuardFailV158(req, ctx, stage, reason, extra 
 }
 
 function customerSecurityRecoveryWorkerLocalEnabled() {
-  const role = diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE')
-    || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE');
-  const explicitlyAllowlisted = DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.has(DIRAC_RECOVERY_WORKER_ACTION);
-  const server1OnlyEnvPresent = [
-    'DIRAC_RECOVERY_WORKER_URL',
-    'DIRAC_RECOVERY_WORKER_CALLER',
-    'DIRAC_RECOVERY_HPKE_ALLOWED_CALLER'
-  ].some((name) => String(process.env[name] || '').trim());
-  return role === 'vercel2'
-    && explicitlyAllowlisted
-    && !server1OnlyEnvPresent
+  const server2Enabled = diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')
+    || diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED')
+    || diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') === 'vercel2'
+    || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE') === 'vercel2';
+  return server2Enabled
+    && !customerSecurityRecoveryWorkerUrl()
+    && !customerSecurityRecoveryWorkerCaller()
     && Boolean(customerSecurityRecoveryWorkerSecret())
     && Boolean(customerSecurityRecoveryWorkerAllowedCaller());
 }
@@ -27370,14 +27366,12 @@ function diracCentralVercel2OnlyActionGuardV150(action) {
   const vercel2OnlyActions = diracCentralVercel2OnlyActionsV150();
   if (!vercel2OnlyActions.has(clean)) return { ok: true };
 
-  const role = diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE')
-    || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE');
-  if (role !== 'vercel2') return { ok: false, reason: 'vercel2_only_action_blocked' };
-  if (!DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.has(clean)) {
-    return { ok: false, reason: 'vercel2_action_env_allowlist_missing' };
-  }
+  if (diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')) return { ok: true };
+  if (diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED')) return { ok: true };
+  if (diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') === 'vercel2') return { ok: true };
+  if (diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE') === 'vercel2') return { ok: true };
 
-  return { ok: true };
+  return { ok: false, reason: 'vercel2_only_action_blocked' };
 }
 
 function diracCentralIsServer2RecoveryOnlyActionV166(action) {
