@@ -30120,3 +30120,84 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
     else diracRecoveryHpkeReleaseEnvelopeV159(claim);
   }
 }
+
+/* ============================================================
+   LOST PASSKEY HPKE SIGNED MANIFEST BRIDGE v160 - APPEND ONLY
+   - Menambahkan public key X25519 dan key id ke manifest Ed25519 existing.
+   - Mengizinkan hanya parameter page nonce target pada action link existing.
+   - Tidak menambah endpoint dan tidak mengubah login, A2F/MFA, payment,
+     email, cookie, hash, atau handler lama.
+   ============================================================ */
+
+const DIRAC_RECOVERY_HPKE_MANIFEST_BRIDGE_V160 = 'dirac-recovery-hpke-signed-manifest-bridge-v160';
+
+const __diracRecoveryHpkePreviousContractV160 = diracCentralContractForActionV146;
+diracCentralContractForActionV146 = function diracCentralContractForActionHpkeManifestV160(action) {
+  const clean = String(action || '');
+  const contract = __diracRecoveryHpkePreviousContractV160(action);
+  if (clean !== DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) return contract;
+  return {
+    ...contract,
+    allowed: Array.from(new Set([
+      ...(Array.isArray(contract && contract.allowed) ? contract.allowed : []),
+      '_dirac_page_nonce_for'
+    ]))
+  };
+};
+Object.defineProperty(diracCentralContractForActionV146, '__diracRecoveryHpkeManifestV160', { value: true, enumerable: false });
+
+const __diracRecoveryHpkePreviousVaultJsonV160 = customerSecurityLostPasskeyReturnVaultJsonV169;
+customerSecurityLostPasskeyReturnVaultJsonV169 = function customerSecurityLostPasskeyReturnVaultJsonHpkeV160(res, row, metadata) {
+  const originalJson = res && res.json;
+  if (!res || typeof originalJson !== 'function') {
+    return __diracRecoveryHpkePreviousVaultJsonV160(res, row, metadata);
+  }
+
+  res.json = function diracRecoveryHpkeSignedManifestJsonV160(payload) {
+    res.json = originalJson;
+    try {
+      const manifest = payload
+        && payload.signed_manifest
+        && payload.signed_manifest.payload
+        && typeof payload.signed_manifest.payload === 'object'
+        ? payload.signed_manifest.payload
+        : null;
+      if (!manifest) throw new Error('RECOVERY_HPKE_MANIFEST_MISSING');
+
+      const hpkeEnv = diracRecoveryHpkeEnvGuardV159();
+      if (!hpkeEnv.ok) throw new Error('RECOVERY_HPKE_MANIFEST_ENV_INVALID');
+      const privateKey = diracRecoveryHpkePrivateKeyV159();
+      const publicKeyRaw = diracRecoveryHpkeRawPublicKeyV159(privateKey);
+      const keyId = hpkeEnv.keyId;
+      if (!keyId || publicKeyRaw.length !== 32) throw new Error('RECOVERY_HPKE_MANIFEST_KEY_INVALID');
+
+      manifest.hpke_suite = DIRAC_RECOVERY_HPKE_SUITE_V159;
+      manifest.hpke_key_id = keyId;
+      manifest.hpke_public_key_b64url = publicKeyRaw.toString('base64url');
+
+      const signature = customerSecurityLostPasskeyEd25519SignManifestB64V169(manifest);
+      publicKeyRaw.fill(0);
+      if (!signature) throw new Error('RECOVERY_HPKE_MANIFEST_SIGNATURE_INVALID');
+
+      payload.manifest = manifest;
+      payload.signature_b64 = signature;
+      payload.signed_manifest = { payload: manifest, signature_b64: signature };
+      return originalJson.call(this, payload);
+    } catch (_) {
+      try { if (typeof this.status === 'function') this.status(503); } catch (_) {}
+      return originalJson.call(this, {
+        ok: false,
+        code: 'RECOVERY_HPKE_CONFIGURATION_INVALID',
+        message: 'Layanan recovery aman belum siap.'
+      });
+    }
+  };
+
+  try {
+    return __diracRecoveryHpkePreviousVaultJsonV160(res, row, metadata);
+  } finally {
+    if (res.json !== originalJson) res.json = originalJson;
+  }
+};
+Object.defineProperty(customerSecurityLostPasskeyReturnVaultJsonV169, '__diracRecoveryHpkeManifestV160', { value: true, enumerable: false });
+
