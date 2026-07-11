@@ -26611,7 +26611,7 @@ module.exports = async function diracRecoveryWorkerWrapper(req, res) {
   if (action === DIRAC_RECOVERY_WORKER_ACTION) {
     return customerSecurityHandleRecoveryWorkerGenerate(req, res, action);
   }
-  if (customerSecurityRecoveryWorkerLocalEnabled()) {
+  if (customerSecurityRecoveryWorkerLocalEnabled() && action !== 'customer_security_recovery_hpke_verify') {
     return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_ONLY', message: 'Endpoint worker hanya menerima action internal recovery.' });
   }
   return __diracRecoveryWorkerPreviousHandler(req, res);
