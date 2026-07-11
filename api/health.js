@@ -30074,6 +30074,8 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'Origin': target.origin,
+        'Referer': target.origin + '/',
         'X-Dirac-HPKE-Caller': caller,
         'X-Dirac-HPKE-Timestamp': timestamp,
         'X-Dirac-HPKE-Signature': signature
