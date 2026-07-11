@@ -6826,6 +6826,68 @@ function customerSecurityLostPasskeyLinkOpenArgon2DebugV174(event, req, requestI
   try { console.error('[dirac-lost-passkey-link-argon2-v174]', JSON.stringify(payload)); } catch (_) {}
 }
 
+
+const DIRAC_LOST_PASSKEY_LINK_OPEN_FLOW_DEBUG_V175 = 'lost-passkey-link-open-flow-debug-v175';
+
+function customerSecurityLostPasskeyLinkOpenFlowContextV175(req, requestId) {
+  return {
+    req,
+    requestId: String(requestId || ''),
+    startedAt: Date.now(),
+    lastStage: 'handler_enter'
+  };
+}
+
+function customerSecurityLostPasskeyLinkOpenFlowSafeErrorV175(error) {
+  const name = String(error && error.name || '').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80);
+  const code = String(error && error.code || '').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80);
+  const message = String(error && error.message || error || '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[^A-Za-z0-9 _.:/()\[\]-]/g, '')
+    .slice(0, 180);
+  return {
+    error_name: name || null,
+    error_code: code || null,
+    error_message_safe: message || null
+  };
+}
+
+function customerSecurityLostPasskeyLinkOpenFlowStageV175(ctx, stage, extra = {}, force = false) {
+  if (!ctx || (!force && !customerSecurityLostPasskeyLinkOpenArgon2DebugEnabledV174())) return;
+  ctx.lastStage = String(stage || 'unknown').slice(0, 80);
+  const req = ctx.req;
+  const payload = {
+    diagnostic_version: DIRAC_LOST_PASSKEY_LINK_OPEN_FLOW_DEBUG_V175,
+    event: ctx.lastStage,
+    request_id_hash: customerSecurityLostPasskeySha256HexV157(String(ctx.requestId || '')),
+    central_guard_passed: diracCentralGuardPassedForHandlerV168(req),
+    elapsed_ms: Math.max(0, Date.now() - Number(ctx.startedAt || Date.now())),
+    memory: customerSecurityLostPasskeyLinkOpenArgon2MemoryV174(),
+    ...extra,
+    time: diracNowIso()
+  };
+  try { console.error('[dirac-lost-passkey-link-flow-v175]', JSON.stringify(payload)); } catch (_) {}
+}
+
+function customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, ctx, stage, statusCode, extra = {}) {
+  if (!customerSecurityLostPasskeyLinkOpenArgon2DebugEnabledV174() || !res || !ctx) return;
+  const clean = (value, max = 120) => String(value == null ? '' : value).replace(/[\r\n]+/g, ' ').replace(/[^A-Za-z0-9 _.:/-]/g, '').slice(0, max);
+  const requestHash = customerSecurityLostPasskeySha256HexV157(String(ctx.requestId || '')).slice(0, 24);
+  try { res.setHeader('X-Dirac-Recovery-Debug-Enabled', '1'); } catch (_) {}
+  try { res.setHeader('X-Dirac-Recovery-Debug-Version', DIRAC_LOST_PASSKEY_LINK_OPEN_FLOW_DEBUG_V175); } catch (_) {}
+  try { res.setHeader('X-Dirac-Recovery-Debug-Stage', clean(stage || ctx.lastStage || 'unknown', 80)); } catch (_) {}
+  try { res.setHeader('X-Dirac-Recovery-Debug-Request', requestHash); } catch (_) {}
+  try { res.setHeader('X-Dirac-Recovery-Debug-Elapsed-Ms', String(Math.max(0, Date.now() - Number(ctx.startedAt || Date.now())))); } catch (_) {}
+  try { res.setHeader('X-Dirac-Recovery-Debug-Guard', diracCentralGuardPassedForHandlerV168(ctx.req) ? 'passed' : 'failed'); } catch (_) {}
+  try { res.setHeader('X-Dirac-Recovery-Debug-Status', String(Number(statusCode || 0) || 0)); } catch (_) {}
+  if (extra && extra.error_class) {
+    try { res.setHeader('X-Dirac-Recovery-Debug-Error-Class', clean(extra.error_class, 80)); } catch (_) {}
+  }
+  if (extra && extra.reason) {
+    try { res.setHeader('X-Dirac-Recovery-Debug-Reason', clean(extra.reason, 120)); } catch (_) {}
+  }
+}
+
 async function customerSecurityLostPasskeyArgon2VerifyHashV157(label, value, encodedHash, pepper, rootSecret) {
   const hash = String(encodedHash || '');
   if (!hash.startsWith('$argon2id$')) return false;
@@ -6970,7 +7032,11 @@ function customerSecurityLostPasskeyEd25519SignManifestB64V169(payload) {
   }
 }
 
-function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata) {
+function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata, debugCtx) {
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'vault_json_build_start', {
+    row_present: Boolean(row && row.id),
+    metadata_present: Boolean(metadata && typeof metadata === 'object')
+  });
   const vaultBundle = metadata && metadata.vault_bundle && typeof metadata.vault_bundle === 'object' ? metadata.vault_bundle : {};
   const aadMetadata = vaultBundle.metadata && typeof vaultBundle.metadata === 'object' ? vaultBundle.metadata : {};
   const argon2Params = vaultBundle.argon2id_params && typeof vaultBundle.argon2id_params === 'object' ? vaultBundle.argon2id_params : (metadata.argon2id_params || {});
@@ -6995,9 +7061,17 @@ function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata) {
     created_at: String(row.created_at || metadata.created_at || ''),
     expires_at: String(row.expires_at || '')
   };
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'manifest_build_success', {
+    ciphertext_present: Boolean(ciphertext),
+    aad_metadata_key_count: Object.keys(aadMetadata).length,
+    argon2id_params_present: Boolean(argon2Params && typeof argon2Params === 'object')
+  });
   const ed25519SignatureB64 = customerSecurityLostPasskeyEd25519SignManifestB64V169(manifestPayload);
-  customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
-  return res.status(200).json({
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'manifest_sign_complete', {
+    signature_present: Boolean(ed25519SignatureB64),
+    key_id_present: Boolean(manifestPayload.key_id)
+  });
+  const responsePayload = {
     ok: true,
     version: manifestPayload.version,
     purpose: 'lost_passkey_recovery',
@@ -7020,7 +7094,17 @@ function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata) {
     signed_manifest: { payload: manifestPayload, signature_b64: ed25519SignatureB64 },
     manifest: manifestPayload,
     signature_b64: ed25519SignatureB64
+  };
+  customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
+  customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'response_send_start', 200);
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'response_send_start', { status_code: 200 });
+  const sent = res.status(200).json(responsePayload);
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'response_send_returned', {
+    status_code: Number(res && res.statusCode || 0),
+    headers_sent: Boolean(res && res.headersSent),
+    writable_ended: Boolean(res && res.writableEnded)
   });
+  return sent;
 }
 
 function customerSecurityLostPasskeyLinkRateKeyV162(req, requestId) {
@@ -7062,39 +7146,77 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
 
+  const debugCtx = customerSecurityLostPasskeyLinkOpenFlowContextV175(req, parsed.requestId);
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'request_validated', {
+    method,
+    api_request: Boolean(parsed.api),
+    token_shape_valid: true
+  });
+
   const rate = customerSecurityLostPasskeyLinkRateLimitV162(req, parsed.requestId);
   if (!rate.ok) {
+    customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'rate_limit_rejected', { status_code: 429 });
+    customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'rate_limit_rejected', 429);
     try { res.setHeader('Retry-After', String(rate.retryAfterSeconds || 60)); } catch (_) {}
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 429);
   }
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'rate_limit_passed');
 
   const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
-  if (!vaultSecrets.ok) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
+  if (!vaultSecrets.ok) {
+    customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'vault_secrets_unavailable', { status_code: 503 }, true);
+    customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'vault_secrets_unavailable', 503);
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
+  }
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'vault_secrets_ready', {
+    pepper_present: true,
+    root_secret_present: true
+  });
 
   const select = 'id,request_id,customer_id,auth_user_id,status,created_at,expires_at,used_at,revoked_at,locked_at,metadata,encrypted_file_key_text,file_key_wrap_nonce,file_key_wrap_tag,salt,file_sha256,aad_hash,server_signature';
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'recovery_row_fetch_start');
   const result = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?select=' + encodeURIComponent(select) + '&request_id=eq.' + encodeURIComponent(parsed.requestId) + '&limit=1', { method: 'GET', auth: 'service' });
-  if (!result.ok) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  if (!result.ok) {
+    customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'recovery_row_fetch_failed', { status_code: 404, upstream_status: Number(result.status || 0) });
+    customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'recovery_row_fetch_failed', 404);
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
   const row = Array.isArray(result.data) ? result.data[0] : null;
   const metadata = row && row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
   const linkTokenHash = String(metadata.link_token_hash || '');
-  if (!row || !row.id || !linkTokenHash.startsWith('$argon2id$')) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'recovery_row_fetch_success', {
+    row_found: Boolean(row && row.id),
+    metadata_present: Boolean(row && row.metadata && typeof row.metadata === 'object'),
+    link_token_hash_present: Boolean(linkTokenHash)
+  });
+  if (!row || !row.id || !linkTokenHash.startsWith('$argon2id$')) {
+    customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'recovery_row_invalid', { status_code: 404 });
+    customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'recovery_row_invalid', 404);
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
 
   const argon2VerifyStartedAt = Date.now();
   customerSecurityLostPasskeyLinkOpenArgon2DebugV174('argon2_verify_start', req, parsed.requestId, linkTokenHash, argon2VerifyStartedAt);
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'argon2_verify_start', {
+    argon2id_params: customerSecurityLostPasskeyArgon2EncodedParamsV171(linkTokenHash)
+  });
 
   let tokenOk = false;
   try {
     tokenOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('link_token', parsed.linkToken, linkTokenHash, vaultSecrets.pepper, vaultSecrets.rootSecret);
   } catch (error) {
+    const argonError = customerSecurityLostPasskeyLinkOpenArgon2ErrorV174(error);
     customerSecurityLostPasskeyLinkOpenArgon2DebugV174(
       'argon2_verify_error',
       req,
       parsed.requestId,
       linkTokenHash,
       argon2VerifyStartedAt,
-      customerSecurityLostPasskeyLinkOpenArgon2ErrorV174(error),
+      argonError,
       true
     );
+    customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'argon2_verify_error', { ...argonError, status_code: 503 }, true);
+    customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'argon2_verify_error', 503, argonError);
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
   }
 
@@ -7105,20 +7227,37 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
     linkTokenHash,
     argon2VerifyStartedAt
   );
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, tokenOk ? 'argon2_verify_match' : 'argon2_verify_mismatch', {
+    argon2_elapsed_ms: Math.max(0, Date.now() - argon2VerifyStartedAt)
+  });
 
   if (!tokenOk) {
     try { console.warn('[dirac-lost-passkey-link-v162]', JSON.stringify({ event: 'invalid_link_token', request_id_hash: customerSecurityLostPasskeySha256HexV157(parsed.requestId), time: diracNowIso() })); } catch (_) {}
+    customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'argon2_verify_mismatch', 404);
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
 
   const nowMs = Date.now();
   const expiresMs = new Date(row.expires_at).getTime();
   if (String(row.status || '') !== 'pending' || row.used_at || row.revoked_at || row.locked_at || !Number.isFinite(expiresMs) || expiresMs <= nowMs) {
+    customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'recovery_row_state_rejected', {
+      status_code: 404,
+      pending: String(row.status || '') === 'pending',
+      used: Boolean(row.used_at),
+      revoked: Boolean(row.revoked_at),
+      locked: Boolean(row.locked_at),
+      expiry_valid: Number.isFinite(expiresMs),
+      expired: !Number.isFinite(expiresMs) || expiresMs <= nowMs
+    });
+    customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'recovery_row_state_rejected', 404);
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'recovery_row_state_valid');
 
   customerSecurityLostPasskeySetLinkSecurityHeadersV162(res);
   if (method === 'HEAD') {
+    customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'head_response_send', 200);
+    customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'head_response_send', { status_code: 200 });
     try { res.statusCode = 200; } catch (_) {}
     try { if (typeof res.status === 'function') res.status(200); } catch (_) {}
     return res.end();
@@ -7126,9 +7265,12 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
 
   const responseFormat = String(req && req.query && req.query.format || '').trim().toLowerCase();
   if (responseFormat === 'redirect') {
+    const debugQuery = customerSecurityLostPasskeyLinkOpenArgon2DebugEnabledV174() ? '?debug=1' : '';
     const redirectUrl = customerSecurityLostPasskeyOfficialBaseUrlV157()
-      + '/lost-passkey.html#rid=' + encodeURIComponent(parsed.requestId)
+      + '/lost-passkey.html' + debugQuery + '#rid=' + encodeURIComponent(parsed.requestId)
       + '&token=' + encodeURIComponent(parsed.linkToken);
+    customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'redirect_response_send', 302);
+    customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'redirect_response_send', { status_code: 302, debug_query_enabled: Boolean(debugQuery) });
     try { res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0'); } catch (_) {}
     try { res.setHeader('Pragma', 'no-cache'); } catch (_) {}
     try { res.setHeader('Expires', '0'); } catch (_) {}
@@ -7140,9 +7282,18 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   }
 
   if (parsed.api || responseFormat === 'json') {
-    return customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata);
+    try {
+      return customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata, debugCtx);
+    } catch (error) {
+      const safeError = customerSecurityLostPasskeyLinkOpenFlowSafeErrorV175(error);
+      customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'vault_json_response_error', { ...safeError, status_code: 503 }, true);
+      customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'vault_json_response_error', 503, { error_class: 'VAULT_JSON_RESPONSE_ERROR' });
+      return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
+    }
   }
 
+  customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'response_format_rejected', { status_code: 404 });
+  customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(res, debugCtx, 'response_format_rejected', 404);
   return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
 }
 
@@ -30207,6 +30358,29 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
    ============================================================ */
 
 const DIRAC_RECOVERY_HPKE_MANIFEST_BRIDGE_V160 = 'dirac-recovery-hpke-signed-manifest-bridge-v160';
+const DIRAC_LOST_PASSKEY_POST_ARGON_DEBUG_V175 = 'lost-passkey-link-open-post-argon-debug-v175';
+
+function customerSecurityLostPasskeyPostArgonDebugV175(event, row, extra = {}, force = false) {
+  if (!force && !customerSecurityLostPasskeyLinkOpenArgon2DebugEnabledV174()) return;
+  const requestId = String(row && row.request_id || '');
+  const payload = {
+    diagnostic_version: DIRAC_LOST_PASSKEY_POST_ARGON_DEBUG_V175,
+    event: String(event || 'post_argon_unknown').slice(0, 96),
+    request_id_hash: customerSecurityLostPasskeySha256HexV157(requestId),
+    memory: customerSecurityLostPasskeyLinkOpenArgon2MemoryV174(),
+    ...extra,
+    time: diracNowIso()
+  };
+  try { console.error('[dirac-lost-passkey-post-argon-v175]', JSON.stringify(payload)); } catch (_) {}
+}
+
+function customerSecurityLostPasskeyPostArgonErrorV175(error) {
+  return {
+    error_name: String(error && error.name || '').slice(0, 80) || null,
+    error_code: String(error && error.code || '').slice(0, 80) || null,
+    error_message: String(error && error.message || error || '').replace(/[\r\n\t]+/g, ' ').slice(0, 240) || null,
+  };
+}
 
 const __diracRecoveryHpkePreviousContractV160 = diracCentralContractForActionV146;
 diracCentralContractForActionV146 = function diracCentralContractForActionHpkeManifestV160(action) {
@@ -30224,14 +30398,28 @@ diracCentralContractForActionV146 = function diracCentralContractForActionHpkeMa
 Object.defineProperty(diracCentralContractForActionV146, '__diracRecoveryHpkeManifestV160', { value: true, enumerable: false });
 
 const __diracRecoveryHpkePreviousVaultJsonV160 = customerSecurityLostPasskeyReturnVaultJsonV169;
-customerSecurityLostPasskeyReturnVaultJsonV169 = function customerSecurityLostPasskeyReturnVaultJsonHpkeV160(res, row, metadata) {
+customerSecurityLostPasskeyReturnVaultJsonV169 = function customerSecurityLostPasskeyReturnVaultJsonHpkeV160(res, row, metadata, debugCtx) {
   const originalJson = res && res.json;
+  customerSecurityLostPasskeyPostArgonDebugV175('vault_json_bridge_enter', row, {
+    response_object_present: Boolean(res),
+    response_json_function_present: typeof originalJson === 'function'
+  });
+
   if (!res || typeof originalJson !== 'function') {
-    return __diracRecoveryHpkePreviousVaultJsonV160(res, row, metadata);
+    customerSecurityLostPasskeyPostArgonDebugV175('vault_json_bridge_fallback', row);
+    return __diracRecoveryHpkePreviousVaultJsonV160(res, row, metadata, debugCtx);
   }
 
   res.json = function diracRecoveryHpkeSignedManifestJsonV160(payload) {
     res.json = originalJson;
+    let diagnosticStage = 'manifest_extract';
+    let diagnosticConfigurationReason = '';
+    customerSecurityLostPasskeyPostArgonDebugV175('vault_json_payload_received', row, {
+      payload_present: Boolean(payload),
+      payload_ok: Boolean(payload && payload.ok),
+      signed_manifest_present: Boolean(payload && payload.signed_manifest)
+    });
+
     try {
       const manifest = payload
         && payload.signed_manifest
@@ -30240,27 +30428,87 @@ customerSecurityLostPasskeyReturnVaultJsonV169 = function customerSecurityLostPa
         ? payload.signed_manifest.payload
         : null;
       if (!manifest) throw new Error('RECOVERY_HPKE_MANIFEST_MISSING');
+      customerSecurityLostPasskeyPostArgonDebugV175('manifest_extract_ok', row, {
+        manifest_request_id_matches_row: String(manifest.request_id || '') === String(row && row.request_id || ''),
+        ed25519_signature_present_before_bridge: Boolean(payload && payload.signed_manifest && payload.signed_manifest.signature_b64)
+      });
 
+      diagnosticStage = 'hpke_env_guard';
       const hpkeEnv = diracRecoveryHpkeEnvGuardV159();
-      if (!hpkeEnv.ok) throw new Error('RECOVERY_HPKE_MANIFEST_ENV_INVALID');
+      if (!hpkeEnv.ok) {
+        diagnosticConfigurationReason = String(hpkeEnv.reason || 'unknown');
+        throw new Error('RECOVERY_HPKE_MANIFEST_ENV_INVALID');
+      }
+      customerSecurityLostPasskeyPostArgonDebugV175('hpke_env_guard_ok', row, {
+        hpke_key_id_present: Boolean(hpkeEnv.keyId),
+        server1_url_valid: Boolean(hpkeEnv.server1Url),
+        minimum_argon2_memory_kib: Number(hpkeEnv.minimumMemory || 0),
+        minimum_argon2_time_cost: Number(hpkeEnv.minimumTime || 0)
+      });
+
+      diagnosticStage = 'hpke_private_key_load';
       const privateKey = diracRecoveryHpkePrivateKeyV159();
+      customerSecurityLostPasskeyPostArgonDebugV175('hpke_private_key_ok', row, {
+        key_type: String(privateKey && privateKey.asymmetricKeyType || '') || null
+      });
+
+      diagnosticStage = 'hpke_public_key_derive';
       const publicKeyRaw = diracRecoveryHpkeRawPublicKeyV159(privateKey);
       const keyId = hpkeEnv.keyId;
       if (!keyId || publicKeyRaw.length !== 32) throw new Error('RECOVERY_HPKE_MANIFEST_KEY_INVALID');
+      customerSecurityLostPasskeyPostArgonDebugV175('hpke_public_key_ok', row, {
+        public_key_bytes: publicKeyRaw.length,
+        hpke_key_id_present: Boolean(keyId)
+      });
 
+      diagnosticStage = 'manifest_fields_attach';
       manifest.hpke_suite = DIRAC_RECOVERY_HPKE_SUITE_V159;
       manifest.hpke_key_id = keyId;
       manifest.hpke_public_key_b64url = publicKeyRaw.toString('base64url');
 
+      diagnosticStage = 'ed25519_manifest_sign';
       const signature = customerSecurityLostPasskeyEd25519SignManifestB64V169(manifest);
       publicKeyRaw.fill(0);
       if (!signature) throw new Error('RECOVERY_HPKE_MANIFEST_SIGNATURE_INVALID');
+      customerSecurityLostPasskeyPostArgonDebugV175('ed25519_manifest_sign_ok', row, {
+        signature_present: true,
+        signature_length: signature.length
+      });
 
+      diagnosticStage = 'response_payload_finalize';
       payload.manifest = manifest;
       payload.signature_b64 = signature;
       payload.signed_manifest = { payload: manifest, signature_b64: signature };
-      return originalJson.call(this, payload);
-    } catch (_) {
+
+      diagnosticStage = 'response_json_send';
+      customerSecurityLostPasskeyPostArgonDebugV175('response_json_send_start', row, {
+        status_code_before_send: Number(this && this.statusCode || 0),
+        headers_sent_before_send: Boolean(this && this.headersSent)
+      });
+      const sendResult = originalJson.call(this, payload);
+      customerSecurityLostPasskeyPostArgonDebugV175('response_json_send_returned', row, {
+        status_code_after_send: Number(this && this.statusCode || 0),
+        headers_sent_after_send: Boolean(this && this.headersSent),
+        writable_ended_after_send: Boolean(this && this.writableEnded)
+      });
+      return sendResult;
+    } catch (error) {
+      customerSecurityLostPasskeyPostArgonDebugV175('post_argon_503', row, {
+        failed_stage: diagnosticStage,
+        ...customerSecurityLostPasskeyPostArgonErrorV175(error),
+        configuration_reason: diagnosticConfigurationReason || null,
+        status_code_before_503: Number(this && this.statusCode || 0),
+        headers_sent_before_503: Boolean(this && this.headersSent)
+      }, true);
+      customerSecurityLostPasskeyLinkOpenFlowStageV175(debugCtx, 'post_argon_503', {
+        failed_stage: diagnosticStage,
+        configuration_reason: diagnosticConfigurationReason || null,
+        status_code: 503
+      }, true);
+      customerSecurityLostPasskeyLinkOpenFlowDebugHeadersV175(this || res, debugCtx, 'post_argon_503_' + diagnosticStage, 503, {
+        error_class: 'RECOVERY_HPKE_CONFIGURATION_INVALID',
+        reason: diagnosticConfigurationReason || String(error && error.message || 'post_argon_error')
+      });
       try { if (typeof this.status === 'function') this.status(503); } catch (_) {}
       return originalJson.call(this, {
         ok: false,
@@ -30271,7 +30519,21 @@ customerSecurityLostPasskeyReturnVaultJsonV169 = function customerSecurityLostPa
   };
 
   try {
-    return __diracRecoveryHpkePreviousVaultJsonV160(res, row, metadata);
+    customerSecurityLostPasskeyPostArgonDebugV175('vault_json_base_builder_start', row);
+    const result = __diracRecoveryHpkePreviousVaultJsonV160(res, row, metadata, debugCtx);
+    customerSecurityLostPasskeyPostArgonDebugV175('vault_json_base_builder_returned', row, {
+      status_code: Number(res && res.statusCode || 0),
+      headers_sent: Boolean(res && res.headersSent),
+      writable_ended: Boolean(res && res.writableEnded)
+    });
+    return result;
+  } catch (error) {
+    customerSecurityLostPasskeyPostArgonDebugV175('vault_json_base_builder_throw', row, {
+      ...customerSecurityLostPasskeyPostArgonErrorV175(error),
+      status_code: Number(res && res.statusCode || 0),
+      headers_sent: Boolean(res && res.headersSent)
+    }, true);
+    throw error;
   } finally {
     if (res.json !== originalJson) res.json = originalJson;
   }
