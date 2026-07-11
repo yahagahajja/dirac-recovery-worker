@@ -30023,10 +30023,51 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
   const caller = 'vercel2';
   const timestamp = String(Date.now());
   const signature = diracRecoveryHpkeProofSignatureV159(caller, timestamp, proofBody);
-  if (!signature) return { ok: false, status: 503, code: 'proof_signature_unavailable' };
+  const diagnosticStartedAt = Date.now();
+  const requestIdHash = crypto.createHash('sha256')
+    .update(String(proofBody && proofBody.request_id || ''))
+    .digest('hex')
+    .slice(0, 24);
+  const diagnosticBase = {
+    diagnostic_version: 'recovery-hpke-server1-diagnostic-v177',
+    action: DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159,
+    target_origin: target.origin,
+    target_path: target.pathname,
+    request_id_hash: requestIdHash,
+    timeout_ms: 12000,
+    redirect_mode: 'error'
+  };
+  const diagnosticLog = (event, extra = {}, level = 'log') => {
+    try {
+      const payload = {
+        ...diagnosticBase,
+        event,
+        elapsed_ms: Date.now() - diagnosticStartedAt,
+        ...extra,
+        time: new Date().toISOString()
+      };
+      const writer = level === 'error' ? console.error : console.log;
+      writer('[dirac-recovery-hpke-server1-v177]', JSON.stringify(payload));
+    } catch (_) {}
+  };
+
+  if (!signature) {
+    diagnosticLog('proof_signature_unavailable', {}, 'error');
+    return { ok: false, status: 503, code: 'proof_signature_unavailable' };
+  }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
+  let timeoutTriggered = false;
+  const timeout = setTimeout(() => {
+    timeoutTriggered = true;
+    controller.abort();
+  }, 12000);
+
+  diagnosticLog('server1_fetch_start', {
+    proof_version: String(proofBody && proofBody.version || ''),
+    signature_present: true
+  });
+
   try {
     const response = await fetch(target.toString(), {
       method: 'POST',
@@ -30041,17 +30082,83 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
       redirect: 'error',
       signal: controller.signal
     });
+
+    const contentType = String(response.headers && response.headers.get && response.headers.get('content-type') || '');
     const length = Number(response.headers && response.headers.get && response.headers.get('content-length') || 0);
-    if (Number.isFinite(length) && length > 64 * 1024) return { ok: false, status: 502, code: 'server1_response_too_large' };
-    const text = await response.text();
-    if (text.length > 64 * 1024) return { ok: false, status: 502, code: 'server1_response_too_large' };
+    diagnosticLog('server1_response_headers', {
+      http_status: Number(response.status || 0),
+      response_ok: Boolean(response.ok),
+      redirected: Boolean(response.redirected),
+      response_url_origin: (() => {
+        try { return new URL(response.url).origin; } catch (_) { return ''; }
+      })(),
+      response_url_path: (() => {
+        try { return new URL(response.url).pathname; } catch (_) { return ''; }
+      })(),
+      content_type: contentType.slice(0, 120),
+      content_length: Number.isFinite(length) ? length : 0
+    });
+
+    if (Number.isFinite(length) && length > 64 * 1024) {
+      diagnosticLog('server1_response_rejected_too_large_header', {
+        content_length: length
+      }, 'error');
+      return { ok: false, status: 502, code: 'server1_response_too_large' };
+    }
+
+    const responseText = await response.text();
+    if (responseText.length > 64 * 1024) {
+      diagnosticLog('server1_response_rejected_too_large_body', {
+        body_length: responseText.length
+      }, 'error');
+      return { ok: false, status: 502, code: 'server1_response_too_large' };
+    }
+
     let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
+    let jsonParsed = false;
+    try {
+      data = responseText ? JSON.parse(responseText) : null;
+      jsonParsed = responseText ? true : false;
+    } catch (_) {
+      data = null;
+    }
+
+    diagnosticLog('server1_response_body', {
+      http_status: Number(response.status || 0),
+      response_ok: Boolean(response.ok),
+      body_length: responseText.length,
+      body_sha256_24: crypto.createHash('sha256').update(responseText).digest('hex').slice(0, 24),
+      json_parsed: jsonParsed,
+      server_ok: Boolean(data && data.ok === true),
+      server_code: data && data.code ? String(data.code).slice(0, 100) : '',
+      server_message: data && data.message ? String(data.message).slice(0, 160) : '',
+      recovery_session_present: Boolean(data && data.dirac_lost_passkey_recovery_session),
+      recovery_expiry_present: Boolean(data && data.recovery_session_expires_at)
+    }, response.ok ? 'log' : 'error');
+
     return { ok: response.ok, status: response.status, data };
-  } catch (_) {
-    return { ok: false, status: 502, code: 'server1_unreachable' };
+  } catch (error) {
+    const cause = error && error.cause && typeof error.cause === 'object' ? error.cause : null;
+    diagnosticLog('server1_fetch_error', {
+      timeout_triggered: timeoutTriggered,
+      aborted: Boolean(controller.signal && controller.signal.aborted),
+      error_name: error && error.name ? String(error.name).slice(0, 100) : '',
+      error_message: error && error.message ? String(error.message).slice(0, 200) : '',
+      cause_name: cause && cause.name ? String(cause.name).slice(0, 100) : '',
+      cause_code: cause && cause.code ? String(cause.code).slice(0, 100) : '',
+      cause_message: cause && cause.message ? String(cause.message).slice(0, 200) : ''
+    }, 'error');
+    return {
+      ok: false,
+      status: 502,
+      code: timeoutTriggered ? 'server1_timeout' : 'server1_unreachable'
+    };
   } finally {
     clearTimeout(timeout);
+    diagnosticLog('server1_fetch_finished', {
+      timeout_triggered: timeoutTriggered,
+      aborted: Boolean(controller.signal && controller.signal.aborted)
+    });
   }
 }
 
