@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-Q6tXohO0+PqRWXhYDdq/ws+DERzi+q1S7CyJwwe5zfhXDpoIEhe2yCf0QDL8K/qpsN5XBnZtFCH8EN6+lgUsVA=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-jRKHX8JINtDIa29N/3FQa+Cos6qRrhwvDhsUHyt5iRrq2TkG6ogZt1BBFFq+NncAkkTJTpwQkwymIktp4pZTRw=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-Q6tXohO0+PqRWXhYDdq/ws+DERzi+q1S7CyJwwe5zfhXDpoIEhe2yCf0QDL8K/qpsN5XBnZtFCH8EN6+lgUsVA=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-jRKHX8JINtDIa29N/3FQa+Cos6qRrhwvDhsUHyt5iRrq2TkG6ogZt1BBFFq+NncAkkTJTpwQkwymIktp4pZTRw=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -1260,21 +1260,42 @@
       if (!state.csrfToken || !state.pageNonce) throw new Error('CENTRAL_GUARD_TOKEN_MISSING');
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.hpkeAction);
-      var response = await fetch(url.toString(), {
+      debugRecord('hpke_verify_fetch_start', {
+        action: CONFIG.hpkeAction,
         method: 'POST',
-        credentials: 'same-origin',
-        cache: 'no-store',
-        redirect: 'error',
-        referrerPolicy: 'strict-origin-when-cross-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-Token': state.csrfToken,
-          'X-Dirac-CSRF-Token': state.csrfToken,
-          'X-Dirac-Page-Nonce': state.pageNonce,
-          'Idempotency-Key': envelope.idempotency_key
-        },
-        body: JSON.stringify(envelope)
+        csrf_present: Boolean(state.csrfToken),
+        page_nonce_present: Boolean(state.pageNonce),
+        envelope_version: envelope && envelope.version || 'missing',
+        hpke_key_id_present: Boolean(envelope && envelope.hpke_key_id)
+      });
+      var response;
+      try {
+        response = await fetch(url.toString(), {
+          method: 'POST',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          redirect: 'error',
+          referrerPolicy: 'strict-origin-when-cross-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-Token': state.csrfToken,
+            'X-Dirac-CSRF-Token': state.csrfToken,
+            'X-Dirac-Page-Nonce': state.pageNonce,
+            'Idempotency-Key': envelope.idempotency_key
+          },
+          body: JSON.stringify(envelope)
+        });
+      } catch (error) {
+        debugRecord('hpke_verify_fetch_network_error', { error_code: debugErrorCode(error) });
+        throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
+      }
+      debugCaptureServerResponse(response);
+      debugRecord('hpke_verify_fetch_response', {
+        http_status: Number(response.status || 0),
+        response_ok: Boolean(response.ok),
+        server_stage: state.debugServerStage || 'missing',
+        server_reason: state.debugServerReason || 'missing'
       });
       var length = Number(response.headers.get('content-length') || 0);
       if (Number.isFinite(length) && length > 65536) throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
@@ -1283,6 +1304,12 @@
       var body;
       try { body = text ? JSON.parse(text) : null; } catch (_) { body = null; }
       if (!response.ok || !body || body.ok !== true || body.recovery_code_verified !== true) {
+        debugRecord('hpke_verify_response_rejected', {
+          http_status: Number(response.status || 0),
+          body_ok: Boolean(body && body.ok === true),
+          recovery_verified: Boolean(body && body.recovery_code_verified === true),
+          error_code: body && (body.code || body.error_code) || 'missing'
+        });
         throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
       }
       var session = String(body.dirac_lost_passkey_recovery_session || '');
@@ -1290,8 +1317,14 @@
       if (!/^[A-Za-z0-9_-]{32,160}$/.test(session)
         || !Number.isFinite(Date.parse(sessionExpiresAt))
         || Date.parse(sessionExpiresAt) <= Date.now()) {
+        debugRecord('recovery_session_invalid', {
+          session_shape_valid: /^[A-Za-z0-9_-]{32,160}$/.test(session),
+          expiry_parse_valid: Number.isFinite(Date.parse(sessionExpiresAt)),
+          expiry_future: Number.isFinite(Date.parse(sessionExpiresAt)) && Date.parse(sessionExpiresAt) > Date.now()
+        });
         throw new Error('RECOVERY_SESSION_INVALID');
       }
+      debugRecord('hpke_verify_complete', { recovery_verified: true, session_shape_valid: true });
       return { session: session, expiresAt: sessionExpiresAt };
     }
 
@@ -1349,6 +1382,15 @@
 
     async function decryptSubmit(event) {
       event.preventDefault();
+      state.debugEnabled = true;
+      try { if (el.debugPanel) { el.debugPanel.hidden = false; el.debugPanel.open = true; } } catch (_) {}
+      debugRecord('decrypt_submit_start', {
+        online: navigator.onLine !== false,
+        vault_ready: Boolean(state.vaultBundle),
+        manifest_ready: Boolean(state.manifestPayload),
+        csrf_present: Boolean(state.csrfToken),
+        page_nonce_present: Boolean(state.pageNonce)
+      });
       if (state.permanentLocked) return renderLockedState();
       if (navigator.onLine === false) {
         updateEncryptedSubmitState();
@@ -1375,22 +1417,42 @@
         var tagBytes = rememberBuffer(b64ToBytes(bundle.auth_tag));
         var aadBytes = rememberBuffer(utf8(canonical(bundle.metadata)));
         var vaultMaterial = rememberBuffer(buildVaultMaterial(el.passwordMaterial.value, el.emailSecret.value, el.websiteSecret.value, bundle));
+        debugRecord('argon2_local_start', {
+          memory_kib: Number(params.mem || params.memoryCost || 0),
+          time_cost: Number(params.time || params.timeCost || 0),
+          parallelism: Number(params.parallelism || 0)
+        });
         var argonRaw = await runArgon2idRaw(vaultMaterial, saltBytes, params);
+        debugRecord('argon2_local_complete', { output_present: Boolean(argonRaw && argonRaw.length) });
         var aesKey = await hkdfSha256(argonRaw, saltBytes, bundle.hkdf_info, 32);
+        debugRecord('hkdf_local_complete', { key_ready: Boolean(aesKey) });
         try {
+          debugRecord('aes_gcm_decrypt_start');
           plaintext = await decryptAesGcm(aesKey, nonceBytes, ciphertextBytes, tagBytes, aadBytes);
+          debugRecord('aes_gcm_decrypt_complete', { plaintext_present: Boolean(plaintext && plaintext.length) });
         } catch (_) {
           throw new Error('AES_GCM_DECRYPT_FAILED');
         }
 
         recoveryMaterial = String(verifyInnerPayload(plaintext));
+        debugRecord('inner_payload_verified', { recovery_material_present: Boolean(recoveryMaterial) });
+        debugRecord('hpke_encrypt_start');
         var envelope = await hpkeEncryptRecoveryCode(recoveryMaterial);
+        debugRecord('hpke_encrypt_complete', {
+          envelope_ready: Boolean(envelope && envelope.ciphertext && envelope.enc),
+          key_id_present: Boolean(envelope && envelope.hpke_key_id)
+        });
         recoveryMaterial = '';
         try { plaintext.fill(0); } catch (_) {}
         plaintext = null;
 
         setStatus('Memperbarui token Central Guard dan mengirim payload HPKE terenkripsi ke layanan resmi...', 'loading');
+        debugRecord('central_guard_refresh_start');
         await refreshCentralGuardTokens();
+        debugRecord('central_guard_refresh_complete', {
+          csrf_present: Boolean(state.csrfToken),
+          page_nonce_present: Boolean(state.pageNonce)
+        });
         var verified = await submitHpkeEnvelope(envelope);
 
         wipeSensitiveInputs();
@@ -1402,6 +1464,16 @@
         setProcessStep(3);
         setStatus('Decrypt berhasil dan kode pemulihan telah diverifikasi secara aman. Kode tidak ditampilkan, tidak disalin, dan tidak dikirim sebagai plaintext. Klik “Verifikasi dan Daftarkan Passkey Baru” untuk kembali ke halaman akun.', 'ok');
       } catch (error) {
+        state.debugEnabled = true;
+        state.debugClientError = debugErrorCode(error);
+        state.debugDiagnosis = 'HTML/browser: ' + state.debugClientError;
+        try { if (el.debugPanel) { el.debugPanel.hidden = false; el.debugPanel.open = true; } } catch (_) {}
+        debugRecord('decrypt_submit_error', {
+          error_code: state.debugClientError,
+          last_server_stage: state.debugServerStage || 'missing',
+          last_http_status: state.debugHttpStatus || 0,
+          response_seen: state.debugResponseSeen
+        });
         recoveryMaterial = '';
         try { if (plaintext) plaintext.fill(0); } catch (_) {}
         var msg = String(error && error.message || '');
