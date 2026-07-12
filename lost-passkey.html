@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-mlgnl/30rruVpGyEgTxzM2CyM8OUy6e9AeN4/qqQKZjMBsnipjIzcKvBIOvhLl3rPJVxm+BORV2f/yFhMnI7iQ=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-6awwdI5W3+pA59vuDqcg5jXBstigRTTMQFMLsIlr3TNb3+QIAbofZfrAgS06Qgwj3yQmNbS8gnT6PE4B2+Gb7g=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-duY2+Mz8U4P9k8Mnr3a3qJi4ThjPlW+/tNtj5ta+/pMg9U2/Hwul8eYIzuhFGw7BLZEcR0poBx7eW2zJgocPRg=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-mlgnl/30rruVpGyEgTxzM2CyM8OUy6e9AeN4/qqQKZjMBsnipjIzcKvBIOvhLl3rPJVxm+BORV2f/yFhMnI7iQ=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-6awwdI5W3+pA59vuDqcg5jXBstigRTTMQFMLsIlr3TNb3+QIAbofZfrAgS06Qgwj3yQmNbS8gnT6PE4B2+Gb7g=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-duY2+Mz8U4P9k8Mnr3a3qJi4ThjPlW+/tNtj5ta+/pMg9U2/Hwul8eYIzuhFGw7BLZEcR0poBx7eW2zJgocPRg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -116,17 +116,6 @@
     body.locked .card { border-color: rgba(92,255,141,.32); }
     body.locked .badge { background: #10251a; border-color: rgba(92,255,141,.34); color: #ccffe2; }
     body.locked input, body.locked textarea, body.locked #decryptButton { pointer-events: none; }
-    .debug-panel { margin: 14px 0 0; border: 1px solid #3a4b63; border-radius: 14px; background: #0a1019; overflow: hidden; }
-    .debug-panel[hidden] { display: none; }
-    .debug-panel summary { cursor: pointer; padding: 12px 14px; color: #dbe8fb; font-size: 12px; font-weight: 800; letter-spacing: .02em; user-select: none; }
-    .debug-panel summary::marker { color: #5cff8d; }
-    .debug-content { padding: 0 14px 14px; }
-    .debug-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
-    .debug-item { min-width: 0; padding: 9px 10px; border: 1px solid #263244; border-radius: 10px; background: #0d1420; }
-    .debug-item span { display: block; color: #91a3bb; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
-    .debug-item strong { display: block; margin-top: 4px; color: #eaf0f8; font-size: 12px; overflow-wrap: anywhere; }
-    .debug-log { max-height: 220px; overflow: auto; margin: 0; padding: 11px; border: 1px solid #263244; border-radius: 10px; background: #070c13; color: #c9d7e9; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .debug-note { margin: 9px 0 0; color: #91a3bb; font-size: 11px; line-height: 1.45; }
     .result { display: none; margin-top: 20px; }
     .result.show { display: block; animation: statusIn .42s ease-out both; }
     .danger { color: #ffd3dc; }
@@ -165,27 +154,6 @@
       <p>Halaman ini membantu proses pemulihan akses akun secara aman. Informasi yang Anda masukkan diproses di perangkat Anda dan tidak disimpan oleh halaman ini.</p>
 
       <div id="status" class="status loading" role="status" aria-live="polite">Memuat layanan pemulihan...</div>
-      <details id="debugPanel" class="debug-panel" hidden>
-        <summary>Panel diagnosis pemulihan</summary>
-        <div class="debug-content">
-          <div class="debug-grid">
-            <div class="debug-item"><span>Sumber</span><strong id="debugSource">Menunggu</strong></div>
-            <div class="debug-item"><span>Diagnosis utama</span><strong id="debugDiagnosis">Menunggu hasil validasi</strong></div>
-            <div class="debug-item"><span>HTTP</span><strong id="debugHttp">Belum ada respons</strong></div>
-            <div class="debug-item"><span>Tahap HTML</span><strong id="debugClientStage">bootstrap_start</strong></div>
-            <div class="debug-item"><span>Tahap Server 2</span><strong id="debugServerStage">Belum tersedia</strong></div>
-            <div class="debug-item"><span>Alasan Server</span><strong id="debugServerReason">Belum tersedia</strong></div>
-            <div class="debug-item"><span>Kode Server</span><strong id="debugServerCode">Belum tersedia</strong></div>
-            <div class="debug-item"><span>Pesan Server</span><strong id="debugServerMessage">Belum tersedia</strong></div>
-            <div class="debug-item"><span>Central Guard</span><strong id="debugGuard">Belum tersedia</strong></div>
-            <div class="debug-item"><span>Request</span><strong id="debugRequest">Belum tersedia</strong></div>
-            <div class="debug-item"><span>Ed25519</span><strong id="debugEd25519">Belum diperiksa</strong></div>
-            <div class="debug-item"><span>Error Klien</span><strong id="debugClientError">Belum ada</strong></div>
-          </div>
-          <pre id="debugLog" class="debug-log" aria-live="polite">Panel diagnosis menunggu respons aman dari Server 2.</pre>
-          <p class="debug-note">Panel tidak menampilkan token, hash, secret, pepper, recovery code, private key, atau payload sensitif.</p>
-        </div>
-      </details>
       <div id="lockNotice" class="lock-notice" role="note" hidden>
         <span aria-hidden="true"></span>
         <strong>Akses belum tervalidasi. Kolom verifikasi dikunci sementara.</strong>
@@ -223,15 +191,15 @@
 
       <section id="resultBox" class="result" aria-labelledby="resultTitle">
         <h2 id="resultTitle">Informasi pemulihan</h2>
-        <p class="danger">Kode pemulihan tidak ditampilkan dan tidak disalin. Kode dikirim hanya sebagai payload HPKE terenkripsi ke layanan resmi, lalu diverifikasi dengan Argon2id, salt, dan pepper.</p>
-        <div class="row" aria-label="Tindakan verifikasi pemulihan">
-          <button id="verifyButton" class="primary" type="button" disabled>Verifikasi dan Daftarkan Passkey Baru</button>
+        <p class="danger">Kode pemulihan tidak ditampilkan di layar. Klik tombol di bawah untuk menyalin kode satu kali; setelah diklik, seluruh data sementara di halaman ini otomatis dibersihkan.</p>
+        <div class="row" aria-label="Tindakan kode pemulihan">
+          <button id="copyCodeButton" class="primary" type="button" disabled>Salin Code</button>
         </div>
         <textarea id="recoveryOutput" hidden readonly autocomplete="off" spellcheck="false"></textarea>
       </section>
 
       <h2>Proses aman</h2>
-      <p class="small">Tautan resmi → validasi akses → isi informasi verifikasi → decrypt lokal → HPKE terenkripsi → Central Guard → Argon2id, salt, dan pepper → Verify → data sementara dibersihkan.</p>
+      <p class="small">Tautan resmi → validasi akses → koneksi dibatasi → isi informasi verifikasi → proses pemulihan → hasil ditampilkan di perangkat → data sementara dibersihkan.</p>
     </section>
   </main>
 
@@ -266,17 +234,11 @@
       minArgon2id: Object.freeze({
         memoryCost: 1024000,
         timeCost: 4,
-        parallelism: 1,
+        parallelism: 3,
         hashLength: 32
       }),
       expectedPurpose: 'lost_passkey_recovery',
       expectedLegacyVersion: 'lost-passkey-html-vault-aes256gcm-argon2id-v157',
-      hpkeAction: 'customer_security_recovery_hpke_verify',
-      hpkeEnvelopeVersion: 'dirac-recovery-hpke-envelope-v1',
-      hpkePlaintextVersion: 'dirac-recovery-hpke-plaintext-v1',
-      hpkeSuite: 'DHKEM-X25519-HKDF-SHA256+HKDF-SHA384+AES-256-GCM',
-      verifyUrl: 'https://diracgroup.store/masuk.html',
-      debugRequested: new URLSearchParams(location.search).get('debug') === '1',
       genericError: 'Proses pemulihan tidak dapat dilanjutkan. Tautan mungkin sudah tidak berlaku atau telah digunakan.'
     });
 
@@ -293,29 +255,7 @@
       expiresAtMs: 0,
       expiryTimer: null,
       sensitiveBuffers: [],
-      csrfToken: '',
-      pageNonce: '',
-      recoverySession: '',
-      recoverySessionExpiresAt: '',
-      debugEnabled: false,
-      debugEvents: [],
-      debugStartedAt: Date.now(),
-      debugClientStage: 'bootstrap_start',
-      debugServerStage: '',
-      debugServerReason: '',
-      debugServerCode: '',
-      debugServerMessage: '',
-      debugHttpStatus: 0,
-      debugGuard: '',
-      debugRequestHash: '',
-      debugResponseSeen: false,
-      debugDiagnosis: 'Menunggu hasil validasi',
-      debugClientError: '',
-      debugServerEd25519KeyId: '',
-      debugServerEd25519State: '',
-      debugServerEd25519Fingerprint: '',
-      debugClientEd25519Fingerprint: '',
-      debugEd25519Status: 'Belum diperiksa'
+      pendingRecoveryMaterial: null
     };
 
     var el = {
@@ -328,118 +268,10 @@
       clearButton: document.getElementById('clearButton'),
       resultBox: document.getElementById('resultBox'),
       recoveryOutput: document.getElementById('recoveryOutput'),
-      verifyButton: document.getElementById('verifyButton'),
+      copyCodeButton: document.getElementById('copyCodeButton'),
       lockNotice: document.getElementById('lockNotice'),
-      steps: document.querySelectorAll('.process-step'),
-      debugPanel: document.getElementById('debugPanel'),
-      debugSource: document.getElementById('debugSource'),
-      debugDiagnosis: document.getElementById('debugDiagnosis'),
-      debugHttp: document.getElementById('debugHttp'),
-      debugClientStage: document.getElementById('debugClientStage'),
-      debugServerStage: document.getElementById('debugServerStage'),
-      debugServerReason: document.getElementById('debugServerReason'),
-      debugServerCode: document.getElementById('debugServerCode'),
-      debugServerMessage: document.getElementById('debugServerMessage'),
-      debugGuard: document.getElementById('debugGuard'),
-      debugRequest: document.getElementById('debugRequest'),
-      debugEd25519: document.getElementById('debugEd25519'),
-      debugClientError: document.getElementById('debugClientError'),
-      debugLog: document.getElementById('debugLog')
+      steps: document.querySelectorAll('.process-step')
     };
-
-    function debugSafeText(value, maxLength) {
-      return String(value == null ? '' : value)
-        .replace(/[\r\n\t]+/g, ' ')
-        .replace(/[^A-Za-z0-9 _.:/()\[\]-]/g, '')
-        .slice(0, Math.max(1, Number(maxLength || 120)));
-    }
-
-    function debugErrorCode(error) {
-      var raw = String(error && error.message || error && error.name || error || 'UNKNOWN_ERROR');
-      var code = debugSafeText(raw, 120);
-      return code || 'UNKNOWN_ERROR';
-    }
-
-    function debugPanelShouldShow() {
-      return Boolean(CONFIG.debugRequested || state.debugEnabled);
-    }
-
-    function renderDebugPanel() {
-      if (!debugPanelShouldShow() || !el.debugPanel) return;
-      el.debugPanel.hidden = false;
-      var source = 'HTML/browser';
-      if (state.debugResponseSeen && state.debugServerStage) source = 'Server 2';
-      else if (state.debugResponseSeen) source = 'Server/platform tanpa stage header';
-      el.debugSource.textContent = source;
-      if (el.debugDiagnosis) el.debugDiagnosis.textContent = state.debugDiagnosis || 'Menunggu hasil validasi';
-      el.debugHttp.textContent = state.debugResponseSeen ? String(state.debugHttpStatus || 0) : 'Belum ada respons';
-      el.debugClientStage.textContent = state.debugClientStage || 'unknown';
-      el.debugServerStage.textContent = state.debugServerStage || 'Belum tersedia';
-      el.debugServerReason.textContent = state.debugServerReason || 'Belum tersedia';
-      if (el.debugServerCode) el.debugServerCode.textContent = state.debugServerCode || 'Belum tersedia';
-      if (el.debugServerMessage) el.debugServerMessage.textContent = state.debugServerMessage || 'Belum tersedia';
-      el.debugGuard.textContent = state.debugGuard || 'Belum tersedia';
-      el.debugRequest.textContent = state.debugRequestHash || 'Belum tersedia';
-      if (el.debugEd25519) el.debugEd25519.textContent = state.debugEd25519Status || 'Belum diperiksa';
-      if (el.debugClientError) el.debugClientError.textContent = state.debugClientError || 'Belum ada';
-      var lines = state.debugEvents.slice(-36).map(function (item) {
-        var details = item.details && Object.keys(item.details).length ? ' ' + JSON.stringify(item.details) : '';
-        return '[' + String(item.elapsed_ms).padStart(5, ' ') + ' ms] ' + item.stage + details;
-      });
-      el.debugLog.textContent = lines.length ? lines.join('\n') : 'Belum ada event diagnosis.';
-    }
-
-    function debugRecord(stage, details) {
-      state.debugClientStage = debugSafeText(stage || 'unknown', 80);
-      var safeDetails = {};
-      var input = details && typeof details === 'object' ? details : {};
-      Object.keys(input).slice(0, 12).forEach(function (key) {
-        var value = input[key];
-        if (typeof value === 'boolean' || typeof value === 'number' || value === null) safeDetails[key] = value;
-        else safeDetails[key] = debugSafeText(value, 120);
-      });
-      state.debugEvents.push({
-        elapsed_ms: Math.max(0, Date.now() - state.debugStartedAt),
-        stage: state.debugClientStage,
-        details: safeDetails
-      });
-      if (state.debugEvents.length > 80) state.debugEvents.splice(0, state.debugEvents.length - 80);
-      renderDebugPanel();
-    }
-
-    function debugCaptureServerResponse(response) {
-      state.debugResponseSeen = true;
-      state.debugHttpStatus = Number(response && response.status || 0);
-      var get = function (name) { return debugSafeText(response && response.headers && response.headers.get(name) || '', 160); };
-      var enabled = get('X-Dirac-Recovery-Debug-Enabled') === '1';
-      if (enabled) state.debugEnabled = true;
-      state.debugServerStage = get('X-Dirac-Recovery-Debug-Stage');
-      state.debugServerReason = get('X-Dirac-Recovery-Debug-Reason');
-      state.debugGuard = get('X-Dirac-Recovery-Debug-Guard');
-      state.debugRequestHash = get('X-Dirac-Recovery-Debug-Request');
-      state.debugServerEd25519KeyId = get('X-Dirac-Recovery-Debug-Ed25519-Key-Id');
-      state.debugServerEd25519State = get('X-Dirac-Recovery-Debug-Ed25519-State');
-      state.debugServerEd25519Fingerprint = get('X-Dirac-Recovery-Debug-Ed25519-Public-Key-Sha256').toLowerCase();
-      if (state.debugHttpStatus >= 400) {
-        state.debugDiagnosis = 'Server 2: ' + (state.debugServerReason || state.debugServerStage || ('HTTP ' + state.debugHttpStatus));
-      } else {
-        state.debugDiagnosis = 'Server 2 merespons; validasi lokal HTML sedang berjalan';
-      }
-      debugRecord('vault_fetch_response', {
-        http_status: state.debugHttpStatus,
-        response_ok: Boolean(response && response.ok),
-        server_stage: state.debugServerStage || 'missing',
-        server_reason: state.debugServerReason || 'missing',
-        central_guard: state.debugGuard || 'missing',
-        server_debug_enabled: enabled,
-        content_type: get('content-type') || 'missing',
-        server_elapsed_ms: get('X-Dirac-Recovery-Debug-Elapsed-Ms') || 'missing',
-        server_error_class: get('X-Dirac-Recovery-Debug-Error-Class') || 'none',
-        ed25519_key_id: state.debugServerEd25519KeyId || 'missing',
-        ed25519_key_state: state.debugServerEd25519State || 'missing',
-        ed25519_fingerprint_present: Boolean(state.debugServerEd25519Fingerprint)
-      });
-    }
 
     function setStatus(message, type) {
       el.status.textContent = String(message || CONFIG.genericError);
@@ -496,8 +328,6 @@
         VAULT_RID_MISMATCH: 'Identitas permintaan tidak sesuai dengan tautan pemulihan.',
         SIGNED_MANIFEST_MISSING: 'Dokumen validasi pemulihan belum tersedia.',
         ED25519_PUBLIC_KEY_MISSING: 'Konfigurasi validasi layanan belum tersedia.',
-        ED25519_PUBLIC_KEY_MISMATCH: 'Kunci validasi HTML tidak cocok dengan kunci Server 2.',
-        ED25519_PUBLIC_KEY_IMPORT_FAILED: 'Browser gagal memuat kunci validasi Ed25519.',
         ED25519_SIGNATURE_INVALID: 'Validasi dokumen pemulihan tidak berhasil.',
         PURPOSE_INVALID: 'Tujuan permintaan tidak sesuai dengan proses pemulihan.',
         MANIFEST_RID_MISMATCH: 'Identitas dokumen validasi tidak sesuai dengan tautan pemulihan.',
@@ -514,16 +344,7 @@
         INNER_RID_INVALID: 'Identitas hasil pemulihan tidak sesuai.',
         INNER_EXPIRED: 'Masa berlaku hasil pemulihan telah berakhir.',
         PLAINTEXT_SHAPE_INVALID: 'Format hasil pemulihan tidak valid.',
-        HPKE_MANIFEST_INVALID: 'Konfigurasi enkripsi HPKE pada manifest tidak valid.',
-        HPKE_X25519_UNAVAILABLE: 'Browser tidak mendukung X25519 yang diperlukan untuk pemulihan aman.',
-        HPKE_DH_INVALID: 'Proses pertukaran kunci HPKE tidak valid.',
-        HPKE_ENCRYPT_FAILED: 'Payload pemulihan tidak dapat dienkripsi.',
-        CENTRAL_GUARD_TOKEN_MISSING: 'Token Central Guard tidak tersedia. Muat ulang tautan resmi.',
-        CENTRAL_GUARD_REFRESH_FAILED: 'Token Central Guard tidak dapat diperbarui.',
-        RECOVERY_HPKE_VERIFY_FAILED: 'Kode pemulihan belum dapat diverifikasi oleh layanan resmi.',
-        RECOVERY_SESSION_INVALID: 'Recovery session yang diterima tidak valid.',
-        NETWORK_REQUIRED: 'Koneksi aman diperlukan untuk mengirim payload HPKE terenkripsi.',
-        DIRAC_NETWORK_DISABLED: 'Koneksi halaman telah dibatasi.'
+        DIRAC_NETWORK_DISABLED: 'Koneksi halaman telah dibatasi setelah data pemulihan diterima.'
       };
       return map[msg] || 'Proses belum dapat dilanjutkan. Silakan gunakan tautan resmi atau hubungi administrator.';
     }
@@ -586,26 +407,28 @@
       state.expiryTimer = setTimeout(renderLockedState, Math.min(delay, 2147483647));
     }
 
-    function updateEncryptedSubmitState() {
-      if (state.permanentLocked) return;
+    function updateOfflineDecryptState() {
+      if (!state.offlineDecryptRequired || state.permanentLocked) return;
       assertNotExpired();
       el.form.hidden = false;
-      setProcessStep(2);
       if (navigator.onLine === false) {
-        setCredentialFieldsLocked(true);
-        setLockNotice(true);
-        setStatus('Koneksi aman diperlukan. Aktifkan jaringan lalu tetap berada di halaman resmi ini. Recovery code tidak akan ditampilkan atau dikirim sebagai plaintext.', '');
+        state.offlineUnlockSeen = true;
+        setCredentialFieldsLocked(false);
+        setLockNotice(false);
+        setProcessStep(2);
+        setStatus('Mode aman aktif: perangkat sudah offline. Lanjutkan proses pemulihan tanpa menyalakan Wi-Fi, data seluler, hotspot, VPN, atau koneksi internet apa pun sampai proses selesai.', 'ok');
         return;
       }
-      setCredentialFieldsLocked(false);
-      setLockNotice(false);
-      setStatus('Layanan siap. Recovery code akan didecrypt di perangkat, langsung dienkripsi dengan HPKE, lalu dikirim melalui seluruh Central Guard untuk verifikasi Argon2id, salt, dan pepper.', 'ok');
+      setCredentialFieldsLocked(true);
+      setLockNotice(true);
+      setProcessStep(2);
+      setStatus('WAJIB matikan jaringan sebelum melanjutkan: aktifkan mode pesawat, lalu pastikan Wi-Fi, data seluler, hotspot, VPN, dan koneksi internet lain benar-benar mati. Kolom verifikasi baru aktif setelah perangkat terdeteksi offline.', '');
     }
 
-    function armEncryptedSubmit() {
-      state.offlineDecryptRequired = false;
-      state.offlineUnlockSeen = false;
-      updateEncryptedSubmitState();
+    function armOfflineOnlyDecrypt() {
+      state.offlineDecryptRequired = true;
+      state.offlineUnlockSeen = navigator.onLine === false;
+      updateOfflineDecryptState();
     }
 
     function rememberBuffer(value) {
@@ -613,24 +436,17 @@
       return value;
     }
 
-    function wipeSensitiveInputs() {
+    function wipeMemory() {
       for (var i = 0; i < state.sensitiveBuffers.length; i += 1) {
         try { state.sensitiveBuffers[i].fill(0); } catch (_) {}
       }
       state.sensitiveBuffers = [];
+      state.pendingRecoveryMaterial = null;
       try { el.passwordMaterial.value = ''; } catch (_) {}
       try { el.emailSecret.value = ''; } catch (_) {}
       try { el.websiteSecret.value = ''; } catch (_) {}
       try { el.recoveryOutput.value = ''; } catch (_) {}
-    }
-
-    function wipeMemory() {
-      wipeSensitiveInputs();
-      state.csrfToken = '';
-      state.pageNonce = '';
-      state.recoverySession = '';
-      state.recoverySessionExpiresAt = '';
-      try { el.verifyButton.disabled = true; } catch (_) {}
+      try { el.copyCodeButton.disabled = true; } catch (_) {}
       try { el.resultBox.classList.remove('show'); } catch (_) {}
     }
 
@@ -751,85 +567,34 @@
       return out;
     }
 
-    function captureCentralGuardTokens(response) {
-      var csrf = String(response && response.headers && response.headers.get('X-Dirac-CSRF-Token') || '').trim();
-      var nonce = String(response && response.headers && response.headers.get('X-Dirac-Page-Nonce') || '').trim();
-      if (!csrf || !nonce) throw new Error('CENTRAL_GUARD_TOKEN_MISSING');
-      state.csrfToken = csrf;
-      state.pageNonce = nonce;
-      debugRecord('central_guard_tokens_received', { csrf_present: true, page_nonce_present: true });
-    }
-
-    function buildVaultAccessUrl(fragment, format) {
+    async function fetchVaultOnce(fragment) {
+      if (state.vaultFetched) throw new Error('VAULT_FETCH_ALREADY_USED');
+      state.vaultFetched = true;
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.vaultApiAction);
       url.searchParams.set('rid', fragment.rid);
       url.searchParams.set('token', fragment.token);
-      if (format) url.searchParams.set('format', format);
-      url.searchParams.set('_dirac_page_nonce_for', CONFIG.hpkeAction);
-      return url;
-    }
-
-    async function fetchVaultOnce(fragment) {
-      if (state.vaultFetched) throw new Error('VAULT_FETCH_ALREADY_USED');
-      state.vaultFetched = true;
-      debugRecord('vault_fetch_start', {
-        action: CONFIG.vaultApiAction,
+      url.searchParams.set('format', 'json');
+      var response = await fetch(url.toString(), {
         method: 'GET',
-        same_origin: true,
-        page_nonce_requested: true
-      });
-      var response;
-      try {
-        response = await fetch(buildVaultAccessUrl(fragment, 'json').toString(), {
-          method: 'GET',
-          credentials: 'same-origin',
-          cache: 'no-store',
-          redirect: 'error',
-          referrerPolicy: 'no-referrer',
-          headers: { 'Accept': 'application/json' }
-        });
-      } catch (error) {
-        debugRecord('vault_fetch_network_error', { error_code: debugErrorCode(error) });
-        throw new Error('VAULT_FETCH_FAILED');
-      }
-      debugCaptureServerResponse(response);
-      if (!response.ok) {
-        debugRecord('vault_fetch_http_error', {
-          http_status: Number(response.status || 0),
-          server_stage: state.debugServerStage || 'missing'
-        });
-        throw new Error('VAULT_FETCH_FAILED');
-      }
-      captureCentralGuardTokens(response);
-      var contentType = String(response.headers.get('content-type') || '').toLowerCase();
-      if (contentType.indexOf('application/json') === -1) throw new Error('VAULT_RESPONSE_NOT_JSON');
-      var length = Number(response.headers.get('content-length') || 0);
-      if (Number.isFinite(length) && length > 262144) throw new Error('VAULT_RESPONSE_INVALID');
-      var text = await response.text();
-      if (text.length > 262144) throw new Error('VAULT_RESPONSE_INVALID');
-      var body;
-      try { body = JSON.parse(text); } catch (_) { throw new Error('VAULT_RESPONSE_INVALID'); }
-      if (!body || body.ok !== true) throw new Error('VAULT_RESPONSE_INVALID');
-      debugRecord('vault_response_json_valid', {
-        body_ok: true,
-        purpose_present: Boolean(body.purpose),
-        manifest_present: Boolean(body.signed_manifest || body.manifest)
-      });
-      return body;
-    }
-
-    async function refreshCentralGuardTokens() {
-      var response = await fetch(buildVaultAccessUrl(state.fragment, '').toString(), {
-        method: 'HEAD',
-        credentials: 'same-origin',
+        credentials: 'omit',
         cache: 'no-store',
         redirect: 'error',
-        referrerPolicy: 'same-origin',
+        referrerPolicy: 'no-referrer',
         headers: { 'Accept': 'application/json' }
       });
-      if (!response.ok) throw new Error('CENTRAL_GUARD_REFRESH_FAILED');
-      captureCentralGuardTokens(response);
+      if (!response.ok) {
+        throw new Error('VAULT_FETCH_FAILED');
+      }
+      var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      if (contentType.indexOf('application/json') === -1) {
+        throw new Error('VAULT_RESPONSE_NOT_JSON');
+      }
+      var body = await response.json();
+      if (!body || body.ok !== true) {
+        throw new Error('VAULT_RESPONSE_INVALID');
+      }
+      return body;
     }
 
     function normalizeVaultBundle(raw) {
@@ -895,64 +660,16 @@
     async function verifyEd25519Manifest(payload, signatureB64) {
       var keyId = String(payload.key_id || payload.keyId || '');
       var publicKeyB64 = CONFIG.ed25519PublicKeysBase64[keyId];
-      state.debugDiagnosis = 'HTML: memeriksa public key dan signature Ed25519';
-      debugRecord('ed25519_verify_start', {
-        manifest_key_id: keyId || 'missing',
-        embedded_key_present: Boolean(publicKeyB64 && publicKeyB64.indexOf('PASTE_') !== 0),
-        signature_present: Boolean(signatureB64),
-        server_key_id: state.debugServerEd25519KeyId || 'missing',
-        server_key_state: state.debugServerEd25519State || 'missing'
-      });
       if (!keyId || !publicKeyB64 || publicKeyB64.indexOf('PASTE_') === 0) {
-        state.debugEd25519Status = 'Kunci publik HTML tidak tersedia';
-        state.debugDiagnosis = 'HTML: public key Ed25519 tidak tersedia';
         throw new Error('ED25519_PUBLIC_KEY_MISSING');
       }
       var publicKeyBytes = b64ToBytes(publicKeyB64);
       var signatureBytes = b64ToBytes(signatureB64);
-      state.debugClientEd25519Fingerprint = String(await sha256Hex(publicKeyBytes)).toLowerCase();
-      if (state.debugServerEd25519Fingerprint
-          && state.debugServerEd25519Fingerprint !== state.debugClientEd25519Fingerprint) {
-        state.debugEd25519Status = 'Fingerprint HTML dan Server 2 berbeda';
-        state.debugDiagnosis = 'HTML: public key tidak cocok dengan Server 2';
-        debugRecord('ed25519_key_fingerprint_mismatch', {
-          key_id: keyId,
-          html_fingerprint: state.debugClientEd25519Fingerprint,
-          server_fingerprint: state.debugServerEd25519Fingerprint
-        });
-        throw new Error('ED25519_PUBLIC_KEY_MISMATCH');
-      }
-      state.debugEd25519Status = state.debugServerEd25519Fingerprint
-        ? 'Fingerprint HTML dan Server 2 cocok'
-        : 'Fingerprint HTML tersedia; fingerprint Server 2 tidak dikirim';
-      debugRecord('ed25519_key_fingerprint_checked', {
-        key_id: keyId,
-        html_fingerprint: state.debugClientEd25519Fingerprint,
-        server_fingerprint: state.debugServerEd25519Fingerprint || 'missing',
-        fingerprint_match: state.debugServerEd25519Fingerprint
-          ? state.debugServerEd25519Fingerprint === state.debugClientEd25519Fingerprint
-          : null
-      });
-      var publicKey;
-      try {
-        publicKey = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
-      } catch (error) {
-        state.debugEd25519Status = 'Browser gagal import Ed25519';
-        state.debugDiagnosis = 'HTML/browser: public key Ed25519 gagal dimuat';
-        debugRecord('ed25519_public_key_import_error', { error_code: debugErrorCode(error) });
-        throw new Error('ED25519_PUBLIC_KEY_IMPORT_FAILED');
-      }
-      debugRecord('ed25519_public_key_imported', { raw_key_bytes: publicKeyBytes.length });
+      var publicKey = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
       var ok = await crypto.subtle.verify({ name: 'Ed25519' }, publicKey, signatureBytes, utf8(canonical(payload)));
       if (!ok) {
-        state.debugEd25519Status = 'Signature manifest tidak cocok';
-        state.debugDiagnosis = 'HTML: signature manifest tidak cocok dengan public key';
-        debugRecord('ed25519_signature_invalid', { key_id: keyId });
         throw new Error('ED25519_SIGNATURE_INVALID');
       }
-      state.debugEd25519Status = 'Signature Ed25519 valid';
-      state.debugDiagnosis = 'HTML: signature Ed25519 valid';
-      debugRecord('ed25519_signature_valid', { key_id: keyId });
     }
 
     async function verifyManifestAndVault(raw, bundle, signedManifest) {
@@ -1000,19 +717,6 @@
         var actualSaltB64 = await sha256B64Url(saltBytes);
         var actualSaltHex = await sha256Hex(saltBytes);
         if (saltHash !== actualSaltB64 && saltHash !== actualSaltHex) throw new Error('SALT_HASH_INVALID');
-      }
-
-      var hpkeSuite = String(payload.hpke_suite || '');
-      var hpkeKeyId = String(payload.hpke_key_id || '');
-      var hpkePublicKey = String(payload.hpke_public_key_b64url || '');
-      var hpkePublicBytes;
-      try { hpkePublicBytes = b64ToBytes(hpkePublicKey); } catch (_) { hpkePublicBytes = null; }
-      if (hpkeSuite !== CONFIG.hpkeSuite
-        || !/^[A-Za-z0-9_.-]{1,80}$/.test(hpkeKeyId)
-        || !hpkePublicBytes
-        || hpkePublicBytes.length !== 32
-        || bytesToB64Url(hpkePublicBytes) !== hpkePublicKey) {
-        throw new Error('HPKE_MANIFEST_INVALID');
       }
       return params;
     }
@@ -1072,284 +776,6 @@
       return rememberBuffer(new Uint8Array(plaintext));
     }
 
-    function concatByteArrays(parts) {
-      var total = 0;
-      for (var i = 0; i < parts.length; i += 1) total += parts[i].length;
-      var out = new Uint8Array(total);
-      var offset = 0;
-      for (var j = 0; j < parts.length; j += 1) {
-        out.set(parts[j], offset);
-        offset += parts[j].length;
-      }
-      return out;
-    }
-
-    function i2osp(value, length) {
-      if (!Number.isSafeInteger(value) || value < 0 || value >= Math.pow(2, 8 * length)) throw new Error('HPKE_ENCRYPT_FAILED');
-      var out = new Uint8Array(length);
-      var remaining = value;
-      for (var i = length - 1; i >= 0; i -= 1) {
-        out[i] = remaining & 255;
-        remaining = Math.floor(remaining / 256);
-      }
-      return out;
-    }
-
-    async function hmacDigest(hashName, keyBytes, dataBytes) {
-      var key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: hashName }, false, ['sign']);
-      var result = await crypto.subtle.sign('HMAC', key, dataBytes);
-      return new Uint8Array(result);
-    }
-
-    async function hpkeExtract(hashName, saltBytes, ikmBytes) {
-      var digestLength = hashName === 'SHA-384' ? 48 : 32;
-      var key = saltBytes && saltBytes.length ? saltBytes : new Uint8Array(digestLength);
-      return hmacDigest(hashName, key, ikmBytes);
-    }
-
-    async function hpkeExpand(hashName, prkBytes, infoBytes, length) {
-      var digestLength = hashName === 'SHA-384' ? 48 : 32;
-      if (!Number.isSafeInteger(length) || length < 0 || length > 255 * digestLength) throw new Error('HPKE_ENCRYPT_FAILED');
-      var blocks = [];
-      var previous = new Uint8Array(0);
-      var total = 0;
-      for (var counter = 1; total < length; counter += 1) {
-        var data = concatByteArrays([previous, infoBytes, new Uint8Array([counter])]);
-        previous = await hmacDigest(hashName, prkBytes, data);
-        data.fill(0);
-        blocks.push(previous);
-        total += previous.length;
-      }
-      var joined = concatByteArrays(blocks);
-      var output = joined.slice(0, length);
-      joined.fill(0);
-      for (var i = 0; i < blocks.length; i += 1) blocks[i].fill(0);
-      return output;
-    }
-
-    async function hpkeLabeledExtract(hashName, suiteId, salt, label, ikm) {
-      var labeledIkm = concatByteArrays([utf8('HPKE-v1'), suiteId, utf8(label), ikm]);
-      try {
-        return await hpkeExtract(hashName, salt, labeledIkm);
-      } finally {
-        labeledIkm.fill(0);
-      }
-    }
-
-    async function hpkeLabeledExpand(hashName, suiteId, prk, label, info, length) {
-      var labeledInfo = concatByteArrays([i2osp(length, 2), utf8('HPKE-v1'), suiteId, utf8(label), info]);
-      try {
-        return await hpkeExpand(hashName, prk, labeledInfo, length);
-      } finally {
-        labeledInfo.fill(0);
-      }
-    }
-
-    function isAllZero(bytes) {
-      var value = 0;
-      for (var i = 0; i < bytes.length; i += 1) value |= bytes[i];
-      return value === 0;
-    }
-
-    async function hpkeEncryptRecoveryCode(recoveryCode) {
-      var manifest = state.manifestPayload || {};
-      var receiverPublicRaw = b64ToBytes(String(manifest.hpke_public_key_b64url || ''));
-      var keyId = String(manifest.hpke_key_id || '');
-      if (String(manifest.hpke_suite || '') !== CONFIG.hpkeSuite
-        || receiverPublicRaw.length !== 32
-        || !/^[A-Za-z0-9_.-]{1,80}$/.test(keyId)) {
-        throw new Error('HPKE_MANIFEST_INVALID');
-      }
-
-      var receiverPublicKey;
-      var ephemeral;
-      try {
-        receiverPublicKey = await crypto.subtle.importKey('raw', receiverPublicRaw, { name: 'X25519' }, false, []);
-        ephemeral = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
-      } catch (_) {
-        throw new Error('HPKE_X25519_UNAVAILABLE');
-      }
-
-      var enc = new Uint8Array(await crypto.subtle.exportKey('raw', ephemeral.publicKey));
-      var dh = new Uint8Array(await crypto.subtle.deriveBits({ name: 'X25519', public: receiverPublicKey }, ephemeral.privateKey, 256));
-      if (dh.length !== 32 || isAllZero(dh)) {
-        dh.fill(0);
-        throw new Error('HPKE_DH_INVALID');
-      }
-
-      var kemSuiteId = concatByteArrays([utf8('KEM'), i2osp(0x0020, 2)]);
-      var kemContext = concatByteArrays([enc, receiverPublicRaw]);
-      var eaePrk = await hpkeLabeledExtract('SHA-256', kemSuiteId, new Uint8Array(0), 'eae_prk', dh);
-      var sharedSecret = await hpkeLabeledExpand('SHA-256', kemSuiteId, eaePrk, 'shared_secret', kemContext, 32);
-
-      var hpkeSuiteId = concatByteArrays([
-        utf8('HPKE'),
-        i2osp(0x0020, 2),
-        i2osp(0x0002, 2),
-        i2osp(0x0002, 2)
-      ]);
-
-      var sentAtMs = Date.now();
-      var expiresAtMs = sentAtMs + 90 * 1000;
-      var infoObject = {
-        version: CONFIG.hpkeEnvelopeVersion,
-        purpose: CONFIG.expectedPurpose,
-        request_id: state.fragment.rid,
-        hpke_suite: CONFIG.hpkeSuite,
-        hpke_key_id: keyId
-      };
-      var aadObject = {
-        action: CONFIG.hpkeAction,
-        version: CONFIG.hpkeEnvelopeVersion,
-        purpose: CONFIG.expectedPurpose,
-        origin: location.origin,
-        request_id: state.fragment.rid,
-        hpke_suite: CONFIG.hpkeSuite,
-        hpke_key_id: keyId,
-        sent_at_ms: sentAtMs,
-        expires_at_ms: expiresAtMs
-      };
-      var info = utf8(canonical(infoObject));
-      var pskIdHash = await hpkeLabeledExtract('SHA-384', hpkeSuiteId, new Uint8Array(0), 'psk_id_hash', new Uint8Array(0));
-      var infoHash = await hpkeLabeledExtract('SHA-384', hpkeSuiteId, new Uint8Array(0), 'info_hash', info);
-      var keyScheduleContext = concatByteArrays([new Uint8Array([0]), pskIdHash, infoHash]);
-      var secret = await hpkeLabeledExtract('SHA-384', hpkeSuiteId, sharedSecret, 'secret', new Uint8Array(0));
-      var keyBytes = await hpkeLabeledExpand('SHA-384', hpkeSuiteId, secret, 'key', keyScheduleContext, 32);
-      var nonce = await hpkeLabeledExpand('SHA-384', hpkeSuiteId, secret, 'base_nonce', keyScheduleContext, 12);
-      var aad = utf8(canonical(aadObject));
-      var plaintext = utf8(canonical({
-        version: CONFIG.hpkePlaintextVersion,
-        request_id: state.fragment.rid,
-        recovery_code: String(recoveryCode || '')
-      }));
-
-      try {
-        var aesKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
-        var sealed = new Uint8Array(await crypto.subtle.encrypt({
-          name: 'AES-GCM',
-          iv: nonce,
-          additionalData: aad,
-          tagLength: 128
-        }, aesKey, plaintext));
-        return {
-          action: CONFIG.hpkeAction,
-          version: CONFIG.hpkeEnvelopeVersion,
-          request_id: state.fragment.rid,
-          hpke_suite: CONFIG.hpkeSuite,
-          hpke_key_id: keyId,
-          enc: bytesToB64Url(enc),
-          ciphertext: bytesToB64Url(sealed),
-          sent_at_ms: sentAtMs,
-          expires_at_ms: expiresAtMs,
-          idempotency_key: bytesToB64Url(crypto.getRandomValues(new Uint8Array(32)))
-        };
-      } catch (_) {
-        throw new Error('HPKE_ENCRYPT_FAILED');
-      } finally {
-        dh.fill(0);
-        kemSuiteId.fill(0);
-        kemContext.fill(0);
-        eaePrk.fill(0);
-        sharedSecret.fill(0);
-        hpkeSuiteId.fill(0);
-        info.fill(0);
-        pskIdHash.fill(0);
-        infoHash.fill(0);
-        keyScheduleContext.fill(0);
-        secret.fill(0);
-        keyBytes.fill(0);
-        nonce.fill(0);
-        aad.fill(0);
-        plaintext.fill(0);
-      }
-    }
-
-    async function submitHpkeEnvelope(envelope) {
-      if (!state.csrfToken || !state.pageNonce) throw new Error('CENTRAL_GUARD_TOKEN_MISSING');
-      var url = new URL(CONFIG.vaultApiPath, location.origin);
-      url.searchParams.set('action', CONFIG.hpkeAction);
-      debugRecord('hpke_verify_fetch_start', {
-        action: CONFIG.hpkeAction,
-        method: 'POST',
-        csrf_present: Boolean(state.csrfToken),
-        page_nonce_present: Boolean(state.pageNonce),
-        envelope_version: envelope && envelope.version || 'missing',
-        hpke_key_id_present: Boolean(envelope && envelope.hpke_key_id)
-      });
-      var response;
-      try {
-        response = await fetch(url.toString(), {
-          method: 'POST',
-          credentials: 'same-origin',
-          cache: 'no-store',
-          redirect: 'error',
-          referrerPolicy: 'strict-origin-when-cross-origin',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-CSRF-Token': state.csrfToken,
-            'X-Dirac-CSRF-Token': state.csrfToken,
-            'X-Dirac-Page-Nonce': state.pageNonce,
-            'Idempotency-Key': envelope.idempotency_key
-          },
-          body: JSON.stringify(envelope)
-        });
-      } catch (error) {
-        debugRecord('hpke_verify_fetch_network_error', { error_code: debugErrorCode(error) });
-        throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
-      }
-      debugCaptureServerResponse(response);
-      debugRecord('hpke_verify_fetch_response', {
-        http_status: Number(response.status || 0),
-        response_ok: Boolean(response.ok),
-        server_stage: state.debugServerStage || 'missing',
-        server_reason: state.debugServerReason || 'missing'
-      });
-      var length = Number(response.headers.get('content-length') || 0);
-      if (Number.isFinite(length) && length > 65536) throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
-      var text = await response.text();
-      if (text.length > 65536) throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
-      var body;
-      try { body = text ? JSON.parse(text) : null; } catch (_) { body = null; }
-      var serverCode = body && (body.code || body.error_code)
-        ? debugSafeText(body.code || body.error_code, 120)
-        : 'missing';
-      var serverMessage = body && body.message
-        ? debugSafeText(body.message, 160)
-        : 'missing';
-      state.debugServerCode = serverCode === 'missing' ? '' : serverCode;
-      state.debugServerMessage = serverMessage === 'missing' ? '' : serverMessage;
-      if (!response.ok || !body || body.ok !== true || body.recovery_code_verified !== true) {
-        state.debugDiagnosis = 'Server 2: ' + (state.debugServerCode || state.debugServerMessage || state.debugServerReason || state.debugServerStage || ('HTTP ' + Number(response.status || 0)));
-        debugRecord('hpke_verify_response_rejected', {
-          http_status: Number(response.status || 0),
-          body_ok: Boolean(body && body.ok === true),
-          recovery_verified: Boolean(body && body.recovery_code_verified === true),
-          error_code: serverCode,
-          server_message: serverMessage
-        });
-        throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
-      }
-      var session = String(body.dirac_lost_passkey_recovery_session || '');
-      var sessionExpiresAt = String(body.recovery_session_expires_at || '');
-      if (!/^[A-Za-z0-9_-]{32,160}$/.test(session)
-        || !Number.isFinite(Date.parse(sessionExpiresAt))
-        || Date.parse(sessionExpiresAt) <= Date.now()) {
-        debugRecord('recovery_session_invalid', {
-          session_shape_valid: /^[A-Za-z0-9_-]{32,160}$/.test(session),
-          expiry_parse_valid: Number.isFinite(Date.parse(sessionExpiresAt)),
-          expiry_future: Number.isFinite(Date.parse(sessionExpiresAt)) && Date.parse(sessionExpiresAt) > Date.now()
-        });
-        throw new Error('RECOVERY_SESSION_INVALID');
-      }
-      debugRecord('hpke_verify_complete', { recovery_verified: true, session_shape_valid: true });
-      return { session: session, expiresAt: sessionExpiresAt };
-    }
-
-    function continueVerifiedRecovery() {
-      setStatus('Recovery session sudah dikirim secara aman ke masuk.html. Kembali ke tab masuk.html lalu tekan Verify.', 'ok');
-    }
-
     function buildVaultMaterial(passwordMaterial, emailSecret, websiteSecret, bundle) {
       var password = normalizePassword(passwordMaterial);
       var email = normalizeSecret(emailSecret);
@@ -1386,30 +812,59 @@
       return text;
     }
 
-    async function decryptSubmit(event) {
-      event.preventDefault();
-      state.debugEnabled = true;
-      try { if (el.debugPanel) { el.debugPanel.hidden = false; el.debugPanel.open = true; } } catch (_) {}
-      debugRecord('decrypt_submit_start', {
-        online: navigator.onLine !== false,
-        vault_ready: Boolean(state.vaultBundle),
-        manifest_ready: Boolean(state.manifestPayload),
-        csrf_present: Boolean(state.csrfToken),
-        page_nonce_present: Boolean(state.pageNonce)
-      });
-      if (state.permanentLocked) return renderLockedState();
-      if (navigator.onLine === false) {
-        updateEncryptedSubmitState();
+    function copyRecoveryMaterialFallback(value) {
+      var buffer = document.createElement('textarea');
+      buffer.className = 'clipboard-buffer';
+      buffer.setAttribute('readonly', '');
+      buffer.setAttribute('aria-hidden', 'true');
+      buffer.value = value;
+      document.body.appendChild(buffer);
+      buffer.focus();
+      buffer.select();
+      buffer.setSelectionRange(0, buffer.value.length);
+      var copied = false;
+      try { copied = document.execCommand('copy'); } catch (_) { copied = false; }
+      buffer.value = '';
+      try { document.body.removeChild(buffer); } catch (_) {}
+      return copied;
+    }
+
+    async function copyRecoveryMaterialOnce() {
+      var value = state.pendingRecoveryMaterial;
+      if (!value) {
+        wipeMemory();
+        setStatus('Kode pemulihan tidak tersedia. Buka ulang tautan resmi jika perlu mengulangi proses.', 'err');
         return;
       }
+      var copied = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(value);
+          copied = true;
+        }
+      } catch (_) {
+        copied = false;
+      }
+      if (!copied) copied = copyRecoveryMaterialFallback(value);
+      wipeMemory();
+      setProcessStep(3);
+      if (copied) {
+        setStatus('Kode berhasil disalin. Seluruh data sementara di halaman ini telah otomatis dibersihkan. Segera lanjutkan pembuatan passkey baru melalui layanan resmi.', 'ok');
+      } else {
+        setStatus('Browser tidak mengizinkan penyalinan otomatis. Demi keamanan, seluruh data sementara di halaman ini telah dibersihkan. Buka ulang tautan resmi jika perlu mengulangi proses.', 'err');
+      }
+    }
+
+    async function decryptSubmit(event) {
+      event.preventDefault();
+      if (state.permanentLocked) return renderLockedState();
+      if (state.offlineDecryptRequired && navigator.onLine !== false) return renderLockedState();
       assertNotExpired();
       el.decryptButton.disabled = true;
       setLockNotice(false);
-      setProcessStep(2);
+      setProcessStep(3);
       try { document.body.classList.add('processing'); } catch (_) {}
-      setStatus('Decrypt lokal dan enkripsi HPKE sedang berjalan. Jangan tutup halaman atau berpindah aplikasi.', 'loading');
-      var recoveryMaterial = '';
-      var plaintext = null;
+      setStatus('Proses pemulihan sedang berjalan. Jangan tutup halaman.', 'loading');
       try {
         var bundle = state.vaultBundle;
         var params = normalizedArgonParams(bundle.argon2id_params);
@@ -1423,127 +878,60 @@
         var tagBytes = rememberBuffer(b64ToBytes(bundle.auth_tag));
         var aadBytes = rememberBuffer(utf8(canonical(bundle.metadata)));
         var vaultMaterial = rememberBuffer(buildVaultMaterial(el.passwordMaterial.value, el.emailSecret.value, el.websiteSecret.value, bundle));
-        debugRecord('argon2_local_start', {
-          memory_kib: Number(params.mem || params.memoryCost || 0),
-          time_cost: Number(params.time || params.timeCost || 0),
-          parallelism: Number(params.parallelism || 0)
-        });
         var argonRaw = await runArgon2idRaw(vaultMaterial, saltBytes, params);
-        debugRecord('argon2_local_complete', { output_present: Boolean(argonRaw && argonRaw.length) });
         var aesKey = await hkdfSha256(argonRaw, saltBytes, bundle.hkdf_info, 32);
-        debugRecord('hkdf_local_complete', { key_ready: Boolean(aesKey) });
+        var plaintext;
         try {
-          debugRecord('aes_gcm_decrypt_start');
           plaintext = await decryptAesGcm(aesKey, nonceBytes, ciphertextBytes, tagBytes, aadBytes);
-          debugRecord('aes_gcm_decrypt_complete', { plaintext_present: Boolean(plaintext && plaintext.length) });
         } catch (_) {
           throw new Error('AES_GCM_DECRYPT_FAILED');
         }
-
-        recoveryMaterial = String(verifyInnerPayload(plaintext));
-        debugRecord('inner_payload_verified', { recovery_material_present: Boolean(recoveryMaterial) });
-        debugRecord('hpke_encrypt_start');
-        var envelope = await hpkeEncryptRecoveryCode(recoveryMaterial);
-        debugRecord('hpke_encrypt_complete', {
-          envelope_ready: Boolean(envelope && envelope.ciphertext && envelope.enc),
-          key_id_present: Boolean(envelope && envelope.hpke_key_id)
-        });
-        recoveryMaterial = '';
-        try { plaintext.fill(0); } catch (_) {}
-        plaintext = null;
-
-        setStatus('Memperbarui token Central Guard dan mengirim payload HPKE terenkripsi ke layanan resmi...', 'loading');
-        debugRecord('central_guard_refresh_start');
-        await refreshCentralGuardTokens();
-        debugRecord('central_guard_refresh_complete', {
-          csrf_present: Boolean(state.csrfToken),
-          page_nonce_present: Boolean(state.pageNonce)
-        });
-        var verified = await submitHpkeEnvelope(envelope);
-
-        wipeSensitiveInputs();
-        state.recoverySession = '';
-        state.recoverySessionExpiresAt = verified.expiresAt;
-        try {
-          el.verifyButton.disabled = true;
-          el.verifyButton.textContent = 'Recovery dikirim ke masuk.html';
-        } catch (_) {}
+        var recoveryMaterial = verifyInnerPayload(plaintext);
+        state.pendingRecoveryMaterial = String(recoveryMaterial);
+        try { el.recoveryOutput.value = ''; } catch (_) {}
+        try { el.copyCodeButton.disabled = false; } catch (_) {}
         el.resultBox.classList.add('show');
-        setCredentialFieldsLocked(true);
         setProcessStep(3);
-        setStatus('Decrypt berhasil dan kode pemulihan telah diverifikasi secara aman. Recovery session sudah dikirim melalui cookie HttpOnly SameSite ke masuk.html. Kembali ke tab masuk.html lalu tekan Verify.', 'ok');
+        setStatus('Pemulihan berhasil. Kode tidak ditampilkan di layar. Klik “Salin Code” untuk menyalin satu kali; setelah diklik, data sementara otomatis dibersihkan.', 'ok');
       } catch (error) {
-        state.debugEnabled = true;
-        state.debugClientError = debugErrorCode(error);
-        if (state.debugResponseSeen && (state.debugServerCode || state.debugServerMessage || state.debugServerReason || state.debugServerStage)) {
-          state.debugDiagnosis = 'Server 2: ' + (state.debugServerCode || state.debugServerMessage || state.debugServerReason || state.debugServerStage);
-        } else {
-          state.debugDiagnosis = 'HTML/browser: ' + state.debugClientError;
-        }
-        try { if (el.debugPanel) { el.debugPanel.hidden = false; el.debugPanel.open = true; } } catch (_) {}
-        debugRecord('decrypt_submit_error', {
-          error_code: state.debugClientError,
-          server_code: state.debugServerCode || 'missing',
-          server_message: state.debugServerMessage || 'missing',
-          last_server_stage: state.debugServerStage || 'missing',
-          last_http_status: state.debugHttpStatus || 0,
-          response_seen: state.debugResponseSeen
-        });
-        recoveryMaterial = '';
-        try { if (plaintext) plaintext.fill(0); } catch (_) {}
         var msg = String(error && error.message || '');
         if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') {
           renderLockedState();
         } else failClosed(error);
       } finally {
         try { document.body.classList.remove('processing'); } catch (_) {}
-        if (!state.recoverySession && !el.form.hidden && !state.permanentLocked) updateEncryptedSubmitState();
+        if (!state.pendingRecoveryMaterial && !el.form.hidden && !state.permanentLocked) updateOfflineDecryptState();
       }
     }
 
     async function bootstrap() {
-      if (CONFIG.debugRequested && el.debugPanel) el.debugPanel.hidden = false;
-      debugRecord('bootstrap_start', {
-        debug_requested: Boolean(CONFIG.debugRequested),
-        secure_context: Boolean(window.isSecureContext),
-        online: navigator.onLine !== false
-      });
       hardenStorageAccess();
-      debugRecord('storage_hardened');
       requireSecureContext();
-      debugRecord('secure_context_valid');
       assertOfficialOrigin();
-      debugRecord('official_origin_valid', { origin: location.origin });
       assertArgon2idReady();
-      debugRecord('argon2_wasm_ready');
       state.fragment = parseFragment();
-      debugRecord('recovery_fragment_valid', { rid_shape_valid: true, token_shape_valid: true });
       setLockNotice(false);
       setProcessStep(1);
       setStatus('Menyiapkan data pemulihan dari layanan resmi...', 'loading');
       var raw = await fetchVaultOnce(state.fragment);
       state.vaultResponse = raw;
       state.vaultBundle = normalizeVaultBundle(raw);
-      debugRecord('vault_bundle_normalized');
       setProcessStep(2);
       setStatus('Memvalidasi akses pemulihan melalui kanal resmi...', 'loading');
       var signedManifest = extractSignedManifest(raw);
       state.manifestPayload = signedManifest.payload;
-      debugRecord('signed_manifest_extracted', { signature_present: Boolean(signedManifest.signatureB64) });
       await verifyManifestAndVault(raw, state.vaultBundle, signedManifest);
-      debugRecord('manifest_and_vault_verified');
-      armEncryptedSubmit();
-      state.debugDiagnosis = 'Validasi Server 2 dan HTML berhasil';
-      debugRecord('bootstrap_complete');
+      disableAllNetwork();
+      armOfflineOnlyDecrypt();
     }
 
     el.form.addEventListener('submit', decryptSubmit);
-    el.verifyButton.addEventListener('click', continueVerifiedRecovery);
+    el.copyCodeButton.addEventListener('click', copyRecoveryMaterialOnce);
     el.clearButton.addEventListener('click', function () {
       wipeMemory();
       setLockNotice(false);
       setProcessStep(1);
-      setStatus('Formulir dan data sementara telah dibersihkan. Jika proses belum selesai, buka ulang tautan resmi dari email.', '');
+      setStatus('Formulir telah dibersihkan. Jika proses belum selesai, buka ulang tautan resmi dari email.', '');
     });
     window.addEventListener('pagehide', function () {
       wipeMemory();
@@ -1552,33 +940,17 @@
       wipeMemory();
     }, { once: false });
     window.addEventListener('online', function () {
-      if (state.vaultFetched && !state.permanentLocked && !state.recoverySession) updateEncryptedSubmitState();
+      if (state.offlineDecryptRequired || state.vaultFetched) renderLockedState();
     }, { once: false });
     window.addEventListener('offline', function () {
-      if (state.vaultFetched && !state.permanentLocked && !state.recoverySession) updateEncryptedSubmitState();
+      if (state.offlineDecryptRequired && !state.permanentLocked) updateOfflineDecryptState();
     }, { once: false });
 
     bootstrap().catch(function (error) {
       var msg = String(error && error.message || '');
-      state.debugEnabled = true;
-      state.debugClientError = debugErrorCode(error);
-      if (!state.debugDiagnosis || state.debugDiagnosis === 'Menunggu hasil validasi') {
-        state.debugDiagnosis = 'HTML/browser: ' + state.debugClientError;
-      }
-      try { if (el.debugPanel) { el.debugPanel.hidden = false; el.debugPanel.open = true; } } catch (_) {}
-      debugRecord('bootstrap_error', {
-        error_code: debugErrorCode(error),
-        response_seen: state.debugResponseSeen,
-        http_status: state.debugHttpStatus || 0,
-        server_stage: state.debugServerStage || 'missing',
-        likely_source: state.debugResponseSeen ? (state.debugServerStage ? 'server2' : 'server_or_platform') : 'html_or_browser'
-      });
       if (msg === 'ARGON2ID_WEBASSEMBLY_DISABLED') return deploymentFailClosed('Fitur keamanan perangkat tidak tersedia pada browser ini. Gunakan browser resmi tanpa mode pembatas tambahan.');
       if (msg === 'ARGON2ID_WASM_MISSING') return deploymentFailClosed('Komponen keamanan halaman belum tersedia. Proses dihentikan secara aman.');
       if (msg === 'ED25519_PUBLIC_KEY_MISSING') return deploymentFailClosed('Konfigurasi validasi layanan belum tersedia. Proses dihentikan secara aman.');
-      if (msg === 'ED25519_PUBLIC_KEY_MISMATCH') return deploymentFailClosed('Kunci validasi HTML tidak cocok dengan Server 2. Lihat panel diagnosis teknis.');
-      if (msg === 'ED25519_PUBLIC_KEY_IMPORT_FAILED') return deploymentFailClosed('Browser tidak dapat memuat kunci validasi Ed25519. Lihat panel diagnosis teknis.');
-      if (msg === 'ED25519_SIGNATURE_INVALID') return deploymentFailClosed('Signature manifest tidak cocok dengan kunci HTML. Lihat panel diagnosis teknis.');
       if (/^(RID_INVALID|TOKEN_INVALID|ORIGIN_NOT_ALLOWED|VAULT_FETCH_FAILED|VAULT_RESPONSE_|EXPIRED|MANIFEST_RID_MISMATCH|RECOVERY_LOCKED)/.test(msg)) return renderLockedState();
       return failClosed(error);
     });
