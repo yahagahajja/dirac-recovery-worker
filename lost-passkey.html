@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-3nFUuWLjWWfSl1l4uhfC9hZIi1EhgcIZ1ONpbBiMdvKuLx32PgpvO3Zdl5YTGLx0EEodho8JoPMETKY3OUcpPQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-IOYFMnGXYjwR4MHJDozjadh4dT6YD+UeNg0bG4AqDb/cq6mPD9hYtKjw1YFfobSNbpO18mfqVlp/cahuAVajaA=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-AgfVPaVMNhDEhnB5SVeFQYn0yHJB3oo3T3rBeCHsrUOORPgiHkY4OOeikzFc7PibwPEBLmnZEhtzX/MCD/ksSA=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-3nFUuWLjWWfSl1l4uhfC9hZIi1EhgcIZ1ONpbBiMdvKuLx32PgpvO3Zdl5YTGLx0EEodho8JoPMETKY3OUcpPQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-IOYFMnGXYjwR4MHJDozjadh4dT6YD+UeNg0bG4AqDb/cq6mPD9hYtKjw1YFfobSNbpO18mfqVlp/cahuAVajaA=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-AgfVPaVMNhDEhnB5SVeFQYn0yHJB3oo3T3rBeCHsrUOORPgiHkY4OOeikzFc7PibwPEBLmnZEhtzX/MCD/ksSA=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -74,6 +74,9 @@
     .card > h2 { animation-delay: .8s; }
     .card > .small { animation-delay: .9s; }
     .grid { display: grid; gap: 14px; margin-top: 16px; }
+    [hidden] { display: none !important; }
+    #decryptForm[hidden], body:not(.offline-form-ready) #decryptForm { display: none !important; visibility: hidden !important; pointer-events: none !important; }
+    body.offline-form-ready #decryptForm:not([hidden]) { display: grid; visibility: visible; pointer-events: auto; }
     label { display: grid; gap: 7px; color: #d7e2f2; font-weight: 650; transition: color .18s ease; }
     label:focus-within { color: #e8fff0; }
     input, textarea { width: 100%; border: 1px solid #33445c; background: linear-gradient(180deg, #0d1420, #0a1019); color: #f3f7fc; border-radius: 12px; padding: 13px 14px; font: inherit; outline: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease; }
@@ -175,27 +178,27 @@
 
       <div id="status" class="status loading" role="status" aria-live="polite" aria-atomic="true"><span id="statusText" class="status-text">Memuat layanan pemulihan...</span><span id="statusCursor" class="status-cursor" aria-hidden="true"></span></div>
 
-      <form id="decryptForm" class="grid" autocomplete="off" spellcheck="false" aria-hidden="true" hidden>
+      <form id="decryptForm" class="grid" autocomplete="off" spellcheck="false" aria-hidden="true" hidden inert>
         <div class="split">
           <label>
             Informasi verifikasi akun
-            <input id="passwordMaterial" name="passwordMaterial" type="password" autocomplete="off" minlength="6" maxlength="1024" required>
+            <input id="passwordMaterial" name="passwordMaterial" type="password" autocomplete="off" minlength="6" maxlength="1024" required disabled>
             <span class="hint">Masukkan data sesuai instruksi resmi pemulihan akun.</span>
           </label>
           <label>
             Kode verifikasi dari email
-            <input id="emailSecret" name="emailSecret" type="password" autocomplete="off" inputmode="text" minlength="100" maxlength="220" required>
+            <input id="emailSecret" name="emailSecret" type="password" autocomplete="off" inputmode="text" minlength="100" maxlength="220" required disabled>
             <span class="hint">Gunakan kode dari email resmi. Spasi akan diabaikan.</span>
           </label>
         </div>
         <label>
           Kode verifikasi dari website
-          <input id="websiteSecret" name="websiteSecret" type="password" autocomplete="off" inputmode="text" minlength="100" maxlength="220" required>
+          <input id="websiteSecret" name="websiteSecret" type="password" autocomplete="off" inputmode="text" minlength="100" maxlength="220" required disabled>
           <span class="hint">Gunakan kode dari halaman resmi. Jangan bagikan kepada pihak lain.</span>
         </label>
         <div class="row">
-          <button id="decryptButton" class="primary" type="submit">Lanjutkan pemulihan</button>
-          <button id="clearButton" class="secondary" type="button">Bersihkan formulir</button>
+          <button id="decryptButton" class="primary" type="submit" disabled>Lanjutkan pemulihan</button>
+          <button id="clearButton" class="secondary" type="button" disabled>Bersihkan formulir</button>
         </div>
       </form>
 
@@ -391,20 +394,33 @@
     }
 
     function hideCredentialForm() {
+      try { document.body.classList.remove('offline-form-ready'); } catch (_) {}
       try { el.form.classList.remove('form-reveal'); } catch (_) {}
       try { el.form.hidden = true; } catch (_) {}
+      try { el.form.setAttribute('hidden', ''); } catch (_) {}
       try { el.form.setAttribute('aria-hidden', 'true'); } catch (_) {}
+      try { el.form.inert = true; } catch (_) {}
+      try { el.form.setAttribute('inert', ''); } catch (_) {}
       setCredentialFieldsLocked(true);
     }
 
     function revealCredentialForm() {
+      if (navigator.onLine !== false || !state.offlineDecryptRequired || state.permanentLocked) {
+        hideCredentialForm();
+        return false;
+      }
+      try { document.body.classList.add('offline-form-ready'); } catch (_) {}
       try { el.form.hidden = false; } catch (_) {}
+      try { el.form.removeAttribute('hidden'); } catch (_) {}
       try { el.form.setAttribute('aria-hidden', 'false'); } catch (_) {}
+      try { el.form.inert = false; } catch (_) {}
+      try { el.form.removeAttribute('inert'); } catch (_) {}
       try {
         el.form.classList.remove('form-reveal');
         void el.form.offsetWidth;
         el.form.classList.add('form-reveal');
       } catch (_) {}
+      return true;
     }
 
     function setDebugStage(stage) {
@@ -455,6 +471,7 @@
       try { el.emailSecret.disabled = disabled; } catch (_) {}
       try { el.websiteSecret.disabled = disabled; } catch (_) {}
       try { el.decryptButton.disabled = disabled; } catch (_) {}
+      try { el.clearButton.disabled = disabled; } catch (_) {}
     }
 
     function describeRecoveryError(error) {
@@ -466,8 +483,8 @@
         return 'Kode dari website belum tepat 100 karakter setelah spasi atau karakter tersembunyi diabaikan. Panjang saat ini: ' + msg.split(':')[1] + '/100.';
       }
       var map = {
-        PASSWORD_INVALID: 'Informasi verifikasi akun tidak valid. Pastikan data yang dimasukkan sesuai instruksi resmi.',
-        AES_GCM_DECRYPT_FAILED: 'Informasi yang dimasukkan belum cocok dengan data pemulihan. Pastikan seluruh kode dan informasi akun sesuai instruksi resmi.',
+        PASSWORD_INVALID: 'Sandi pemulihan belum diisi atau hanya berisi karakter yang tidak dapat digunakan.',
+        AES_GCM_DECRYPT_FAILED: 'Kombinasi sandi pemulihan, kode email, dan kode website tidak cocok dengan vault terenkripsi. Ketiga nilai membentuk satu kunci kriptografi, sehingga halaman tidak dapat menentukan satu kolom yang salah secara terpisah. Periksa ketiganya lalu coba lagi.',
         ARGON2ID_WEBASSEMBLY_DISABLED: 'Fitur keamanan perangkat tidak tersedia pada browser ini. Gunakan browser resmi tanpa mode pembatas tambahan.',
         ARGON2ID_WASM_MISSING: 'Komponen keamanan halaman belum tersedia.',
         ARGON2ID_WASM_OUTPUT_INVALID: 'Proses keamanan halaman menghasilkan data yang tidak valid.',
@@ -500,6 +517,29 @@
         DIRAC_NETWORK_DISABLED: 'Koneksi halaman telah dibatasi setelah data pemulihan diterima.'
       };
       return map[msg] || 'Proses belum dapat dilanjutkan. Silakan gunakan tautan resmi atau hubungi administrator.';
+    }
+
+    function isRetryableCredentialError(error) {
+      var msg = String(error && error.message || error || '');
+      return msg === 'PASSWORD_INVALID'
+        || /^EMAIL_SECRET_LENGTH_INVALID:\d+$/.test(msg)
+        || /^WEBSITE_SECRET_LENGTH_INVALID:\d+$/.test(msg)
+        || msg === 'AES_GCM_DECRYPT_FAILED';
+    }
+
+    function renderCredentialError(error) {
+      recoveryDebug('credential_validation_rejected', error);
+      wipeMemory();
+      setProcessStep(2);
+      setStatus(describeRecoveryError(error), 'err');
+      if (navigator.onLine === false && state.offlineDecryptRequired && !state.permanentLocked) {
+        state.formRevealed = true;
+        setCredentialFieldsLocked(false);
+        revealCredentialForm();
+        try { el.passwordMaterial.focus(); } catch (_) {}
+      } else {
+        hideCredentialForm();
+      }
     }
 
     function failClosed(error) {
@@ -1164,7 +1204,11 @@
         var msg = String(error && error.message || '');
         if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') {
           renderLockedState();
-        } else failClosed(error);
+        } else if (isRetryableCredentialError(error)) {
+          renderCredentialError(error);
+        } else {
+          failClosed(error);
+        }
       } finally {
         try { document.body.classList.remove('processing'); } catch (_) {}
         if (!el.form.hidden && !state.permanentLocked) updateOfflineDecryptState();
@@ -1219,6 +1263,8 @@
       setDebugStage('offline_decrypt_ready');
       armOfflineOnlyDecrypt();
     }
+
+    hideCredentialForm();
 
     el.form.addEventListener('submit', decryptSubmit);
     el.copyRecoveryButton.addEventListener('click', copyRecoveryMaterialOnce);
