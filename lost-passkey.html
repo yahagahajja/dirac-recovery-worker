@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-AgfVPaVMNhDEhnB5SVeFQYn0yHJB3oo3T3rBeCHsrUOORPgiHkY4OOeikzFc7PibwPEBLmnZEhtzX/MCD/ksSA=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-VFBmPgxNpZR9/rMQumRODrt5vICHRGkkbXx+5uRd4lYxTMZb0VZIZJlrALVjlu+c4SZtjddHhxLERk8fvK1rnQ=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -249,6 +249,12 @@
         timeCost: 4,
         parallelism: 3,
         hashLength: 32
+      }),
+      maxArgon2id: Object.freeze({
+        memoryCost: 1792000,
+        timeCost: 10,
+        parallelism: 4,
+        hashLength: 128
       }),
       expectedPurpose: 'lost_passkey_recovery',
       expectedLegacyVersion: 'lost-passkey-html-vault-aes256gcm-argon2id-v157',
@@ -505,6 +511,19 @@
         ARGON2_TIME_DOWNGRADE: 'Standar keamanan waktu proses tidak memenuhi batas minimum.',
         ARGON2_PARALLELISM_INVALID: 'Standar keamanan pemrosesan tidak memenuhi batas minimum.',
         ARGON2_HASHLEN_INVALID: 'Standar keamanan hasil proses tidak memenuhi batas minimum.',
+        ARGON2_MEMORY_EXCESSIVE: 'Parameter keamanan memori melebihi batas perangkat dan proses dihentikan untuk mencegah crash.',
+        ARGON2_TIME_EXCESSIVE: 'Parameter waktu proses melebihi batas aman perangkat.',
+        ARGON2_PARALLELISM_EXCESSIVE: 'Parameter paralelisme melebihi batas aman perangkat.',
+        ARGON2_HASHLEN_EXCESSIVE: 'Panjang hasil Argon2id melebihi batas aman.',
+        VERSION_BINDING_INVALID: 'Versi vault tidak cocok dengan manifest bertanda tangan.',
+        CIPHER_BINDING_INVALID: 'Algoritma enkripsi tidak cocok dengan manifest bertanda tangan.',
+        KDF_BINDING_INVALID: 'Algoritma derivasi kunci tidak cocok dengan manifest bertanda tangan.',
+        HKDF_INFO_BINDING_INVALID: 'Konteks HKDF tidak cocok dengan manifest bertanda tangan.',
+        ARGON2_MEMORY_BINDING_INVALID: 'Parameter memori Argon2id tidak cocok dengan manifest bertanda tangan.',
+        ARGON2_TIME_BINDING_INVALID: 'Parameter waktu Argon2id tidak cocok dengan manifest bertanda tangan.',
+        ARGON2_PARALLELISM_BINDING_INVALID: 'Parameter paralelisme Argon2id tidak cocok dengan manifest bertanda tangan.',
+        VAULT_ID_BINDING_INVALID: 'Identitas vault tidak cocok dengan manifest bertanda tangan.',
+        ARGON2_AAD_BINDING_INVALID: 'Parameter Argon2id tidak cocok dengan metadata vault yang diautentikasi.',
         CIPHERTEXT_HASH_INVALID: 'Validasi data pemulihan tidak sesuai.',
         AAD_HASH_INVALID: 'Validasi metadata pemulihan tidak sesuai.',
         SALT_HASH_INVALID: 'Validasi parameter pemulihan tidak sesuai.',
@@ -545,6 +564,7 @@
     function failClosed(error) {
       recoveryDebug('fail_closed', error);
       wipeMemory();
+      clearVaultReferences();
       setStatus(CONFIG.genericError, 'err');
       hideCredentialForm();
       setLockNotice(true);
@@ -554,6 +574,7 @@
     function deploymentFailClosed(message, error) {
       recoveryDebug('deployment_fail_closed', error || new Error('DEPLOYMENT_NOT_READY'));
       wipeMemory();
+      clearVaultReferences();
       setStatus(message || 'Layanan pemulihan belum siap. Hubungi administrator.', 'err');
       hideCredentialForm();
       setLockNotice(true);
@@ -562,6 +583,7 @@
 
     function renderLockedState() {
       wipeMemory();
+      clearVaultReferences();
       state.permanentLocked = true;
       state.offlineDecryptRequired = false;
       try { if (state.expiryTimer) clearTimeout(state.expiryTimer); } catch (_) {}
@@ -656,6 +678,13 @@
       return value;
     }
 
+    function clearVaultReferences() {
+      state.fragment = null;
+      state.vaultResponse = null;
+      state.vaultBundle = null;
+      state.manifestPayload = null;
+    }
+
     function wipeMemory(options) {
       var preserveResultUi = Boolean(options && options.preserveResultUi);
       for (var i = 0; i < state.sensitiveBuffers.length; i += 1) {
@@ -699,10 +728,7 @@
       wipeMemory({ preserveResultUi: true });
       try { if (state.expiryTimer) clearTimeout(state.expiryTimer); } catch (_) {}
       state.expiryTimer = null;
-      state.fragment = null;
-      state.vaultResponse = null;
-      state.vaultBundle = null;
-      state.manifestPayload = null;
+      clearVaultReferences();
       state.vaultFetched = false;
       state.offlineDecryptRequired = false;
       state.offlineUnlockSeen = false;
@@ -971,11 +997,15 @@
       };
     }
 
-    function verifyMinimumArgon2idParams(params) {
+    function verifyArgon2idParams(params) {
       if (params.memoryCost < CONFIG.minArgon2id.memoryCost) throw new Error('ARGON2_MEMORY_DOWNGRADE');
       if (params.timeCost < CONFIG.minArgon2id.timeCost) throw new Error('ARGON2_TIME_DOWNGRADE');
       if (params.parallelism < CONFIG.minArgon2id.parallelism) throw new Error('ARGON2_PARALLELISM_INVALID');
       if (params.hashLength < CONFIG.minArgon2id.hashLength) throw new Error('ARGON2_HASHLEN_INVALID');
+      if (params.memoryCost > CONFIG.maxArgon2id.memoryCost) throw new Error('ARGON2_MEMORY_EXCESSIVE');
+      if (params.timeCost > CONFIG.maxArgon2id.timeCost) throw new Error('ARGON2_TIME_EXCESSIVE');
+      if (params.parallelism > CONFIG.maxArgon2id.parallelism) throw new Error('ARGON2_PARALLELISM_EXCESSIVE');
+      if (params.hashLength > CONFIG.maxArgon2id.hashLength) throw new Error('ARGON2_HASHLEN_EXCESSIVE');
     }
 
     async function verifyEd25519Manifest(payload, signatureB64) {
@@ -1015,9 +1045,22 @@
         throw new Error('MANIFEST_RID_MISMATCH');
       }
 
-      var params = await runLoadingStage('Memeriksa parameter Argon2id', function () {
+      var params = await runLoadingStage('Memeriksa parameter Argon2id', async function () {
         var normalized = normalizedArgonParams(bundle.argon2id_params);
-        verifyMinimumArgon2idParams(normalized);
+        verifyArgon2idParams(normalized);
+        if (String(payload.version || '') !== String(bundle.version || '')) throw new Error('VERSION_BINDING_INVALID');
+        if (String(payload.cipher || '') !== 'AES-256-GCM') throw new Error('CIPHER_BINDING_INVALID');
+        if (String(payload.kdf || '') !== 'Argon2id+HKDF-SHA256') throw new Error('KDF_BINDING_INVALID');
+        if (String(payload.hkdf_info || '') !== String(bundle.hkdf_info || '')) throw new Error('HKDF_INFO_BINDING_INVALID');
+        if (Number(payload.min_argon2id_memory_kib || 0) !== normalized.memoryCost) throw new Error('ARGON2_MEMORY_BINDING_INVALID');
+        if (Number(payload.min_argon2id_time_cost || 0) !== normalized.timeCost) throw new Error('ARGON2_TIME_BINDING_INVALID');
+        if (Number(payload.min_argon2id_parallelism || 0) !== normalized.parallelism) throw new Error('ARGON2_PARALLELISM_BINDING_INVALID');
+        var vaultIdHash = await sha256Hex(utf8(String(bundle.vault_id || '')));
+        if (String(payload.vault_id_hash || '') !== vaultIdHash) throw new Error('VAULT_ID_BINDING_INVALID');
+        var aadParams = normalizedArgonParams(bundle.metadata && bundle.metadata.argon2id_params || {});
+        if (aadParams.memoryCost !== normalized.memoryCost || aadParams.timeCost !== normalized.timeCost || aadParams.parallelism !== normalized.parallelism || aadParams.hashLength !== normalized.hashLength) {
+          throw new Error('ARGON2_AAD_BINDING_INVALID');
+        }
         return normalized;
       });
 
@@ -1238,6 +1281,7 @@
         setDebugStage('vault_fetch');
         return fetchVaultOnce(state.fragment);
       });
+      state.fragment = { rid: state.fragment.rid, token: '' };
       state.vaultResponse = raw;
 
       state.vaultBundle = await runLoadingStage('Memeriksa struktur vault terenkripsi', function () {
@@ -1270,15 +1314,18 @@
     el.copyRecoveryButton.addEventListener('click', copyRecoveryMaterialOnce);
     el.clearButton.addEventListener('click', function () {
       wipeMemory();
+      clearVaultReferences();
       setLockNotice(false);
       setProcessStep(1);
       setStatus('Formulir telah dibersihkan. Jika proses belum selesai, buka ulang tautan resmi dari email.', '');
     });
     window.addEventListener('pagehide', function () {
       wipeMemory();
+      clearVaultReferences();
     }, { once: false });
     window.addEventListener('beforeunload', function () {
       wipeMemory();
+      clearVaultReferences();
     }, { once: false });
     window.addEventListener('online', function () {
       if (state.offlineDecryptRequired || state.vaultFetched) renderLockedState();
