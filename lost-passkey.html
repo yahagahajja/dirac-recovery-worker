@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-cZAEfVXUlkNJ2YGsmovRV5yjj1UlXYzSP/pUixccOxB/PzxQP1LmugwyakO9AqRiUKqVDYc+aBLmrA58D/N/Uw=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-XoVARXjvWzvKGDXXGes0W8By65rXrt3ZpmBeHUftnBf3anCGsJhdSciF3uOl43zaN31XzWbFp0XIjH74vNWToA=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -23,8 +23,8 @@
     X-Frame-Options: DENY
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
-    Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-cZAEfVXUlkNJ2YGsmovRV5yjj1UlXYzSP/pUixccOxB/PzxQP1LmugwyakO9AqRiUKqVDYc+aBLmrA58D/N/Uw=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-XoVARXjvWzvKGDXXGes0W8By65rXrt3ZpmBeHUftnBf3anCGsJhdSciF3uOl43zaN31XzWbFp0XIjH74vNWToA=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -247,32 +247,17 @@
       minArgon2id: Object.freeze({
         memoryCost: 1024000,
         timeCost: 4,
-        parallelism: 2,
+        parallelism: 3,
         hashLength: 32
       }),
-      maxArgon2id: Object.freeze({
-        memoryCost: 1792000,
-        timeCost: 10,
-        parallelism: 4,
-        hashLength: 128
-      }),
-      maxVaultResponseBytes: 524288,
-      maxManifestCanonicalBytes: 32768,
-      maxAadCanonicalBytes: 32768,
-      maxJsonDepth: 8,
-      maxJsonKeys: 160,
-      maxJsonStringBytes: 131072,
-      vaultFetchTimeoutMs: 15000,
-      expectedSaltBytes: 2500,
-      expectedVaultIdBytes: 2500,
-      expectedNonceBytes: 12,
-      expectedAuthTagBytes: 16,
-      expectedCiphertextBytes: 1200,
-      expectedRecoveryCodeLength: 1200,
-      maxClockSkewMs: 120000,
-      maxManifestLifetimeMs: 900000,
       expectedPurpose: 'lost_passkey_recovery',
       expectedLegacyVersion: 'lost-passkey-html-vault-aes256gcm-argon2id-v157',
+      expectedManifestSchema: 'dirac-lost-passkey-signed-security-manifest-v1',
+      expectedSecurityContractVersion: 'dirac-lost-passkey-security-contract-v1',
+      expectedCentralGuard: 'dirac-central-security-guard-v146',
+      expectedCipher: 'AES-256-GCM',
+      expectedKdf: 'Argon2id+HKDF-SHA256',
+      expectedHpkeSuite: 'DHKEM-X25519-HKDF-SHA256+HKDF-SHA384+AES-256-GCM',
       genericError: 'Proses pemulihan tidak dapat dilanjutkan. Tautan mungkin sudah tidak berlaku atau telah digunakan.'
     });
 
@@ -514,12 +499,6 @@
         VAULT_FETCH_FAILED: 'Data pemulihan belum dapat diambil. Periksa tautan resmi atau hubungi administrator.',
         VAULT_RESPONSE_NOT_JSON: 'Respons layanan pemulihan tidak sesuai format yang diharapkan.',
         VAULT_RESPONSE_INVALID: 'Respons layanan pemulihan belum valid.',
-        VAULT_FETCH_TIMEOUT: 'Layanan pemulihan tidak merespons dalam batas waktu aman.',
-        VAULT_RESPONSE_TOO_LARGE: 'Respons layanan melebihi batas ukuran aman.',
-        VAULT_RESPONSE_STREAM_REQUIRED: 'Browser tidak mendukung pembacaan respons aman yang diwajibkan halaman ini.',
-        VAULT_RESPONSE_UTF8_INVALID: 'Encoding respons layanan tidak valid.',
-        VAULT_RESPONSE_JSON_INVALID: 'Struktur JSON respons layanan tidak valid.',
-        FRAMED_CONTEXT_BLOCKED: 'Halaman pemulihan tidak boleh dibuka di dalam frame.',
         VAULT_BUNDLE_MISSING: 'Data pemulihan tidak ditemukan pada respons layanan.',
         VAULT_BUNDLE_INCOMPLETE: 'Data pemulihan yang diterima belum lengkap.',
         VAULT_RID_MISMATCH: 'Identitas permintaan tidak sesuai dengan tautan pemulihan.',
@@ -532,19 +511,6 @@
         ARGON2_TIME_DOWNGRADE: 'Standar keamanan waktu proses tidak memenuhi batas minimum.',
         ARGON2_PARALLELISM_INVALID: 'Standar keamanan pemrosesan tidak memenuhi batas minimum.',
         ARGON2_HASHLEN_INVALID: 'Standar keamanan hasil proses tidak memenuhi batas minimum.',
-        ARGON2_MEMORY_EXCESSIVE: 'Parameter keamanan memori melebihi batas perangkat dan proses dihentikan untuk mencegah crash.',
-        ARGON2_TIME_EXCESSIVE: 'Parameter waktu proses melebihi batas aman perangkat.',
-        ARGON2_PARALLELISM_EXCESSIVE: 'Parameter paralelisme melebihi batas aman perangkat.',
-        ARGON2_HASHLEN_EXCESSIVE: 'Panjang hasil Argon2id melebihi batas aman.',
-        VERSION_BINDING_INVALID: 'Versi vault tidak cocok dengan manifest bertanda tangan.',
-        CIPHER_BINDING_INVALID: 'Algoritma enkripsi tidak cocok dengan manifest bertanda tangan.',
-        KDF_BINDING_INVALID: 'Algoritma derivasi kunci tidak cocok dengan manifest bertanda tangan.',
-        HKDF_INFO_BINDING_INVALID: 'Konteks HKDF tidak cocok dengan manifest bertanda tangan.',
-        ARGON2_MEMORY_BINDING_INVALID: 'Parameter memori Argon2id tidak cocok dengan manifest bertanda tangan.',
-        ARGON2_TIME_BINDING_INVALID: 'Parameter waktu Argon2id tidak cocok dengan manifest bertanda tangan.',
-        ARGON2_PARALLELISM_BINDING_INVALID: 'Parameter paralelisme Argon2id tidak cocok dengan manifest bertanda tangan.',
-        VAULT_ID_BINDING_INVALID: 'Identitas vault tidak cocok dengan manifest bertanda tangan.',
-        ARGON2_AAD_BINDING_INVALID: 'Parameter Argon2id tidak cocok dengan metadata vault yang diautentikasi.',
         CIPHERTEXT_HASH_INVALID: 'Validasi data pemulihan tidak sesuai.',
         AAD_HASH_INVALID: 'Validasi metadata pemulihan tidak sesuai.',
         SALT_HASH_INVALID: 'Validasi parameter pemulihan tidak sesuai.',
@@ -585,7 +551,6 @@
     function failClosed(error) {
       recoveryDebug('fail_closed', error);
       wipeMemory();
-      clearVaultReferences();
       setStatus(CONFIG.genericError, 'err');
       hideCredentialForm();
       setLockNotice(true);
@@ -595,7 +560,6 @@
     function deploymentFailClosed(message, error) {
       recoveryDebug('deployment_fail_closed', error || new Error('DEPLOYMENT_NOT_READY'));
       wipeMemory();
-      clearVaultReferences();
       setStatus(message || 'Layanan pemulihan belum siap. Hubungi administrator.', 'err');
       hideCredentialForm();
       setLockNotice(true);
@@ -604,7 +568,6 @@
 
     function renderLockedState() {
       wipeMemory();
-      clearVaultReferences();
       state.permanentLocked = true;
       state.offlineDecryptRequired = false;
       try { if (state.expiryTimer) clearTimeout(state.expiryTimer); } catch (_) {}
@@ -699,13 +662,6 @@
       return value;
     }
 
-    function clearVaultReferences() {
-      state.fragment = null;
-      state.vaultResponse = null;
-      state.vaultBundle = null;
-      state.manifestPayload = null;
-    }
-
     function wipeMemory(options) {
       var preserveResultUi = Boolean(options && options.preserveResultUi);
       for (var i = 0; i < state.sensitiveBuffers.length; i += 1) {
@@ -749,7 +705,10 @@
       wipeMemory({ preserveResultUi: true });
       try { if (state.expiryTimer) clearTimeout(state.expiryTimer); } catch (_) {}
       state.expiryTimer = null;
-      clearVaultReferences();
+      state.fragment = null;
+      state.vaultResponse = null;
+      state.vaultBundle = null;
+      state.manifestPayload = null;
       state.vaultFetched = false;
       state.offlineDecryptRequired = false;
       state.offlineUnlockSeen = false;
@@ -764,9 +723,6 @@
       sink.setAttribute('readonly', '');
       sink.setAttribute('aria-hidden', 'true');
       sink.setAttribute('tabindex', '-1');
-      sink.setAttribute('autocomplete', 'off');
-      sink.setAttribute('autocapitalize', 'off');
-      sink.setAttribute('spellcheck', 'false');
       sink.value = text;
       document.body.appendChild(sink);
       sink.focus();
@@ -853,14 +809,6 @@
       }
     }
 
-    function assertTopLevelContext() {
-      try {
-        if (window.top !== window.self) throw new Error('FRAMED_CONTEXT_BLOCKED');
-      } catch (_) {
-        throw new Error('FRAMED_CONTEXT_BLOCKED');
-      }
-    }
-
 
     function parseFragment() {
       var hash = String(location.hash || '').replace(/^#/, '');
@@ -882,7 +830,7 @@
     }
 
     function fromUtf8(bytes) {
-      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
     }
 
     function normalizeSecret(value) {
@@ -905,127 +853,6 @@
         }).join(',') + '}';
       }
       return JSON.stringify(value);
-    }
-
-    function isPlainObject(value) {
-      if (!value || Object.prototype.toString.call(value) !== '[object Object]') return false;
-      var proto = Object.getPrototypeOf(value);
-      return proto === Object.prototype || proto === null;
-    }
-
-    function assertAllowedKeys(value, allowed, required, code) {
-      if (!isPlainObject(value)) throw new Error(code || 'JSON_OBJECT_INVALID');
-      var allowedSet = Object.create(null);
-      for (var i = 0; i < allowed.length; i += 1) allowedSet[allowed[i]] = true;
-      var keys = Object.keys(value);
-      for (var j = 0; j < keys.length; j += 1) {
-        if (!allowedSet[keys[j]]) throw new Error((code || 'JSON_OBJECT_INVALID') + '_UNKNOWN_KEY');
-      }
-      for (var k = 0; k < required.length; k += 1) {
-        if (!Object.prototype.hasOwnProperty.call(value, required[k])) throw new Error((code || 'JSON_OBJECT_INVALID') + '_MISSING_KEY');
-      }
-    }
-
-    function assertBoundedJsonTree(root) {
-      var stack = [{ value: root, depth: 0 }];
-      var totalKeys = 0;
-      while (stack.length) {
-        var item = stack.pop();
-        var value = item.value;
-        if (item.depth > CONFIG.maxJsonDepth) throw new Error('VAULT_RESPONSE_DEPTH_EXCESSIVE');
-        if (value === null || typeof value === 'boolean') continue;
-        if (typeof value === 'number') {
-          if (!Number.isFinite(value)) throw new Error('VAULT_RESPONSE_NUMBER_INVALID');
-          continue;
-        }
-        if (typeof value === 'string') {
-          if (utf8(value).byteLength > CONFIG.maxJsonStringBytes) throw new Error('VAULT_RESPONSE_STRING_EXCESSIVE');
-          continue;
-        }
-        if (Array.isArray(value)) {
-          if (value.length > 64) throw new Error('VAULT_RESPONSE_ARRAY_EXCESSIVE');
-          for (var a = 0; a < value.length; a += 1) stack.push({ value: value[a], depth: item.depth + 1 });
-          continue;
-        }
-        if (!isPlainObject(value)) throw new Error('VAULT_RESPONSE_OBJECT_INVALID');
-        var keys = Object.keys(value);
-        totalKeys += keys.length;
-        if (totalKeys > CONFIG.maxJsonKeys) throw new Error('VAULT_RESPONSE_KEYS_EXCESSIVE');
-        for (var b = 0; b < keys.length; b += 1) {
-          var key = keys[b];
-          if (key === '__proto__' || key === 'prototype' || key === 'constructor') throw new Error('VAULT_RESPONSE_KEY_REJECTED');
-          stack.push({ value: value[key], depth: item.depth + 1 });
-        }
-      }
-    }
-
-    function strictB64ToBytes(value, label, exactBytes, minBytes, maxBytes) {
-      var name = String(label || 'BASE64');
-      var raw = String(value || '').trim();
-      if (!raw || raw.length > 20000 || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(raw) || raw.length % 4 === 1) {
-        throw new Error(name + '_BASE64_INVALID');
-      }
-      var normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
-      while (normalized.length % 4) normalized += '=';
-      var bin;
-      try { bin = atob(normalized); } catch (_) { throw new Error(name + '_BASE64_INVALID'); }
-      var canonicalUrl = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-      var suppliedUrl = raw.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-      if (canonicalUrl !== suppliedUrl) throw new Error(name + '_BASE64_NONCANONICAL');
-      var length = bin.length;
-      if (Number.isFinite(exactBytes) && length !== exactBytes) throw new Error(name + '_LENGTH_INVALID');
-      if (Number.isFinite(minBytes) && length < minBytes) throw new Error(name + '_LENGTH_INVALID');
-      if (Number.isFinite(maxBytes) && length > maxBytes) throw new Error(name + '_LENGTH_INVALID');
-      var out = new Uint8Array(length);
-      for (var i = 0; i < length; i += 1) out[i] = bin.charCodeAt(i);
-      return out;
-    }
-
-    function assertStrictB64Length(value, label, exactBytes, minBytes, maxBytes) {
-      var probe = strictB64ToBytes(value, label, exactBytes, minBytes, maxBytes);
-      try { return probe.byteLength; }
-      finally { try { probe.fill(0); } catch (_) {} }
-    }
-
-    async function readBoundedJsonResponse(response) {
-      var declared = Number(response.headers.get('content-length') || 0);
-      if (Number.isFinite(declared) && declared > CONFIG.maxVaultResponseBytes) throw new Error('VAULT_RESPONSE_TOO_LARGE');
-      if (!response.body || typeof response.body.getReader !== 'function') throw new Error('VAULT_RESPONSE_STREAM_REQUIRED');
-      var reader = response.body.getReader();
-      var chunks = [];
-      var total = 0;
-      try {
-        while (true) {
-          var part = await reader.read();
-          if (part.done) break;
-          var chunk = part.value instanceof Uint8Array ? part.value : new Uint8Array(part.value || []);
-          total += chunk.byteLength;
-          if (total > CONFIG.maxVaultResponseBytes) {
-            try { await reader.cancel(); } catch (_) {}
-            throw new Error('VAULT_RESPONSE_TOO_LARGE');
-          }
-          chunks.push(chunk);
-        }
-        var combined = new Uint8Array(total);
-        var offset = 0;
-        for (var i = 0; i < chunks.length; i += 1) {
-          combined.set(chunks[i], offset);
-          offset += chunks[i].byteLength;
-        }
-        var jsonText;
-        try { jsonText = new TextDecoder('utf-8', { fatal: true }).decode(combined); }
-        catch (_) { throw new Error('VAULT_RESPONSE_UTF8_INVALID'); }
-        var parsed;
-        try { parsed = JSON.parse(jsonText); }
-        catch (_) { throw new Error('VAULT_RESPONSE_JSON_INVALID'); }
-        assertBoundedJsonTree(parsed);
-        return parsed;
-      } finally {
-        try { if (combined) combined.fill(0); } catch (_) {}
-        for (var j = 0; j < chunks.length; j += 1) {
-          try { chunks[j].fill(0); } catch (_) {}
-        }
-      }
     }
 
     function b64ToBytes(value) {
@@ -1072,25 +899,14 @@
       url.searchParams.set('rid', fragment.rid);
       url.searchParams.set('token', fragment.token);
       url.searchParams.set('format', 'json');
-      var controller = new AbortController();
-      var timeout = setTimeout(function () { try { controller.abort(); } catch (_) {} }, CONFIG.vaultFetchTimeoutMs);
-      var response;
-      try {
-        response = await fetch(url.toString(), {
-          method: 'GET',
-          credentials: 'omit',
-          cache: 'no-store',
-          redirect: 'error',
-          referrerPolicy: 'no-referrer',
-          signal: controller.signal,
-          headers: { 'Accept': 'application/json' }
-        });
-      } catch (error) {
-        if (error && error.name === 'AbortError') throw new Error('VAULT_FETCH_TIMEOUT');
-        throw error;
-      } finally {
-        clearTimeout(timeout);
-      }
+      var response = await fetch(url.toString(), {
+        method: 'GET',
+        credentials: 'omit',
+        cache: 'no-store',
+        redirect: 'error',
+        referrerPolicy: 'no-referrer',
+        headers: { 'Accept': 'application/json' }
+      });
       var contentType = String(response.headers.get('content-type') || '').toLowerCase();
       if (!response.ok) {
         var fetchError = new Error('VAULT_FETCH_FAILED');
@@ -1098,40 +914,19 @@
         fetchError.responseContentType = contentType;
         throw fetchError;
       }
-      if (contentType.indexOf('application/json') === -1) throw new Error('VAULT_RESPONSE_NOT_JSON');
-      var body = await readBoundedJsonResponse(response);
-      if (!body || body.ok !== true) throw new Error('VAULT_RESPONSE_INVALID');
+      if (contentType.indexOf('application/json') === -1) {
+        throw new Error('VAULT_RESPONSE_NOT_JSON');
+      }
+      var body = await response.json();
+      if (!body || body.ok !== true) {
+        throw new Error('VAULT_RESPONSE_INVALID');
+      }
       return body;
     }
 
     function normalizeVaultBundle(raw) {
-      assertAllowedKeys(raw,
-        ['ok', 'version', 'purpose', 'request_id', 'expires_at', 'vault_bundle', 'aad_hash', 'signed_manifest', 'manifest', 'signature_b64'],
-        ['ok', 'version', 'purpose', 'request_id', 'expires_at', 'vault_bundle', 'aad_hash', 'signed_manifest', 'manifest', 'signature_b64'],
-        'VAULT_RESPONSE_SCHEMA');
-      var bundle = raw.vault_bundle;
-      assertAllowedKeys(bundle,
-        ['version', 'salt', 'aes_nonce', 'ciphertext', 'auth_tag', 'vault_id', 'request_id', 'metadata', 'metadata_signature', 'argon2id_params', 'hkdf_info'],
-        ['version', 'salt', 'aes_nonce', 'ciphertext', 'auth_tag', 'vault_id', 'request_id', 'metadata', 'metadata_signature', 'argon2id_params', 'hkdf_info'],
-        'VAULT_BUNDLE_SCHEMA');
-      assertAllowedKeys(bundle.argon2id_params,
-        ['memoryCost', 'timeCost', 'parallelism', 'hashLength'],
-        ['memoryCost', 'timeCost', 'parallelism', 'hashLength'],
-        'ARGON2_SCHEMA');
-      assertAllowedKeys(bundle.metadata,
-        ['version', 'domain', 'request_id', 'vault_id', 'expires_at', 'argon2id_params', 'extra_nonce_entropy_hash'],
-        ['version', 'domain', 'request_id', 'vault_id', 'expires_at', 'argon2id_params', 'extra_nonce_entropy_hash'],
-        'AAD_SCHEMA');
-      assertAllowedKeys(bundle.metadata.argon2id_params,
-        ['memoryCost', 'timeCost', 'parallelism', 'hashLength'],
-        ['memoryCost', 'timeCost', 'parallelism', 'hashLength'],
-        'AAD_ARGON2_SCHEMA');
-      var argonKeys = ['memoryCost', 'timeCost', 'parallelism', 'hashLength'];
-      for (var argonIndex = 0; argonIndex < argonKeys.length; argonIndex += 1) {
-        var argonKey = argonKeys[argonIndex];
-        if (!Number.isSafeInteger(bundle.argon2id_params[argonKey])) throw new Error('ARGON2_VALUE_INVALID');
-        if (!Number.isSafeInteger(bundle.metadata.argon2id_params[argonKey])) throw new Error('AAD_ARGON2_VALUE_INVALID');
-      }
+      var bundle = raw && raw.vault_bundle;
+      if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) throw new Error('VAULT_BUNDLE_MISSING');
 
       var normalized = {
         version: String(bundle.version || ''),
@@ -1141,41 +936,29 @@
         auth_tag: String(bundle.auth_tag || ''),
         vault_id: String(bundle.vault_id || ''),
         request_id: String(bundle.request_id || ''),
-        metadata: bundle.metadata,
+        metadata: bundle.metadata && typeof bundle.metadata === 'object' && !Array.isArray(bundle.metadata) ? bundle.metadata : {},
         metadata_signature: String(bundle.metadata_signature || ''),
-        argon2id_params: bundle.argon2id_params,
+        argon2id_params: bundle.argon2id_params && typeof bundle.argon2id_params === 'object' && !Array.isArray(bundle.argon2id_params) ? bundle.argon2id_params : {},
         hkdf_info: String(bundle.hkdf_info || '')
       };
 
-      if (normalized.version !== CONFIG.expectedLegacyVersion) throw new Error('VAULT_VERSION_INVALID');
-      if (normalized.request_id !== state.fragment.rid) throw new Error('VAULT_RID_MISMATCH');
-      if (!/^[A-Fa-f0-9]{64}$/.test(normalized.metadata_signature)) throw new Error('METADATA_SIGNATURE_SHAPE_INVALID');
-      if (normalized.hkdf_info !== 'dirac-lost-passkey-v157:aes-256-gcm:' + state.fragment.rid) throw new Error('HKDF_INFO_SHAPE_INVALID');
-      assertStrictB64Length(normalized.salt, 'SALT', CONFIG.expectedSaltBytes);
-      assertStrictB64Length(normalized.vault_id, 'VAULT_ID', CONFIG.expectedVaultIdBytes);
-      assertStrictB64Length(normalized.aes_nonce, 'AES_NONCE', CONFIG.expectedNonceBytes);
-      assertStrictB64Length(normalized.auth_tag, 'AUTH_TAG', CONFIG.expectedAuthTagBytes);
-      assertStrictB64Length(normalized.ciphertext, 'CIPHERTEXT', CONFIG.expectedCiphertextBytes);
-      var aadCanonical = canonical(normalized.metadata);
-      if (utf8(aadCanonical).byteLength > CONFIG.maxAadCanonicalBytes) throw new Error('AAD_TOO_LARGE');
+      if (!normalized.version || !normalized.salt || !normalized.aes_nonce || !normalized.ciphertext || !normalized.auth_tag || !normalized.vault_id || !normalized.metadata_signature || !normalized.hkdf_info) {
+        throw new Error('VAULT_BUNDLE_INCOMPLETE');
+      }
+      if (normalized.request_id !== state.fragment.rid) {
+        throw new Error('VAULT_RID_MISMATCH');
+      }
       return normalized;
     }
 
     function extractSignedManifest(raw) {
-      var signed = raw.signed_manifest;
-      assertAllowedKeys(signed, ['payload', 'signature_b64'], ['payload', 'signature_b64'], 'SIGNED_MANIFEST_SCHEMA');
-      var payload = signed.payload;
-      assertAllowedKeys(payload,
-        ['version', 'purpose', 'request_id', 'key_id', 'signature_alg', 'cipher', 'kdf', 'hkdf_info', 'ciphertext_sha256', 'aad_sha256', 'salt_sha256', 'vault_id_hash', 'min_argon2id_memory_kib', 'min_argon2id_time_cost', 'min_argon2id_parallelism', 'created_at', 'expires_at', 'hpke_suite', 'hpke_key_id', 'hpke_public_key_b64url'],
-        ['version', 'purpose', 'request_id', 'key_id', 'signature_alg', 'cipher', 'kdf', 'hkdf_info', 'ciphertext_sha256', 'aad_sha256', 'salt_sha256', 'vault_id_hash', 'min_argon2id_memory_kib', 'min_argon2id_time_cost', 'min_argon2id_parallelism', 'created_at', 'expires_at', 'hpke_suite', 'hpke_key_id', 'hpke_public_key_b64url'],
-        'SIGNED_PAYLOAD_SCHEMA');
-      var signature = String(signed.signature_b64 || '').trim();
-      assertStrictB64Length(signature, 'ED25519_SIGNATURE', 64);
-      var manifestCanonical = canonical(payload);
-      if (utf8(manifestCanonical).byteLength > CONFIG.maxManifestCanonicalBytes) throw new Error('SIGNED_MANIFEST_TOO_LARGE');
-      if (canonical(raw.manifest) !== manifestCanonical) throw new Error('MANIFEST_MIRROR_MISMATCH');
-      if (String(raw.signature_b64 || '') !== signature) throw new Error('SIGNATURE_MIRROR_MISMATCH');
-      return { payload: payload, signatureB64: signature };
+      var signed = raw && raw.signed_manifest;
+      var payload = signed && signed.payload;
+      var signature = String(signed && signed.signature_b64 || '').trim();
+      if (!signed || !payload || typeof payload !== 'object' || Array.isArray(payload) || !signature) {
+        throw new Error('SIGNED_MANIFEST_MISSING');
+      }
+      return { payload: payload, signatureB64: signature, signature_b64: signature, signature: signature };
     }
 
     function getArgonParam(params, camel, snake, fallback) {
@@ -1192,106 +975,112 @@
       };
     }
 
-    function verifyArgon2idParams(params) {
+    function verifyMinimumArgon2idParams(params) {
       if (params.memoryCost < CONFIG.minArgon2id.memoryCost) throw new Error('ARGON2_MEMORY_DOWNGRADE');
       if (params.timeCost < CONFIG.minArgon2id.timeCost) throw new Error('ARGON2_TIME_DOWNGRADE');
       if (params.parallelism < CONFIG.minArgon2id.parallelism) throw new Error('ARGON2_PARALLELISM_INVALID');
       if (params.hashLength < CONFIG.minArgon2id.hashLength) throw new Error('ARGON2_HASHLEN_INVALID');
-      if (params.memoryCost > CONFIG.maxArgon2id.memoryCost) throw new Error('ARGON2_MEMORY_EXCESSIVE');
-      if (params.timeCost > CONFIG.maxArgon2id.timeCost) throw new Error('ARGON2_TIME_EXCESSIVE');
-      if (params.parallelism > CONFIG.maxArgon2id.parallelism) throw new Error('ARGON2_PARALLELISM_EXCESSIVE');
-      if (params.hashLength > CONFIG.maxArgon2id.hashLength) throw new Error('ARGON2_HASHLEN_EXCESSIVE');
     }
 
     async function verifyEd25519Manifest(payload, signatureB64) {
-      var keyId = String(payload.key_id || '');
+      var keyId = String(payload.key_id || payload.keyId || '');
       var publicKeyB64 = CONFIG.ed25519PublicKeysBase64[keyId];
-      if (!keyId || !publicKeyB64 || publicKeyB64.indexOf('PASTE_') === 0) throw new Error('ED25519_PUBLIC_KEY_MISSING');
-      if (String(payload.signature_alg || '') !== 'Ed25519') throw new Error('SIGNATURE_ALG_INVALID');
-      var publicKeyBytes = strictB64ToBytes(publicKeyB64, 'ED25519_PUBLIC_KEY', 32);
-      var signatureBytes = strictB64ToBytes(signatureB64, 'ED25519_SIGNATURE', 64);
-      try {
-        var publicKey = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
-        var ok = await crypto.subtle.verify({ name: 'Ed25519' }, publicKey, signatureBytes, utf8(canonical(payload)));
-        if (!ok) throw new Error('ED25519_SIGNATURE_INVALID');
-      } finally {
-        try { publicKeyBytes.fill(0); } catch (_) {}
-        try { signatureBytes.fill(0); } catch (_) {}
+      if (!keyId || !publicKeyB64 || publicKeyB64.indexOf('PASTE_') === 0) {
+        throw new Error('ED25519_PUBLIC_KEY_MISSING');
+      }
+      var publicKeyBytes = b64ToBytes(publicKeyB64);
+      var signatureBytes = b64ToBytes(signatureB64);
+      if (publicKeyBytes.byteLength !== 32 || signatureBytes.byteLength !== 64) throw new Error('ED25519_SIGNATURE_INVALID');
+      var publicKey = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
+      var ok = await crypto.subtle.verify({ name: 'Ed25519' }, publicKey, signatureBytes, utf8(canonical(payload)));
+      if (!ok) {
+        throw new Error('ED25519_SIGNATURE_INVALID');
       }
     }
 
     async function verifyManifestAndVault(raw, bundle, signedManifest) {
       var payload = signedManifest.payload;
-      var signatureB64 = String(signedManifest.signatureB64 || '').trim();
-      if (!payload || !signatureB64) throw new Error('SIGNED_MANIFEST_MISSING');
+      var signatureB64 = String(signedManifest.signatureB64 || signedManifest.signature_b64 || signedManifest.signature || '').trim();
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !signatureB64) throw new Error('SIGNED_MANIFEST_MISSING');
 
       await runLoadingStage('Memeriksa signature Ed25519', function () {
         return verifyEd25519Manifest(payload, signatureB64);
       });
 
+      if (String(payload.manifest_schema || '') !== CONFIG.expectedManifestSchema) throw new Error('MANIFEST_SCHEMA_INVALID');
+      if (String(payload.version || '') !== CONFIG.expectedLegacyVersion || String(payload.version || '') !== bundle.version) throw new Error('MANIFEST_VERSION_INVALID');
       if (String(payload.purpose || '') !== CONFIG.expectedPurpose) throw new Error('PURPOSE_INVALID');
-      if (String(payload.version || '') !== CONFIG.expectedLegacyVersion) throw new Error('VERSION_BINDING_INVALID');
-      if (String(payload.request_id || '') !== state.fragment.rid) throw new Error('MANIFEST_RID_MISMATCH');
-      if (String(payload.cipher || '') !== 'AES-256-GCM') throw new Error('CIPHER_BINDING_INVALID');
-      if (String(payload.kdf || '') !== 'Argon2id+HKDF-SHA256') throw new Error('KDF_BINDING_INVALID');
-      if (String(payload.hkdf_info || '') !== bundle.hkdf_info) throw new Error('HKDF_INFO_BINDING_INVALID');
-      if (String(raw.version || '') !== payload.version) throw new Error('TOP_LEVEL_VERSION_MISMATCH');
-      if (String(raw.purpose || '') !== payload.purpose) throw new Error('TOP_LEVEL_PURPOSE_MISMATCH');
-      if (String(raw.request_id || '') !== payload.request_id) throw new Error('TOP_LEVEL_RID_MISMATCH');
-      if (String(raw.expires_at || '') !== payload.expires_at) throw new Error('TOP_LEVEL_EXPIRY_MISMATCH');
-      if (String(raw.aad_hash || '') !== payload.aad_sha256) throw new Error('TOP_LEVEL_AAD_HASH_MISMATCH');
+      if (String(payload.action || '') !== CONFIG.vaultApiAction) throw new Error('MANIFEST_ACTION_INVALID');
+      if (String(payload.signature_alg || '') !== 'Ed25519') throw new Error('SIGNATURE_ALGORITHM_INVALID');
+      if (String(payload.cipher || '') !== CONFIG.expectedCipher) throw new Error('CIPHER_INVALID');
+      if (String(payload.kdf || '') !== CONFIG.expectedKdf) throw new Error('KDF_INVALID');
+      if (String(payload.hkdf_info || '') !== bundle.hkdf_info) throw new Error('HKDF_INFO_MISMATCH');
 
-      var createdMs = Date.parse(String(payload.created_at || ''));
-      var expiresMs = Date.parse(String(payload.expires_at || ''));
-      var now = Date.now();
-      if (!Number.isFinite(createdMs) || !Number.isFinite(expiresMs)) throw new Error('MANIFEST_TIME_INVALID');
-      if (createdMs > now + CONFIG.maxClockSkewMs) throw new Error('MANIFEST_CREATED_IN_FUTURE');
-      if (expiresMs <= now) throw new Error('EXPIRED');
-      if (expiresMs <= createdMs || expiresMs - createdMs > CONFIG.maxManifestLifetimeMs) throw new Error('MANIFEST_LIFETIME_INVALID');
+      var createdAt = String(payload.created_at || '');
+      var createdMs = Date.parse(createdAt);
+      var expiresAt = String(payload.expires_at || '');
+      var expiresMs = Date.parse(expiresAt);
+      var nowMs = Date.now();
+      if (!Number.isFinite(createdMs) || createdMs > nowMs + 60000 || !Number.isFinite(expiresMs) || expiresMs <= nowMs || createdMs >= expiresMs) throw new Error('EXPIRED');
       scheduleExpiryLock(expiresMs);
 
-      var params = await runLoadingStage('Memeriksa parameter Argon2id', async function () {
-        var normalized = normalizedArgonParams(bundle.argon2id_params);
-        verifyArgon2idParams(normalized);
-        if (Number(payload.min_argon2id_memory_kib) !== normalized.memoryCost) throw new Error('ARGON2_MEMORY_BINDING_INVALID');
-        if (Number(payload.min_argon2id_time_cost) !== normalized.timeCost) throw new Error('ARGON2_TIME_BINDING_INVALID');
-        if (Number(payload.min_argon2id_parallelism) !== normalized.parallelism) throw new Error('ARGON2_PARALLELISM_BINDING_INVALID');
+      var manifestRid = String(payload.request_id || '');
+      if (manifestRid !== state.fragment.rid || manifestRid !== bundle.request_id) throw new Error('MANIFEST_RID_MISMATCH');
 
-        var metadata = bundle.metadata;
-        if (String(metadata.version || '') !== bundle.version) throw new Error('AAD_VERSION_BINDING_INVALID');
-        if (String(metadata.domain || '') !== location.origin) throw new Error('AAD_DOMAIN_BINDING_INVALID');
-        if (String(metadata.request_id || '') !== state.fragment.rid) throw new Error('AAD_RID_BINDING_INVALID');
-        if (String(metadata.vault_id || '') !== bundle.vault_id) throw new Error('AAD_VAULT_ID_BINDING_INVALID');
-        if (String(metadata.expires_at || '') !== payload.expires_at) throw new Error('AAD_EXPIRY_BINDING_INVALID');
-        if (!/^[A-Fa-f0-9]{64}$/.test(String(metadata.extra_nonce_entropy_hash || ''))) throw new Error('AAD_ENTROPY_HASH_INVALID');
-        var aadParams = normalizedArgonParams(metadata.argon2id_params);
-        if (aadParams.memoryCost !== normalized.memoryCost || aadParams.timeCost !== normalized.timeCost || aadParams.parallelism !== normalized.parallelism || aadParams.hashLength !== normalized.hashLength) {
-          throw new Error('ARGON2_AAD_BINDING_INVALID');
-        }
-        var vaultIdHash = await sha256Hex(utf8(bundle.vault_id));
-        if (String(payload.vault_id_hash || '') !== vaultIdHash) throw new Error('VAULT_ID_BINDING_INVALID');
+      var contract = payload.security_contract;
+      if (!contract || typeof contract !== 'object' || Array.isArray(contract)) throw new Error('SECURITY_CONTRACT_MISSING');
+      if (String(contract.version || '') !== CONFIG.expectedSecurityContractVersion) throw new Error('SECURITY_CONTRACT_INVALID');
+      if (contract.central_guard_required !== true || String(contract.central_guard || '') !== CONFIG.expectedCentralGuard) throw new Error('CENTRAL_GUARD_SIGNATURE_INVALID');
+      if (String(contract.action || '') !== CONFIG.vaultApiAction || contract.vercel2_only !== true || String(contract.response_format || '') !== 'json') throw new Error('SECURITY_ROUTE_CONTRACT_INVALID');
+      if (contract.offline_required !== true || contract.network_locked_after_fetch !== true || contract.one_time_copy !== true) throw new Error('OFFLINE_SECURITY_CONTRACT_INVALID');
+      if (Number(contract.recovery_code_length) !== 1200 || Number(contract.email_secret_length) !== 100 || Number(contract.website_secret_length) !== 100) throw new Error('SECURITY_LENGTH_CONTRACT_INVALID');
+
+      if (String(payload.hpke_suite || '') !== CONFIG.expectedHpkeSuite || String(payload.hpke_key_id || '') === '' || !/^[A-Za-z0-9._:-]{1,80}$/.test(String(payload.hpke_key_id || ''))) throw new Error('HPKE_IDENTITY_INVALID');
+      if (!/^[A-Za-z0-9_-]{43}$/.test(String(payload.hpke_public_key_b64url || ''))) throw new Error('HPKE_PUBLIC_KEY_INVALID');
+      var hpkePublicKeyBytes = b64ToBytes(payload.hpke_public_key_b64url);
+      if (hpkePublicKeyBytes.byteLength !== 32) throw new Error('HPKE_PUBLIC_KEY_INVALID');
+      if (contract.hpke_required !== true || String(contract.hpke_suite || '') !== String(payload.hpke_suite || '') || String(contract.hpke_key_id || '') !== String(payload.hpke_key_id || '')) throw new Error('HPKE_SECURITY_CONTRACT_INVALID');
+      var hpkePublicKeyHash = await sha256B64Url(hpkePublicKeyBytes);
+      hpkePublicKeyBytes.fill(0);
+      if (String(contract.hpke_public_key_sha256 || '') !== hpkePublicKeyHash) throw new Error('HPKE_PUBLIC_KEY_HASH_INVALID');
+
+      var params = await runLoadingStage('Memeriksa parameter Argon2id', function () {
+        var normalized = normalizedArgonParams(bundle.argon2id_params);
+        var signedParams = normalizedArgonParams(payload.argon2id_params);
+        verifyMinimumArgon2idParams(normalized);
+        if (canonical(normalized) !== canonical(signedParams)) throw new Error('ARGON2_SIGNED_PARAMS_MISMATCH');
         return normalized;
       });
 
       await runLoadingStage('Memeriksa integritas vault terenkripsi', async function () {
-        var ciphertextBytes = strictB64ToBytes(bundle.ciphertext, 'CIPHERTEXT', CONFIG.expectedCiphertextBytes);
-        var saltBytes = strictB64ToBytes(bundle.salt, 'SALT', CONFIG.expectedSaltBytes);
+        var ciphertextBytes = b64ToBytes(bundle.ciphertext);
         var aadBytes = utf8(canonical(bundle.metadata));
-        try {
-          var ciphertextHash = String(payload.ciphertext_sha256 || '');
-          var aadHash = String(payload.aad_sha256 || '');
-          var saltHash = String(payload.salt_sha256 || '');
-          if (!/^[A-Za-z0-9_-]{43}$/.test(ciphertextHash)) throw new Error('CIPHERTEXT_HASH_MISSING');
-          if (!/^[A-Za-z0-9_-]{43}$/.test(aadHash)) throw new Error('AAD_HASH_MISSING');
-          if (!/^[A-Za-z0-9_-]{43}$/.test(saltHash)) throw new Error('SALT_HASH_MISSING');
-          if (await sha256B64Url(ciphertextBytes) !== ciphertextHash) throw new Error('CIPHERTEXT_HASH_INVALID');
-          if (await sha256B64Url(aadBytes) !== aadHash) throw new Error('AAD_HASH_INVALID');
-          if (await sha256B64Url(saltBytes) !== saltHash) throw new Error('SALT_HASH_INVALID');
-        } finally {
-          try { ciphertextBytes.fill(0); } catch (_) {}
-          try { saltBytes.fill(0); } catch (_) {}
-          try { aadBytes.fill(0); } catch (_) {}
+        var saltBytes = b64ToBytes(bundle.salt);
+        var nonceBytes = b64ToBytes(bundle.aes_nonce);
+        var tagBytes = b64ToBytes(bundle.auth_tag);
+
+        var requiredHashes = [
+          'ciphertext_sha256', 'aad_sha256', 'salt_sha256', 'aes_nonce_sha256',
+          'auth_tag_sha256', 'vault_id_hash', 'metadata_signature_sha256', 'vault_bundle_sha256'
+        ];
+        for (var i = 0; i < requiredHashes.length; i += 1) {
+          if (!String(payload[requiredHashes[i]] || '')) throw new Error('SIGNED_SECURITY_HASH_MISSING');
         }
+
+        if (String(payload.ciphertext_sha256) !== await sha256B64Url(ciphertextBytes)) throw new Error('CIPHERTEXT_HASH_INVALID');
+        if (String(payload.aad_sha256) !== await sha256B64Url(aadBytes)) throw new Error('AAD_HASH_INVALID');
+        if (String(payload.salt_sha256) !== await sha256B64Url(saltBytes)) throw new Error('SALT_HASH_INVALID');
+        if (String(payload.aes_nonce_sha256) !== await sha256B64Url(nonceBytes)) throw new Error('AES_NONCE_HASH_INVALID');
+        if (String(payload.auth_tag_sha256) !== await sha256B64Url(tagBytes)) throw new Error('AUTH_TAG_HASH_INVALID');
+        if (String(payload.vault_id_hash) !== await sha256Hex(utf8(bundle.vault_id))) throw new Error('VAULT_ID_HASH_INVALID');
+        if (String(payload.metadata_signature_sha256) !== await sha256B64Url(utf8(bundle.metadata_signature))) throw new Error('METADATA_SIGNATURE_HASH_INVALID');
+        if (String(payload.vault_bundle_sha256) !== await sha256B64Url(utf8(canonical(bundle)))) throw new Error('VAULT_BUNDLE_HASH_INVALID');
+
+        ciphertextBytes.fill(0);
+        aadBytes.fill(0);
+        saltBytes.fill(0);
+        nonceBytes.fill(0);
+        tagBytes.fill(0);
       });
       return params;
     }
@@ -1369,11 +1158,22 @@
     }
 
     function verifyInnerPayload(plaintextBytes) {
-      var text;
-      try { text = fromUtf8(plaintextBytes); }
-      catch (_) { throw new Error('PLAINTEXT_UTF8_INVALID'); }
-      if (text.length !== CONFIG.expectedRecoveryCodeLength) throw new Error('PLAINTEXT_LENGTH_INVALID');
-      if (!/^[A-Za-z0-9_-]+$/.test(text)) throw new Error('PLAINTEXT_SHAPE_INVALID');
+      var text = fromUtf8(plaintextBytes).trim();
+      if (!text) throw new Error('PLAINTEXT_EMPTY');
+      try {
+        var parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.magic && parsed.magic !== 'DIRAC_LOST_PASSKEY_RECOVERY') throw new Error('INNER_MAGIC_INVALID');
+          if (parsed.purpose && parsed.purpose !== 'lost_passkey_recovery') throw new Error('INNER_PURPOSE_INVALID');
+          if (parsed.request_id && parsed.request_id !== state.fragment.rid) throw new Error('INNER_RID_INVALID');
+          if (parsed.expires_at && Date.parse(parsed.expires_at) <= Date.now()) throw new Error('INNER_EXPIRED');
+          var parsedMaterial = parsed.recovery_material || parsed.recovery_code || parsed.code || text;
+          return rememberBuffer(utf8(String(parsedMaterial)));
+        }
+      } catch (error) {
+        if (/^INNER_/.test(String(error && error.message || ''))) throw error;
+      }
+      if (text.length < 16 || text.length > 5000) throw new Error('PLAINTEXT_SHAPE_INVALID');
       return rememberBuffer(utf8(text));
     }
 
@@ -1395,10 +1195,10 @@
 
         var prepared = await runLoadingStage('Memvalidasi data verifikasi', function () {
           return {
-            saltBytes: rememberBuffer(strictB64ToBytes(bundle.salt, 'SALT', CONFIG.expectedSaltBytes)),
-            nonceBytes: rememberBuffer(strictB64ToBytes(bundle.aes_nonce, 'AES_NONCE', CONFIG.expectedNonceBytes)),
-            ciphertextBytes: rememberBuffer(strictB64ToBytes(bundle.ciphertext, 'CIPHERTEXT', CONFIG.expectedCiphertextBytes)),
-            tagBytes: rememberBuffer(strictB64ToBytes(bundle.auth_tag, 'AUTH_TAG', CONFIG.expectedAuthTagBytes)),
+            saltBytes: rememberBuffer(b64ToBytes(bundle.salt)),
+            nonceBytes: rememberBuffer(b64ToBytes(bundle.aes_nonce)),
+            ciphertextBytes: rememberBuffer(b64ToBytes(bundle.ciphertext)),
+            tagBytes: rememberBuffer(b64ToBytes(bundle.auth_tag)),
             aadBytes: rememberBuffer(utf8(canonical(bundle.metadata))),
             vaultMaterial: rememberBuffer(buildVaultMaterial(el.passwordMaterial.value, el.emailSecret.value, el.websiteSecret.value, bundle))
           };
@@ -1456,8 +1256,6 @@
         hardenStorageAccess();
         setDebugStage('secure_context_check');
         requireSecureContext();
-        setDebugStage('top_level_context_check');
-        assertTopLevelContext();
         setDebugStage('official_origin_check');
         assertOfficialOrigin();
         setDebugStage('argon2_runtime_check');
@@ -1475,7 +1273,6 @@
         setDebugStage('vault_fetch');
         return fetchVaultOnce(state.fragment);
       });
-      state.fragment = { rid: state.fragment.rid, token: '' };
       state.vaultResponse = raw;
 
       state.vaultBundle = await runLoadingStage('Memeriksa struktur vault terenkripsi', function () {
@@ -1492,9 +1289,6 @@
 
       setDebugStage('manifest_and_vault_verify');
       await verifyManifestAndVault(raw, state.vaultBundle, signedManifest);
-      state.vaultResponse = null;
-      raw = null;
-      signedManifest = null;
 
       await runLoadingStage('Menyiapkan mode pemulihan offline', function () {
         setDebugStage('network_lock');
@@ -1511,21 +1305,15 @@
     el.copyRecoveryButton.addEventListener('click', copyRecoveryMaterialOnce);
     el.clearButton.addEventListener('click', function () {
       wipeMemory();
-      clearVaultReferences();
       setLockNotice(false);
       setProcessStep(1);
       setStatus('Formulir telah dibersihkan. Jika proses belum selesai, buka ulang tautan resmi dari email.', '');
     });
     window.addEventListener('pagehide', function () {
       wipeMemory();
-      clearVaultReferences();
     }, { once: false });
     window.addEventListener('beforeunload', function () {
       wipeMemory();
-      clearVaultReferences();
-    }, { once: false });
-    window.addEventListener('pageshow', function (event) {
-      if (event && event.persisted) renderLockedState();
     }, { once: false });
     window.addEventListener('online', function () {
       if (state.offlineDecryptRequired || state.vaultFetched) renderLockedState();
