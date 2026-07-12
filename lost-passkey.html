@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-+6Igb5ujN+JgAqXKPWWBCNOL3aAHQOrq1YgfZir95IS1aOr5g4JBOEo05SSXNRS8ffCyPunDDmn0ZrXtKT8kHg=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-uBySpzOPzCy3oftkzKOPFEN8cGWsqYfMSYdc3vecjSE/zhyTzgxP0U9PiSBlGSnjRhlwvSlDyX71ICYh1hKWCQ=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-+6Igb5ujN+JgAqXKPWWBCNOL3aAHQOrq1YgfZir95IS1aOr5g4JBOEo05SSXNRS8ffCyPunDDmn0ZrXtKT8kHg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-RKpb77AXqzHtjI32gV/c7dDIajy2ZyYfBC7EAB0jfCIlG4PaXcGpDwzYjIBqStHHsaBK6Y4OS0gtK8KKN104KQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-uBySpzOPzCy3oftkzKOPFEN8cGWsqYfMSYdc3vecjSE/zhyTzgxP0U9PiSBlGSnjRhlwvSlDyX71ICYh1hKWCQ=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -1330,36 +1330,25 @@
         });
         throw new Error('RECOVERY_HPKE_VERIFY_FAILED');
       }
-      var session = String(body.dirac_lost_passkey_recovery_session || '');
       var sessionExpiresAt = String(body.recovery_session_expires_at || '');
-      if (!/^[A-Za-z0-9_-]{32,160}$/.test(session)
+      var sessionReady = body.recovery_session_ready === true
+        && body.recovery_session_transport === 'httponly_same_site_cookie';
+      if (!sessionReady
         || !Number.isFinite(Date.parse(sessionExpiresAt))
         || Date.parse(sessionExpiresAt) <= Date.now()) {
         debugRecord('recovery_session_invalid', {
-          session_shape_valid: /^[A-Za-z0-9_-]{32,160}$/.test(session),
+          session_ready: sessionReady,
           expiry_parse_valid: Number.isFinite(Date.parse(sessionExpiresAt)),
           expiry_future: Number.isFinite(Date.parse(sessionExpiresAt)) && Date.parse(sessionExpiresAt) > Date.now()
         });
         throw new Error('RECOVERY_SESSION_INVALID');
       }
-      debugRecord('hpke_verify_complete', { recovery_verified: true, session_shape_valid: true });
-      return { session: session, expiresAt: sessionExpiresAt };
+      debugRecord('hpke_verify_complete', { recovery_verified: true, session_cookie_ready: true });
+      return { expiresAt: sessionExpiresAt };
     }
 
     function continueVerifiedRecovery() {
-      var session = String(state.recoverySession || '');
-      if (!/^[A-Za-z0-9_-]{32,160}$/.test(session)) {
-        wipeMemory();
-        setStatus('Recovery session tidak tersedia. Buka ulang tautan resmi.', 'err');
-        return;
-      }
-      var target = new URL(CONFIG.verifyUrl);
-      var fragment = new URLSearchParams();
-      fragment.set('dirac_lost_passkey_recovery_session', session);
-      fragment.set('request_id', state.fragment.rid);
-      target.hash = fragment.toString();
-      wipeMemory();
-      location.replace(target.toString());
+      setStatus('Recovery session sudah dikirim secara aman ke masuk.html. Kembali ke tab masuk.html lalu tekan Verify.', 'ok');
     }
 
     function buildVaultMaterial(passwordMaterial, emailSecret, websiteSecret, bundle) {
@@ -1474,13 +1463,16 @@
         var verified = await submitHpkeEnvelope(envelope);
 
         wipeSensitiveInputs();
-        state.recoverySession = verified.session;
+        state.recoverySession = '';
         state.recoverySessionExpiresAt = verified.expiresAt;
-        try { el.verifyButton.disabled = false; } catch (_) {}
+        try {
+          el.verifyButton.disabled = true;
+          el.verifyButton.textContent = 'Recovery dikirim ke masuk.html';
+        } catch (_) {}
         el.resultBox.classList.add('show');
         setCredentialFieldsLocked(true);
         setProcessStep(3);
-        setStatus('Decrypt berhasil dan kode pemulihan telah diverifikasi secara aman. Kode tidak ditampilkan, tidak disalin, dan tidak dikirim sebagai plaintext. Klik “Verifikasi dan Daftarkan Passkey Baru” untuk kembali ke halaman akun.', 'ok');
+        setStatus('Decrypt berhasil dan kode pemulihan telah diverifikasi secara aman. Recovery session sudah dikirim melalui cookie HttpOnly SameSite ke masuk.html. Kembali ke tab masuk.html lalu tekan Verify.', 'ok');
       } catch (error) {
         state.debugEnabled = true;
         state.debugClientError = debugErrorCode(error);
