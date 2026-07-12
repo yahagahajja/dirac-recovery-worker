@@ -6590,11 +6590,11 @@ function customerSecurityLostPasskeyCanonical(value) {
 function customerSecurityLostPasskeyArgon2ParamsV157(hashLength) {
   const memoryRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB || 1024000);
   const timeRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_TIME_COST || 4);
-  const parallelRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM || 2);
+  const parallelRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM || 4);
   return {
     memoryCost: Math.max(LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157, Math.min(LOST_PASSKEY_ARGON2_MEMORY_MAX_KIB_V163, Number.isFinite(memoryRaw) ? Math.floor(memoryRaw) : 1024000)),
     timeCost: Math.max(3, Math.min(10, Number.isFinite(timeRaw) ? Math.floor(timeRaw) : 4)),
-    parallelism: Math.max(2, Math.min(2, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 2)),
+    parallelism: Math.max(3, Math.min(4, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 4)),
     hashLength: Math.max(32, Math.min(128, Number(hashLength || 32)))
   };
 }
@@ -7021,49 +7021,78 @@ function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata) {
   const vaultBundle = metadata && metadata.vault_bundle && typeof metadata.vault_bundle === 'object' ? metadata.vault_bundle : {};
   const aadMetadata = vaultBundle.metadata && typeof vaultBundle.metadata === 'object' ? vaultBundle.metadata : {};
   const argon2Params = vaultBundle.argon2id_params && typeof vaultBundle.argon2id_params === 'object' ? vaultBundle.argon2id_params : (metadata.argon2id_params || {});
+  const signedArgon2Params = {
+    memoryCost: Number(argon2Params.memoryCost || argon2Params.memory_kib || 0),
+    timeCost: Number(argon2Params.timeCost || argon2Params.time_cost || 0),
+    parallelism: Number(argon2Params.parallelism || 0),
+    hashLength: Number(argon2Params.hashLength || argon2Params.hash_len || 0)
+  };
   const ciphertext = String(vaultBundle.ciphertext || row.encrypted_file_key_text || '');
+  const responseVaultBundle = {
+    version: String(vaultBundle.version || DIRAC_LOST_PASSKEY_VAULT_PATCH_V157),
+    salt: String(vaultBundle.salt || row.salt || ''),
+    aes_nonce: String(vaultBundle.aes_nonce || row.file_key_wrap_nonce || ''),
+    ciphertext,
+    auth_tag: String(vaultBundle.auth_tag || row.file_key_wrap_tag || ''),
+    vault_id: String(vaultBundle.vault_id || ''),
+    request_id: String(row.request_id || vaultBundle.request_id || ''),
+    metadata: aadMetadata,
+    metadata_signature: String(vaultBundle.metadata_signature || row.server_signature || ''),
+    argon2id_params: signedArgon2Params,
+    hkdf_info: String(vaultBundle.hkdf_info || '')
+  };
   const aad = customerSecurityLostPasskeyBuildAadV157(aadMetadata);
   const manifestPayload = {
-    version: String(vaultBundle.version || DIRAC_LOST_PASSKEY_VAULT_PATCH_V157),
+    manifest_schema: 'dirac-lost-passkey-signed-security-manifest-v1',
+    version: responseVaultBundle.version,
     purpose: 'lost_passkey_recovery',
-    request_id: String(row.request_id || vaultBundle.request_id || ''),
+    action: DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165,
+    request_id: responseVaultBundle.request_id,
     key_id: String(process.env.DIRAC_LOST_PASSKEY_ED25519_KEY_ID || 'dirac-recovery-ed25519-2026-01'),
     signature_alg: 'Ed25519',
     cipher: 'AES-256-GCM',
     kdf: 'Argon2id+HKDF-SHA256',
-    hkdf_info: String(vaultBundle.hkdf_info || ''),
-    ciphertext_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(ciphertext, 'base64')),
+    hkdf_info: responseVaultBundle.hkdf_info,
+    argon2id_params: signedArgon2Params,
+    ciphertext_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(responseVaultBundle.ciphertext, 'base64')),
     aad_sha256: customerSecurityLostPasskeySha256B64(aad),
-    salt_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(String(vaultBundle.salt || row.salt || ''), 'base64')),
-    vault_id_hash: customerSecurityLostPasskeySha256HexV157(String(vaultBundle.vault_id || '')),
-    min_argon2id_memory_kib: Number(argon2Params.memoryCost || argon2Params.memory_kib || 0),
-    min_argon2id_time_cost: Number(argon2Params.timeCost || argon2Params.time_cost || 0),
-    min_argon2id_parallelism: Number(argon2Params.parallelism || 1),
+    salt_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(responseVaultBundle.salt, 'base64')),
+    aes_nonce_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(responseVaultBundle.aes_nonce, 'base64')),
+    auth_tag_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(responseVaultBundle.auth_tag, 'base64')),
+    vault_id_hash: customerSecurityLostPasskeySha256HexV157(responseVaultBundle.vault_id),
+    metadata_signature_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(responseVaultBundle.metadata_signature, 'utf8')),
+    vault_bundle_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(customerSecurityLostPasskeyCanonical(responseVaultBundle), 'utf8')),
+    security_contract: {
+      version: 'dirac-lost-passkey-security-contract-v1',
+      central_guard_required: true,
+      central_guard: DIRAC_CENTRAL_SECURITY_GUARD_V146,
+      action: DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165,
+      vercel2_only: true,
+      response_format: 'json',
+      offline_required: true,
+      network_locked_after_fetch: true,
+      one_time_copy: true,
+      recovery_code_length: LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157,
+      email_secret_length: LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157,
+      website_secret_length: LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157
+    },
     created_at: String(row.created_at || metadata.created_at || ''),
     expires_at: String(row.expires_at || '')
   };
   const ed25519SignatureB64 = customerSecurityLostPasskeyEd25519SignManifestB64V169(manifestPayload);
+  if (!ed25519SignatureB64) {
+    customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
+    return res.status(503).json({ ok: false, code: 'RECOVERY_SIGNED_MANIFEST_UNAVAILABLE', message: 'Layanan recovery aman belum siap.' });
+  }
   customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
   return res.status(200).json({
     ok: true,
     version: manifestPayload.version,
-    purpose: 'lost_passkey_recovery',
+    purpose: manifestPayload.purpose,
     request_id: manifestPayload.request_id,
-    expires_at: String(row.expires_at || ''),
-    vault_bundle: {
-      version: manifestPayload.version,
-      salt: String(vaultBundle.salt || row.salt || ''),
-      aes_nonce: String(vaultBundle.aes_nonce || row.file_key_wrap_nonce || ''),
-      ciphertext,
-      auth_tag: String(vaultBundle.auth_tag || row.file_key_wrap_tag || ''),
-      vault_id: String(vaultBundle.vault_id || ''),
-      request_id: manifestPayload.request_id,
-      metadata: aadMetadata,
-      metadata_signature: String(vaultBundle.metadata_signature || row.server_signature || ''),
-      argon2id_params: argon2Params,
-      hkdf_info: String(vaultBundle.hkdf_info || '')
-    },
-    aad_hash: String(row.aad_hash || manifestPayload.aad_sha256),
+    expires_at: manifestPayload.expires_at,
+    vault_bundle: responseVaultBundle,
+    aad_hash: manifestPayload.aad_sha256,
     signed_manifest: { payload: manifestPayload, signature_b64: ed25519SignatureB64 },
     manifest: manifestPayload,
     signature_b64: ed25519SignatureB64
@@ -30497,6 +30526,13 @@ customerSecurityLostPasskeyReturnVaultJsonV169 = function customerSecurityLostPa
       manifest.hpke_suite = DIRAC_RECOVERY_HPKE_SUITE_V159;
       manifest.hpke_key_id = keyId;
       manifest.hpke_public_key_b64url = publicKeyRaw.toString('base64url');
+      manifest.security_contract = {
+        ...(manifest.security_contract && typeof manifest.security_contract === 'object' ? manifest.security_contract : {}),
+        hpke_required: true,
+        hpke_suite: DIRAC_RECOVERY_HPKE_SUITE_V159,
+        hpke_key_id: keyId,
+        hpke_public_key_sha256: customerSecurityLostPasskeySha256B64(publicKeyRaw)
+      };
 
       const signature = customerSecurityLostPasskeyEd25519SignManifestB64V169(manifest);
       publicKeyRaw.fill(0);
