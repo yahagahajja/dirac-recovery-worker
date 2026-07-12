@@ -30278,9 +30278,15 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
       return res.status(502).json({ ok: false, code: 'RECOVERY_PROOF_RESPONSE_INVALID', message: 'Respons recovery dari server utama tidak valid.' });
     }
 
-    if (!diracRecoveryHandoffSetCookieV175(res, session, sessionExpiresAt)) {
-      return res.status(503).json({ ok: false, code: 'RECOVERY_HANDOFF_COOKIE_FAILED', message: 'Recovery session belum dapat dikirim ke halaman akun.' });
-    }
+    const handoffDomain = normalizeCookieDomain(process.env.DOMAIN_COOKIE_DOMAIN || 'diracgroup.store') || 'diracgroup.store';
+    const handoffExpiresAtMs = Date.parse(sessionExpiresAt);
+    const handoffMaxAge = Math.max(1, Math.min(30 * 60, Math.floor((handoffExpiresAtMs - Date.now()) / 1000)));
+    appendSetCookie(res,
+      '__Secure-dirac_recovery_handoff=' + encodeURIComponent(session)
+      + '; Path=/api/health; Domain=' + handoffDomain
+      + '; Max-Age=' + handoffMaxAge + '; Expires=' + new Date(handoffExpiresAtMs).toUTCString()
+      + '; HttpOnly; Secure; SameSite=Strict; Priority=High'
+    );
 
     consumeClaim = true;
     await customerSecurityWriteGuardEvent(row.customer_id, {
@@ -30321,8 +30327,7 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
       request_status: 'accepted',
       request_id: envelope.requestId,
       message: 'Kode pemulihan berhasil dikirim dan diverifikasi secara aman. Silakan lanjutkan tombol Verify.',
-      recovery_session_ready: true,
-      recovery_session_transport: 'httponly_same_site_cookie',
+      dirac_lost_passkey_recovery_session: session,
       recovery_session_expires_at: sessionExpiresAt,
       recovery_code_verified: true,
       plaintext_recovery_code_forwarded: false,
@@ -30418,34 +30423,4 @@ customerSecurityLostPasskeyReturnVaultJsonV169 = function customerSecurityLostPa
   }
 };
 Object.defineProperty(customerSecurityLostPasskeyReturnVaultJsonV169, '__diracRecoveryHpkeManifestV160', { value: true, enumerable: false });
-
-/* ============================================================
-   LOST PASSKEY SAME-SITE HANDOFF COOKIE v175 - NARROW PATCH
-   - Runs only after the existing Vercel 2 HPKE/Argon2id flow and
-     Server 1 proof acceptance have succeeded.
-   - No new action, no endpoint change, and no Central Guard bypass.
-   ============================================================ */
-
-const DIRAC_RECOVERY_HANDOFF_PATCH_V175 = 'lost-passkey-samesite-handoff-v175';
-const DIRAC_RECOVERY_HANDOFF_COOKIE_V175 = '__Secure-dirac_recovery_handoff';
-const DIRAC_RECOVERY_HANDOFF_COOKIE_DOMAIN_V175 = 'diracgroup.store';
-const DIRAC_RECOVERY_HANDOFF_COOKIE_PATH_V175 = '/api/health';
-
-function diracRecoveryHandoffSetCookieV175(res, token, expiresAt) {
-  const cleanToken = String(token || '').trim();
-  const expiresAtMs = Date.parse(String(expiresAt || ''));
-  if (!res || typeof appendSetCookie !== 'function') return false;
-  if (!/^[A-Za-z0-9_-]{32,160}$/.test(cleanToken)) return false;
-  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) return false;
-
-  const maxAge = Math.max(1, Math.min(30 * 60, Math.floor((expiresAtMs - Date.now()) / 1000)));
-  appendSetCookie(res, [
-    DIRAC_RECOVERY_HANDOFF_COOKIE_V175 + '=' + encodeURIComponent(cleanToken)
-      + '; Path=' + DIRAC_RECOVERY_HANDOFF_COOKIE_PATH_V175
-      + '; Domain=' + DIRAC_RECOVERY_HANDOFF_COOKIE_DOMAIN_V175
-      + '; Max-Age=' + maxAge
-      + '; HttpOnly; Secure; SameSite=Strict; Priority=High'
-  ]);
-  return true;
-}
 
