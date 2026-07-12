@@ -30278,16 +30278,6 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
       return res.status(502).json({ ok: false, code: 'RECOVERY_PROOF_RESPONSE_INVALID', message: 'Respons recovery dari server utama tidak valid.' });
     }
 
-    const handoffDomain = normalizeCookieDomain(process.env.DOMAIN_COOKIE_DOMAIN || 'diracgroup.store') || 'diracgroup.store';
-    const handoffExpiresAtMs = Date.parse(sessionExpiresAt);
-    const handoffMaxAge = Math.max(1, Math.min(30 * 60, Math.floor((handoffExpiresAtMs - Date.now()) / 1000)));
-    appendSetCookie(res,
-      '__Secure-dirac_recovery_handoff=' + encodeURIComponent(session)
-      + '; Path=/api/health; Domain=' + handoffDomain
-      + '; Max-Age=' + handoffMaxAge + '; Expires=' + new Date(handoffExpiresAtMs).toUTCString()
-      + '; HttpOnly; Secure; SameSite=Strict; Priority=High'
-    );
-
     consumeClaim = true;
     await customerSecurityWriteGuardEvent(row.customer_id, {
       event_type: 'lost_passkey_recovery_hpke_verified',
