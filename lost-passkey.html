@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-+iJzoWbp3M0kWeD2G/S2YXW2Lg0CWMQI1r+NDUgsJysgSJPIwGCdgnzRibw3PVcIi0tqDhCYuLfARSy2nga48Q=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-3PAuuGVfmKZxb87aAGR5ASu4TWH53f2jeDQlszkf0UuBDvRbkwnuWI3o13quIMiFokSB4/iOFrWPzmfPeY1aEg=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-3nFUuWLjWWfSl1l4uhfC9hZIi1EhgcIZ1ONpbBiMdvKuLx32PgpvO3Zdl5YTGLx0EEodho8JoPMETKY3OUcpPQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-IOYFMnGXYjwR4MHJDozjadh4dT6YD+UeNg0bG4AqDb/cq6mPD9hYtKjw1YFfobSNbpO18mfqVlp/cahuAVajaA=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-+iJzoWbp3M0kWeD2G/S2YXW2Lg0CWMQI1r+NDUgsJysgSJPIwGCdgnzRibw3PVcIi0tqDhCYuLfARSy2nga48Q=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-3PAuuGVfmKZxb87aAGR5ASu4TWH53f2jeDQlszkf0UuBDvRbkwnuWI3o13quIMiFokSB4/iOFrWPzmfPeY1aEg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-3nFUuWLjWWfSl1l4uhfC9hZIi1EhgcIZ1ONpbBiMdvKuLx32PgpvO3Zdl5YTGLx0EEodho8JoPMETKY3OUcpPQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-IOYFMnGXYjwR4MHJDozjadh4dT6YD+UeNg0bG4AqDb/cq6mPD9hYtKjw1YFfobSNbpO18mfqVlp/cahuAVajaA=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -83,11 +83,12 @@
     textarea { min-height: 132px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.45; }
     .hint { color: #91a3bb; font-size: 12px; font-weight: 500; }
     .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
-    .grid label, .grid .row { opacity: 0; transform: translateY(10px); animation: fieldReveal .58s ease-out forwards; }
-    .grid .split label:nth-child(1) { animation-delay: .04s; }
-    .grid .split label:nth-child(2) { animation-delay: .12s; }
-    .grid > label { animation-delay: .2s; }
-    .grid .row { animation-delay: .28s; }
+    .grid.form-reveal { animation: formShellReveal .64s cubic-bezier(.2,.8,.2,1) both; }
+    .grid.form-reveal label, .grid.form-reveal .row { opacity: 0; transform: translateY(18px) scale(.985); animation: fieldReveal .62s cubic-bezier(.2,.8,.2,1) forwards; }
+    .grid.form-reveal .split label:nth-child(1) { animation-delay: .08s; }
+    .grid.form-reveal .split label:nth-child(2) { animation-delay: .18s; }
+    .grid.form-reveal > label { animation-delay: .3s; }
+    .grid.form-reveal .row { animation-delay: .42s; }
     button { appearance: none; border: 0; border-radius: 12px; padding: 12px 15px; font: inherit; font-weight: 750; cursor: pointer; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, opacity .18s ease; }
     button.primary { position: relative; overflow: hidden; background: linear-gradient(135deg, #b4ffbf, #27e768); color: #07111f; box-shadow: 0 12px 28px rgba(39,231,104,.22); }
     button.primary::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,.22) 42%, transparent 72%); transform: translateX(-110%); opacity: 0; pointer-events: none; }
@@ -105,12 +106,9 @@
     .status-text { min-width: 0; overflow-wrap: anywhere; }
     .status-cursor { display: none; width: 2px; height: 1.05em; flex: 0 0 2px; border-radius: 2px; background: #5cff8d; box-shadow: 0 0 10px rgba(92,255,141,.55); }
     .status.loading .status-cursor { display: inline-block; animation: typingCursorBlink .72s steps(1, end) infinite; }
+    .status.waiting { border-color: #3c536f; background: linear-gradient(180deg, #101b2a, #0c1521); color: #dce8f9; }
     .status.ok { border-color: #245f3d; background: #0b2115; color: #ccffe2; }
     .status.err { border-color: #6b2530; background: #241016; color: #ffd3dc; }
-    #offlineAnnouncement { margin-top: 18px; padding: 18px 18px 17px; border-color: #7b2d3a; background: linear-gradient(180deg, #32131a, #210d12); color: #ffe8ed; white-space: normal; line-height: 1.55; text-align: left; box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 12px 30px rgba(0,0,0,.16); }
-    #offlineAnnouncement strong { display: block; margin: 0 0 11px; color: #fff1f4; font-size: clamp(17px, 4.4vw, 21px); line-height: 1.25; letter-spacing: .01em; text-align: center; }
-    #offlineAnnouncement .offline-copy { display: block; margin: 0; color: #f4cfd7; font-size: 14px; line-height: 1.58; }
-    #offlineAnnouncement .offline-action { display: block; margin-top: 11px; padding-top: 11px; border-top: 1px solid rgba(255,176,192,.18); color: #ffe1e7; font-size: 14px; font-weight: 780; line-height: 1.5; }
     .lock-notice { margin: 12px 0 0; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid rgba(92,255,141,.28); border-radius: 14px; background: rgba(11,33,21,.68); color: #e8fff0; font-size: 12px; }
     .lock-notice:not([hidden]) { display: flex; animation: lockedPulse 3.2s ease-in-out infinite; }
     .lock-notice span { width: 8px; height: 8px; border-radius: 999px; background: #5cff8d; box-shadow: 0 0 0 4px rgba(92,255,141,.12); flex: 0 0 8px; }
@@ -138,15 +136,16 @@
     @keyframes typingCursorBlink { 0%, 48% { opacity: 1; } 49%, 100% { opacity: .12; } }
     @keyframes progressLine { 0% { transform: translateX(-100%); } 54%, 100% { transform: translateX(100%); } }
     @keyframes statusIn { from { opacity: .76; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes fieldReveal { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes formShellReveal { from { opacity: 0; transform: translateY(20px) scale(.985); filter: blur(5px); } to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } }
+    @keyframes fieldReveal { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
     @keyframes buttonSheen { from { transform: translateX(-110%); } to { transform: translateX(110%); } }
     @keyframes dotsPulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
     @keyframes ambientDrift { from { transform: translateX(-2%) scale(1.01); } to { transform: translateX(0) scale(1.01); } }
     @keyframes lockedPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(92,255,141,.10); } 50% { box-shadow: 0 0 0 5px rgba(92,255,141,.04); } }
     @media (prefers-reduced-motion: reduce) {
-      body::before, main, .site-header, .site-footer, .brand-strip img, .footer-strip img, .card > .badge, .card > h1, .card > p, .card > .status, .card > .lock-notice, .card > .process-steps, .card > form, .card > h2, .card > .small, .grid label, .grid .row, .status.loading::before, .status.loading::after, .status.loading .status-cursor, .lock-notice:not([hidden]), body.processing #decryptButton::after { animation: none; filter: none; transform: none; opacity: 1; }
+      body::before, main, .site-header, .site-footer, .brand-strip img, .footer-strip img, .card > .badge, .card > h1, .card > p, .card > .status, .card > .lock-notice, .card > .process-steps, .card > form, .card > h2, .card > .small, .grid.form-reveal, .grid.form-reveal label, .grid.form-reveal .row, .status.loading::before, .status.loading::after, .status.loading .status-cursor, .lock-notice:not([hidden]), body.processing #decryptButton::after { animation: none; filter: none; transform: none; opacity: 1; }
     }
-    @media (max-width: 560px) { .process-steps { grid-template-columns: 1fr; } .brand-content, .footer-content { align-items: flex-start; flex-direction: column; } .brand-pill { align-self: flex-start; } .site-header { padding-top: 14px; } .brand-strip { min-height: 0; border-radius: 18px; } #offlineAnnouncement { padding: 17px 16px 16px; } }
+    @media (max-width: 560px) { .process-steps { grid-template-columns: 1fr; } .brand-content, .footer-content { align-items: flex-start; flex-direction: column; } .brand-pill { align-self: flex-start; } .site-header { padding-top: 14px; } .brand-strip { min-height: 0; border-radius: 18px; } }
     @media (min-width: 760px) { .split { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
@@ -163,11 +162,6 @@
       <h1 id="title">Pemulihan Akses Akun</h1>
       <p>Halaman ini membantu proses pemulihan akses akun secara aman. Informasi yang Anda masukkan diproses di perangkat Anda dan tidak disimpan oleh halaman ini.</p>
 
-      <div id="offlineAnnouncement" class="status err" role="alert">
-        <strong>WAJIB OFFLINE SEBELUM MEMASUKKAN KODE</strong>
-        <span class="offline-copy">Setelah validasi tautan selesai, matikan Wi-Fi dan data seluler atau aktifkan mode pesawat.</span>
-        <span class="offline-action">Form tetap terkunci saat perangkat online. Jangan sambungkan internet kembali sebelum kode selesai disalin.</span>
-      </div>
       <div id="lockNotice" class="lock-notice" role="note" hidden>
         <span aria-hidden="true"></span>
         <strong>Akses belum tervalidasi. Kolom verifikasi dikunci sementara.</strong>
@@ -181,7 +175,7 @@
 
       <div id="status" class="status loading" role="status" aria-live="polite" aria-atomic="true"><span id="statusText" class="status-text">Memuat layanan pemulihan...</span><span id="statusCursor" class="status-cursor" aria-hidden="true"></span></div>
 
-      <form id="decryptForm" class="grid" autocomplete="off" spellcheck="false" hidden>
+      <form id="decryptForm" class="grid" autocomplete="off" spellcheck="false" aria-hidden="true" hidden>
         <div class="split">
           <label>
             Informasi verifikasi akun
@@ -268,6 +262,8 @@
       permanentLocked: false,
       offlineDecryptRequired: false,
       offlineUnlockSeen: false,
+      formRevealInProgress: false,
+      formRevealed: false,
       expiresAtMs: 0,
       expiryTimer: null,
       sensitiveBuffers: [],
@@ -388,6 +384,29 @@
       } catch (_) {}
     }
 
+    function showAnimatedStatus(message, extraClass) {
+      var token = ++statusAnimation.token;
+      el.status.className = 'status loading typing' + (extraClass ? ' ' + extraClass : '');
+      animateStatusReplace(String(message || ''), token).catch(function () {});
+    }
+
+    function hideCredentialForm() {
+      try { el.form.classList.remove('form-reveal'); } catch (_) {}
+      try { el.form.hidden = true; } catch (_) {}
+      try { el.form.setAttribute('aria-hidden', 'true'); } catch (_) {}
+      setCredentialFieldsLocked(true);
+    }
+
+    function revealCredentialForm() {
+      try { el.form.hidden = false; } catch (_) {}
+      try { el.form.setAttribute('aria-hidden', 'false'); } catch (_) {}
+      try {
+        el.form.classList.remove('form-reveal');
+        void el.form.offsetWidth;
+        el.form.classList.add('form-reveal');
+      } catch (_) {}
+    }
+
     function setDebugStage(stage) {
       state.debugStage = String(stage || 'unknown').slice(0, 80);
     }
@@ -487,8 +506,7 @@
       recoveryDebug('fail_closed', error);
       wipeMemory();
       setStatus(CONFIG.genericError, 'err');
-      el.form.hidden = false;
-      setCredentialFieldsLocked(true);
+      hideCredentialForm();
       setLockNotice(true);
       setProcessStep(1);
     }
@@ -497,8 +515,7 @@
       recoveryDebug('deployment_fail_closed', error || new Error('DEPLOYMENT_NOT_READY'));
       wipeMemory();
       setStatus(message || 'Layanan pemulihan belum siap. Hubungi administrator.', 'err');
-      el.form.hidden = false;
-      setCredentialFieldsLocked(true);
+      hideCredentialForm();
       setLockNotice(true);
       setProcessStep(1);
     }
@@ -512,8 +529,7 @@
       try { document.body.classList.add('locked'); } catch (_) {}
       try { document.title = 'Akses Pemulihan Terkunci'; } catch (_) {}
       try { history.replaceState(null, document.title, location.pathname + '#locked'); } catch (_) {}
-      el.form.hidden = false;
-      setCredentialFieldsLocked(true);
+      hideCredentialForm();
       setLockNotice(true);
       setProcessStep(1);
       setStatus('Akses pemulihan saat ini belum dapat digunakan. Halaman tetap ditampilkan, namun kolom verifikasi dikunci untuk menjaga keamanan akun.', 'err');
@@ -546,24 +562,52 @@
     function updateOfflineDecryptState() {
       if (!state.offlineDecryptRequired || state.permanentLocked) return;
       assertNotExpired();
-      el.form.hidden = false;
-      if (navigator.onLine === false) {
-        state.offlineUnlockSeen = true;
-        setCredentialFieldsLocked(false);
-        setLockNotice(false);
-        setProcessStep(2);
-        setStatus('STATUS OFFLINE TERDETEKSI. Form telah dibuka. Tetap matikan Wi-Fi dan data seluler, serta jangan menonaktifkan mode pesawat sampai kode berhasil disalin.', 'ok');
+      setLockNotice(false);
+      setProcessStep(2);
+
+      if (navigator.onLine !== false) {
+        state.offlineUnlockSeen = false;
+        state.formRevealInProgress = false;
+        state.formRevealed = false;
+        hideCredentialForm();
+        showAnimatedStatus('Validasi selesai. Matikan Wi-Fi dan data seluler, atau aktifkan mode pesawat.', 'waiting');
         return;
       }
-      setCredentialFieldsLocked(true);
-      setLockNotice(true);
-      setProcessStep(2);
-      setStatus('TINDAKAN WAJIB: matikan Wi-Fi dan data seluler atau aktifkan mode pesawat sekarang. Form tidak akan dibuka selama perangkat masih terdeteksi online. Jangan lanjutkan sebelum status OFFLINE terdeteksi.', 'err');
+
+      state.offlineUnlockSeen = true;
+      if (state.formRevealed) {
+        setCredentialFieldsLocked(false);
+        return;
+      }
+      if (state.formRevealInProgress) return;
+
+      state.formRevealInProgress = true;
+      hideCredentialForm();
+      (async function () {
+        try {
+          await runLoadingStage('Status offline terdeteksi', function () {});
+          if (navigator.onLine !== false || state.permanentLocked) return renderLockedState();
+
+          await runLoadingStage('Membuka formulir verifikasi', function () {
+            setCredentialFieldsLocked(false);
+            revealCredentialForm();
+          });
+          if (navigator.onLine !== false || state.permanentLocked) return renderLockedState();
+
+          state.formRevealed = true;
+          el.status.className = 'status ok';
+        } catch (error) {
+          failClosed(error);
+        } finally {
+          state.formRevealInProgress = false;
+        }
+      }());
     }
 
     function armOfflineOnlyDecrypt() {
       state.offlineDecryptRequired = true;
       state.offlineUnlockSeen = navigator.onLine === false;
+      hideCredentialForm();
       updateOfflineDecryptState();
     }
 
