@@ -6590,11 +6590,11 @@ function customerSecurityLostPasskeyCanonical(value) {
 function customerSecurityLostPasskeyArgon2ParamsV157(hashLength) {
   const memoryRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB || 1024000);
   const timeRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_TIME_COST || 4);
-  const parallelRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM || 4);
+  const parallelRaw = Number(process.env.DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM || 2);
   return {
     memoryCost: Math.max(LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157, Math.min(LOST_PASSKEY_ARGON2_MEMORY_MAX_KIB_V163, Number.isFinite(memoryRaw) ? Math.floor(memoryRaw) : 1024000)),
     timeCost: Math.max(3, Math.min(10, Number.isFinite(timeRaw) ? Math.floor(timeRaw) : 4)),
-    parallelism: Math.max(3, Math.min(4, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 4)),
+    parallelism: Math.max(2, Math.min(2, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 2)),
     hashLength: Math.max(32, Math.min(128, Number(hashLength || 32)))
   };
 }
