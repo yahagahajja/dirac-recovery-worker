@@ -6594,7 +6594,7 @@ function customerSecurityLostPasskeyArgon2ParamsV157(hashLength) {
   return {
     memoryCost: Math.max(LOST_PASSKEY_ARGON2_MEMORY_MIN_KIB_V157, Math.min(LOST_PASSKEY_ARGON2_MEMORY_MAX_KIB_V163, Number.isFinite(memoryRaw) ? Math.floor(memoryRaw) : 1024000)),
     timeCost: Math.max(3, Math.min(10, Number.isFinite(timeRaw) ? Math.floor(timeRaw) : 4)),
-    parallelism: Math.max(1, Math.min(1, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 4)),
+    parallelism: Math.max(3, Math.min(4, Number.isFinite(parallelRaw) ? Math.floor(parallelRaw) : 4)),
     hashLength: Math.max(32, Math.min(128, Number(hashLength || 32)))
   };
 }
@@ -6776,6 +6776,53 @@ function customerSecurityLostPasskeyArgon2EncodedParamsV171(encodedHash) {
 }
 
 const DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_DEBUG_V174 = 'lost-passkey-link-open-argon2-debug-v174';
+const DIRAC_LOST_PASSKEY_LINK_FLOW_DEBUG_V175 = 'lost-passkey-link-flow-debug-v175';
+
+function customerSecurityLostPasskeyLinkFlowDebugEnabledV175() {
+  const value = String(process.env.DIRAC_LOST_PASSKEY_LINK_DEBUG || '').trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on';
+}
+
+function customerSecurityLostPasskeyLinkFlowDebugV175(stage, req, res, extra = {}) {
+  if (!customerSecurityLostPasskeyLinkFlowDebugEnabledV175()) return null;
+  const parsed = customerSecurityLostPasskeyParseRecoveryLinkV162(req);
+  const headers = req && req.headers || {};
+  const safeExtra = {};
+  const allowedExtra = [
+    'reason', 'status', 'db_status', 'row_found', 'hash_present', 'token_shape_valid',
+    'token_length', 'request_status', 'expired', 'used', 'revoked', 'locked',
+    'response_format', 'guard_passport', 'error_class', 'error_name', 'error_code',
+    'argon2id_params', 'elapsed_ms'
+  ];
+  for (const key of allowedExtra) {
+    if (Object.prototype.hasOwnProperty.call(extra || {}, key)) safeExtra[key] = extra[key];
+  }
+  const payload = {
+    diagnostic_version: DIRAC_LOST_PASSKEY_LINK_FLOW_DEBUG_V175,
+    stage: String(stage || 'unknown').slice(0, 100),
+    method: String(req && req.method || '').toUpperCase().slice(0, 12),
+    host: String(headers.host || '').split(',')[0].trim().toLowerCase().slice(0, 160),
+    forwarded_host: String(headers['x-forwarded-host'] || '').split(',')[0].trim().toLowerCase().slice(0, 160),
+    forwarded_proto: String(headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase().slice(0, 20),
+    deployment_role: diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE') || '',
+    vercel2_actions_enabled: diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED') || diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED'),
+    central_guard_passed: diracCentralGuardPassedForHandlerV168(req),
+    request_id_hash: parsed && parsed.requestId ? customerSecurityLostPasskeySha256HexV157(parsed.requestId) : '',
+    link_token_present: Boolean(parsed && parsed.linkToken),
+    link_token_length: parsed && parsed.linkToken ? String(parsed.linkToken).length : 0,
+    ...safeExtra,
+    time: diracNowIso()
+  };
+  try {
+    if (res && typeof res.setHeader === 'function') {
+      res.setHeader('X-Dirac-Recovery-Link-Debug', DIRAC_LOST_PASSKEY_LINK_FLOW_DEBUG_V175);
+      res.setHeader('X-Dirac-Recovery-Link-Stage', payload.stage);
+      if (safeExtra.reason) res.setHeader('X-Dirac-Recovery-Link-Reason', String(safeExtra.reason).slice(0, 120));
+    }
+  } catch (_) {}
+  try { console.error('[dirac-lost-passkey-link-flow-v175]', JSON.stringify(payload)); } catch (_) {}
+  return payload;
+}
 
 function customerSecurityLostPasskeyLinkOpenArgon2DebugEnabledV174() {
   const value = String(process.env.DIRAC_LOST_PASSKEY_LINK_OPEN_DEBUG || '').trim().toLowerCase();
@@ -7047,8 +7094,15 @@ function customerSecurityLostPasskeyLinkRateLimitV162(req, requestId) {
 
 async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   const method = String(req && req.method || 'GET').toUpperCase();
-  if (method !== 'GET' && method !== 'HEAD') return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
-  if (!diracCentralGuardPassedForHandlerV168(req)) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  customerSecurityLostPasskeyLinkFlowDebugV175('handler_enter', req, res, { response_format: String(req && req.query && req.query.format || '').trim().toLowerCase() });
+  if (method !== 'GET' && method !== 'HEAD') {
+    customerSecurityLostPasskeyLinkFlowDebugV175('method_rejected', req, res, { reason: 'method_not_allowed', status: 404 });
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
+  if (!diracCentralGuardPassedForHandlerV168(req)) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('central_guard_missing', req, res, { reason: 'central_guard_required', status: 404 });
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
 
   try {
     if (typeof diracV107CheckActiveBan === 'function') {
@@ -7059,25 +7113,46 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
 
   const parsed = customerSecurityLostPasskeyParseRecoveryLinkV162(req);
   if (!parsed || !parsed.matched || !parsed.requestId || !customerSecurityLostPasskeyLinkTokenShapeV162(parsed.linkToken)) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('link_shape_rejected', req, res, {
+      reason: 'request_id_or_token_shape_invalid',
+      status: 404,
+      token_shape_valid: Boolean(parsed && customerSecurityLostPasskeyLinkTokenShapeV162(parsed.linkToken)),
+      token_length: parsed && parsed.linkToken ? String(parsed.linkToken).length : 0
+    });
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
 
   const rate = customerSecurityLostPasskeyLinkRateLimitV162(req, parsed.requestId);
   if (!rate.ok) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('link_rate_rejected', req, res, { reason: 'link_rate_limit', status: 429 });
     try { res.setHeader('Retry-After', String(rate.retryAfterSeconds || 60)); } catch (_) {}
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 429);
   }
 
   const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
-  if (!vaultSecrets.ok) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
+  if (!vaultSecrets.ok) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('vault_env_rejected', req, res, { reason: String(vaultSecrets.code || 'vault_secret_invalid'), status: 503 });
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
+  }
 
   const select = 'id,request_id,customer_id,auth_user_id,status,created_at,expires_at,used_at,revoked_at,locked_at,metadata,encrypted_file_key_text,file_key_wrap_nonce,file_key_wrap_tag,salt,file_sha256,aad_hash,server_signature';
   const result = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?select=' + encodeURIComponent(select) + '&request_id=eq.' + encodeURIComponent(parsed.requestId) + '&limit=1', { method: 'GET', auth: 'service' });
-  if (!result.ok) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  if (!result.ok) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('vault_row_read_rejected', req, res, { reason: 'vault_row_read_failed', status: 404, db_status: Number(result.status || 0) });
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
   const row = Array.isArray(result.data) ? result.data[0] : null;
   const metadata = row && row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
   const linkTokenHash = String(metadata.link_token_hash || '');
-  if (!row || !row.id || !linkTokenHash.startsWith('$argon2id$')) return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  if (!row || !row.id || !linkTokenHash.startsWith('$argon2id$')) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('vault_row_shape_rejected', req, res, {
+      reason: 'vault_row_or_argon2_hash_missing',
+      status: 404,
+      row_found: Boolean(row && row.id),
+      hash_present: Boolean(linkTokenHash)
+    });
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
 
   const argon2VerifyStartedAt = Date.now();
   customerSecurityLostPasskeyLinkOpenArgon2DebugV174('argon2_verify_start', req, parsed.requestId, linkTokenHash, argon2VerifyStartedAt);
@@ -7095,6 +7170,16 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
       customerSecurityLostPasskeyLinkOpenArgon2ErrorV174(error),
       true
     );
+    const argon2Error = customerSecurityLostPasskeyLinkOpenArgon2ErrorV174(error);
+    customerSecurityLostPasskeyLinkFlowDebugV175('argon2_verify_rejected', req, res, {
+      reason: 'argon2_verify_runtime_error',
+      status: 503,
+      error_class: argon2Error.error_class,
+      error_name: argon2Error.error_name,
+      error_code: argon2Error.error_code,
+      argon2id_params: customerSecurityLostPasskeyArgon2EncodedParamsV171(linkTokenHash),
+      elapsed_ms: Math.max(0, Date.now() - argon2VerifyStartedAt)
+    });
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
   }
 
@@ -7107,6 +7192,7 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   );
 
   if (!tokenOk) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('argon2_token_mismatch', req, res, { reason: 'link_token_mismatch', status: 404, argon2id_params: customerSecurityLostPasskeyArgon2EncodedParamsV171(linkTokenHash) });
     try { console.warn('[dirac-lost-passkey-link-v162]', JSON.stringify({ event: 'invalid_link_token', request_id_hash: customerSecurityLostPasskeySha256HexV157(parsed.requestId), time: diracNowIso() })); } catch (_) {}
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
@@ -7114,6 +7200,15 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   const nowMs = Date.now();
   const expiresMs = new Date(row.expires_at).getTime();
   if (String(row.status || '') !== 'pending' || row.used_at || row.revoked_at || row.locked_at || !Number.isFinite(expiresMs) || expiresMs <= nowMs) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('vault_state_rejected', req, res, {
+      reason: 'vault_not_pending_or_expired',
+      status: 404,
+      request_status: String(row.status || ''),
+      expired: !Number.isFinite(expiresMs) || expiresMs <= nowMs,
+      used: Boolean(row.used_at),
+      revoked: Boolean(row.revoked_at),
+      locked: Boolean(row.locked_at)
+    });
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
 
@@ -7126,6 +7221,7 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
 
   const responseFormat = String(req && req.query && req.query.format || '').trim().toLowerCase();
   if (responseFormat === 'redirect') {
+    customerSecurityLostPasskeyLinkFlowDebugV175('redirect_allowed', req, res, { status: 302, response_format: 'redirect' });
     const redirectUrl = customerSecurityLostPasskeyOfficialBaseUrlV157()
       + '/lost-passkey.html#rid=' + encodeURIComponent(parsed.requestId)
       + '&token=' + encodeURIComponent(parsed.linkToken);
@@ -7140,6 +7236,7 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   }
 
   if (parsed.api || responseFormat === 'json') {
+    customerSecurityLostPasskeyLinkFlowDebugV175('vault_json_allowed', req, res, { status: 200, response_format: responseFormat || 'api' });
     return customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata);
   }
 
@@ -26968,6 +27065,9 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
 
     const memoryBan = diracCentralCheckMemoryBanV146(identity);
     if (memoryBan.blocked) {
+      if (customerSecurityLostPasskeyIsRecoveryLinkPathV162(req)) {
+        customerSecurityLostPasskeyLinkFlowDebugV175('central_guard_memory_ban', req, res, { reason: 'MEMORY_BAN_ACTIVE', status: 403 });
+      }
       if (String(req && req.query && req.query.action || '').toLowerCase() === DIRAC_RECOVERY_WORKER_ACTION) {
         ctx.action = DIRAC_RECOVERY_WORKER_ACTION;
         diracCentralRecoveryWorkerGuardDebugV158(req, ctx, 'pre_action_memory_ban', 'MEMORY_BAN_ACTIVE');
@@ -26979,6 +27079,9 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
 
     const persistentBan = await diracCentralCheckPersistentBanV146(req, identity);
     if (persistentBan.blocked) {
+      if (customerSecurityLostPasskeyIsRecoveryLinkPathV162(req)) {
+        customerSecurityLostPasskeyLinkFlowDebugV175('central_guard_persistent_ban', req, res, { reason: 'PERSISTENT_BAN_ACTIVE', status: 403 });
+      }
       if (String(req && req.query && req.query.action || '').toLowerCase() === DIRAC_RECOVERY_WORKER_ACTION) {
         ctx.action = DIRAC_RECOVERY_WORKER_ACTION;
         diracCentralRecoveryWorkerGuardDebugV158(req, ctx, 'pre_action_persistent_ban', 'PERSISTENT_BAN_ACTIVE');
@@ -28955,6 +29058,13 @@ function diracCentralCircuitBreakerV146(req, ctx, event) {
 }
 
 async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason) {
+  if (ctx && ctx.action === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('central_guard_rejected', req, res, {
+      reason: String(reason || 'central_security_block').slice(0, 120),
+      status: 403,
+      guard_passport: Object.keys(ctx.guardPassport || {}).filter((key) => ctx.guardPassport[key] === true)
+    });
+  }
   try { await Promise.resolve(diracCentralCircuitBreakerV146(req, ctx, reason || 'block')); } catch (_) {}
   const now = Date.now();
   const blockedUntilMs = now + diracCentralBlockMsV146();
