@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-XoVARXjvWzvKGDXXGes0W8By65rXrt3ZpmBeHUftnBf3anCGsJhdSciF3uOl43zaN31XzWbFp0XIjH74vNWToA=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-rULwEneBQ5XhsQMajWh6ohY+spq2/Gpqob7N05oRw6veSByPqWXSCHGKmz/1cBii+LIhB2kNEwmW9yLPGLFaEQ=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-XoVARXjvWzvKGDXXGes0W8By65rXrt3ZpmBeHUftnBf3anCGsJhdSciF3uOl43zaN31XzWbFp0XIjH74vNWToA=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-rULwEneBQ5XhsQMajWh6ohY+spq2/Gpqob7N05oRw6veSByPqWXSCHGKmz/1cBii+LIhB2kNEwmW9yLPGLFaEQ=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -131,6 +131,10 @@
     .clipboard-sink { position: fixed; left: -10000px; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .danger { color: #ffd3dc; }
     .small { font-size: 12px; color: #91a3bb; }
+    .debug-panel { margin: 12px 0 0; border: 1px solid #3a4b63; border-radius: 14px; background: #0a1019; color: #dce8f9; overflow: hidden; }
+    .debug-panel > summary { cursor: pointer; padding: 11px 13px; font-size: 12px; font-weight: 800; color: #dce8f9; user-select: none; }
+    .debug-panel > p { margin: 0; padding: 0 13px 9px; }
+    .debug-panel pre { margin: 0; padding: 12px 13px 14px; border-top: 1px solid #263244; background: #070c13; color: #b9c6d8; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .split { display: grid; gap: 14px; grid-template-columns: 1fr; }
     @keyframes pageBackdropReveal { from { opacity: 0; filter: none; transform: scale(1.12); } to { opacity: 1; filter: none; transform: scale(1); } }
     @keyframes pageReveal { from { opacity: 0; filter: none; transform: translateY(14px); } to { opacity: 1; filter: none; transform: translateY(0); } }
@@ -177,6 +181,12 @@
       </div>
 
       <div id="status" class="status loading" role="status" aria-live="polite" aria-atomic="true"><span id="statusText" class="status-text">Memuat layanan pemulihan...</span><span id="statusCursor" class="status-cursor" aria-hidden="true"></span></div>
+
+      <details id="debugPanel" class="debug-panel" hidden>
+        <summary>Panel diagnostik aman</summary>
+        <p class="small">Hanya menampilkan tahap dan kode kegagalan. Token, RID, kode verifikasi, signature, ciphertext, hash, dan data rahasia tidak pernah ditampilkan.</p>
+        <pre id="debugOutput" aria-live="polite"></pre>
+      </details>
 
       <form id="decryptForm" class="grid" autocomplete="off" spellcheck="false" aria-hidden="true" hidden inert>
         <div class="split">
@@ -278,7 +288,9 @@
       sensitiveBuffers: [],
       recoveryMaterialBytes: null,
       recoveryCopied: false,
-      debugStage: 'init'
+      debugStage: 'init',
+      serverDiagnostics: null,
+      lastDiagnostic: null
     };
 
     var el = {
@@ -295,6 +307,8 @@
       copyRecoveryButton: document.getElementById('copyRecoveryButton'),
       copyState: document.getElementById('copyState'),
       lockNotice: document.getElementById('lockNotice'),
+      debugPanel: document.getElementById('debugPanel'),
+      debugOutput: document.getElementById('debugOutput'),
       steps: document.querySelectorAll('.process-step')
     };
 
@@ -439,23 +453,51 @@
       return code || 'UNKNOWN_ERROR';
     }
 
-    function recoveryDebug(event, error, extra) {
-      var payload = {
-        diagnostic_version: 'lost-passkey-client-flow-debug-v176',
-        event: String(event || 'unknown').slice(0, 80),
-        stage: String(state.debugStage || 'unknown').slice(0, 80),
-        error_code: safeRecoveryErrorCode(error),
-        http_status: Number(error && error.httpStatus || 0) || null,
-        response_content_type: String(error && error.responseContentType || '').slice(0, 120) || null,
+    function safeDiagnosticText(value, maxLength) {
+      return String(value == null ? '' : value).replace(/[^A-Za-z0-9._:/-]/g, '_').slice(0, Math.max(1, Number(maxLength) || 120)) || null;
+    }
+
+    function renderSafeDebug(payload) {
+      var safe = {
+        diagnostic_version: safeDiagnosticText(payload && payload.diagnostic_version, 80),
+        event: safeDiagnosticText(payload && payload.event, 80),
+        stage: safeDiagnosticText(payload && payload.stage, 80),
+        error_code: safeDiagnosticText(payload && payload.error_code, 80),
+        http_status: Number(payload && payload.http_status || 0) || null,
+        response_content_type: safeDiagnosticText(payload && payload.response_content_type, 120),
         origin: String(location.origin || '').slice(0, 160),
         path: String(location.pathname || '').slice(0, 160),
         online: navigator.onLine !== false,
         fragment_present: Boolean(location.hash),
         central_api_action: CONFIG.vaultApiAction,
-        extra: extra && typeof extra === 'object' ? extra : null
+        server_diagnostics: state.serverDiagnostics && typeof state.serverDiagnostics === 'object' ? {
+          signed_envelope: safeDiagnosticText(state.serverDiagnostics.signed_envelope, 80),
+          recovery_link_stage: safeDiagnosticText(state.serverDiagnostics.recovery_link_stage, 80),
+          recovery_link_reason: safeDiagnosticText(state.serverDiagnostics.recovery_link_reason, 80),
+          central_guard: safeDiagnosticText(state.serverDiagnostics.central_guard, 80)
+        } : null
       };
-      try { console.error('[dirac-lost-passkey-client-v176]', payload); } catch (_) {}
-      return payload;
+      state.lastDiagnostic = safe;
+      try {
+        if (el.debugOutput) el.debugOutput.textContent = JSON.stringify(safe, null, 2);
+        if (el.debugPanel) el.debugPanel.hidden = false;
+      } catch (_) {}
+      return safe;
+    }
+
+    function recoveryDebug(event, error, extra) {
+      void extra;
+      var payload = {
+        diagnostic_version: 'lost-passkey-client-flow-debug-v177',
+        event: String(event || 'unknown').slice(0, 80),
+        stage: String(state.debugStage || 'unknown').slice(0, 80),
+        error_code: safeRecoveryErrorCode(error),
+        http_status: Number(error && error.httpStatus || 0) || null,
+        response_content_type: String(error && error.responseContentType || '').slice(0, 120) || null
+      };
+      var safePayload = renderSafeDebug(payload);
+      try { console.error('[dirac-lost-passkey-client-v177]', safePayload); } catch (_) {}
+      return safePayload;
     }
 
     function setLockNotice(visible) {
@@ -891,6 +933,16 @@
       return out;
     }
 
+    function readSafeResponseDiagnostics(response) {
+      if (!response || !response.headers || typeof response.headers.get !== 'function') return null;
+      return {
+        signed_envelope: safeDiagnosticText(response.headers.get('x-dirac-recovery-signed-envelope'), 80),
+        recovery_link_stage: safeDiagnosticText(response.headers.get('x-dirac-recovery-link-stage'), 80),
+        recovery_link_reason: safeDiagnosticText(response.headers.get('x-dirac-recovery-link-reason'), 80),
+        central_guard: safeDiagnosticText(response.headers.get('x-dirac-central-security-guard'), 80)
+      };
+    }
+
     async function fetchVaultOnce(fragment) {
       if (state.vaultFetched) throw new Error('VAULT_FETCH_ALREADY_USED');
       state.vaultFetched = true;
@@ -907,6 +959,7 @@
         referrerPolicy: 'no-referrer',
         headers: { 'Accept': 'application/json' }
       });
+      state.serverDiagnostics = readSafeResponseDiagnostics(response);
       var contentType = String(response.headers.get('content-type') || '').toLowerCase();
       if (!response.ok) {
         var fetchError = new Error('VAULT_FETCH_FAILED');
