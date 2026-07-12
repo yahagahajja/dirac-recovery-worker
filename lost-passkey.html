@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-Sjq/9KM4V//YiGVTfRE2iEQD4st2bMZDFt7+MtyI3j7E0U2OosBjAWuuA3o6mf3rg9CvD6BvENsmQO7JbuVx1g=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-Z/a1c1p6qiYYPkTUW+e7cR0c4uAVTjO0zNeGxjQm4zhruCi9tik7cLvu3rxTLuwus16S7cO58/dfOJ1lPPvYGQ=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-Sjq/9KM4V//YiGVTfRE2iEQD4st2bMZDFt7+MtyI3j7E0U2OosBjAWuuA3o6mf3rg9CvD6BvENsmQO7JbuVx1g=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-HT5LRNPftfRWHY96FrvnNs9R2OPNQdM64KsDs16hh5Ezgut4yQWVsH8Kkkma967sDarcAULJ4ywFNGcPkCacAA=='; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-Z/a1c1p6qiYYPkTUW+e7cR0c4uAVTjO0zNeGxjQm4zhruCi9tik7cLvu3rxTLuwus16S7cO58/dfOJ1lPPvYGQ=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -1166,8 +1166,8 @@
       assertAllowedKeys(signed, ['payload', 'signature_b64'], ['payload', 'signature_b64'], 'SIGNED_MANIFEST_SCHEMA');
       var payload = signed.payload;
       assertAllowedKeys(payload,
-        ['version', 'purpose', 'request_id', 'key_id', 'signature_alg', 'cipher', 'kdf', 'hkdf_info', 'ciphertext_sha256', 'aad_sha256', 'salt_sha256', 'vault_id_hash', 'min_argon2id_memory_kib', 'min_argon2id_time_cost', 'min_argon2id_parallelism', 'created_at', 'expires_at'],
-        ['version', 'purpose', 'request_id', 'key_id', 'signature_alg', 'cipher', 'kdf', 'hkdf_info', 'ciphertext_sha256', 'aad_sha256', 'salt_sha256', 'vault_id_hash', 'min_argon2id_memory_kib', 'min_argon2id_time_cost', 'min_argon2id_parallelism', 'created_at', 'expires_at'],
+        ['version', 'purpose', 'request_id', 'key_id', 'signature_alg', 'cipher', 'kdf', 'hkdf_info', 'ciphertext_sha256', 'aad_sha256', 'salt_sha256', 'vault_id_hash', 'min_argon2id_memory_kib', 'min_argon2id_time_cost', 'min_argon2id_parallelism', 'created_at', 'expires_at', 'hpke_suite', 'hpke_key_id', 'hpke_public_key_b64url'],
+        ['version', 'purpose', 'request_id', 'key_id', 'signature_alg', 'cipher', 'kdf', 'hkdf_info', 'ciphertext_sha256', 'aad_sha256', 'salt_sha256', 'vault_id_hash', 'min_argon2id_memory_kib', 'min_argon2id_time_cost', 'min_argon2id_parallelism', 'created_at', 'expires_at', 'hpke_suite', 'hpke_key_id', 'hpke_public_key_b64url'],
         'SIGNED_PAYLOAD_SCHEMA');
       var signature = String(signed.signature_b64 || '').trim();
       assertStrictB64Length(signature, 'ED25519_SIGNATURE', 64);
