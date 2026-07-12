@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-QV8uS34sod0oGV8VnvUKVFqzuuWP2TuvnTUITRSWpryHzy8mTplUdo3CwBYlrMCzhXuyAT3o17aIr8+l1Kui7A=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-ztKSptwESR64EzbdZ6wzJchd8gFaAE1D8+q869vA+haRWRfSICSyLlW3Ge230+67aAzjYpvOcDfrpbO0N+LiQQ=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-QV8uS34sod0oGV8VnvUKVFqzuuWP2TuvnTUITRSWpryHzy8mTplUdo3CwBYlrMCzhXuyAT3o17aIr8+l1Kui7A=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-aSps7srR6vYzW6HRH30bnBPmHHWw9DekgixYr8KJ+XFNGO0vmDus0b9xzueLrvHkNqhScaOisIK9C1opVJfVNg=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-/2hCqOyniA2mK9w+3SeR00WU7s+JdTzSffrWfy83/6gYxs9pXgU1kBxOdqL1hgmslMDNArdf/urAFOjqH09PFA=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-C2wf76j3r2d1VriLrRAi16fOkNjrRpVvKvaUk56hdzFEKYxVFB31fn1Dy0I8mH6WNuaHDh2K3Tj8Gz/o7LfBXw==' 'sha512-VhXM+3XbN8dymCsO6o7P3V77Bnki3vykL1t51BvCP/T8/6E4nh1EFalQhy1WW4edJTw0go//q4I1jYqJkL7omg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-QV8uS34sod0oGV8VnvUKVFqzuuWP2TuvnTUITRSWpryHzy8mTplUdo3CwBYlrMCzhXuyAT3o17aIr8+l1Kui7A=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-aSps7srR6vYzW6HRH30bnBPmHHWw9DekgixYr8KJ+XFNGO0vmDus0b9xzueLrvHkNqhScaOisIK9C1opVJfVNg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -250,7 +250,8 @@
       offlineUnlockSeen: false,
       expiresAtMs: 0,
       expiryTimer: null,
-      sensitiveBuffers: []
+      sensitiveBuffers: [],
+      debugStage: 'init'
     };
 
     var el = {
@@ -275,6 +276,35 @@
         void el.status.offsetHeight;
         el.status.classList.add('status-refresh');
       } catch (_) {}
+    }
+
+    function setDebugStage(stage) {
+      state.debugStage = String(stage || 'unknown').slice(0, 80);
+    }
+
+    function safeRecoveryErrorCode(error) {
+      var message = String(error && error.message || error || 'UNKNOWN_ERROR');
+      var code = message.split(':')[0].replace(/[^A-Z0-9_-]/gi, '_').slice(0, 80);
+      return code || 'UNKNOWN_ERROR';
+    }
+
+    function recoveryDebug(event, error, extra) {
+      var payload = {
+        diagnostic_version: 'lost-passkey-client-flow-debug-v175',
+        event: String(event || 'unknown').slice(0, 80),
+        stage: String(state.debugStage || 'unknown').slice(0, 80),
+        error_code: safeRecoveryErrorCode(error),
+        http_status: Number(error && error.httpStatus || 0) || null,
+        response_content_type: String(error && error.responseContentType || '').slice(0, 120) || null,
+        origin: String(location.origin || '').slice(0, 160),
+        path: String(location.pathname || '').slice(0, 160),
+        online: navigator.onLine !== false,
+        fragment_present: Boolean(location.hash),
+        central_api_action: CONFIG.vaultApiAction,
+        extra: extra && typeof extra === 'object' ? extra : null
+      };
+      try { console.error('[dirac-lost-passkey-client-v175]', payload); } catch (_) {}
+      return payload;
     }
 
     function setLockNotice(visible) {
@@ -344,6 +374,7 @@
     }
 
     function failClosed(error) {
+      recoveryDebug('fail_closed', error);
       wipeMemory();
       setStatus(CONFIG.genericError, 'err');
       el.form.hidden = false;
@@ -352,7 +383,8 @@
       setProcessStep(1);
     }
 
-    function deploymentFailClosed(message) {
+    function deploymentFailClosed(message, error) {
+      recoveryDebug('deployment_fail_closed', error || new Error('DEPLOYMENT_NOT_READY'));
       wipeMemory();
       setStatus(message || 'Layanan pemulihan belum siap. Hubungi administrator.', 'err');
       el.form.hidden = false;
@@ -575,10 +607,13 @@
         referrerPolicy: 'no-referrer',
         headers: { 'Accept': 'application/json' }
       });
-      if (!response.ok) {
-        throw new Error('VAULT_FETCH_FAILED');
-      }
       var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      if (!response.ok) {
+        var fetchError = new Error('VAULT_FETCH_FAILED');
+        fetchError.httpStatus = Number(response.status || 0);
+        fetchError.responseContentType = contentType;
+        throw fetchError;
+      }
       if (contentType.indexOf('application/json') === -1) {
         throw new Error('VAULT_RESPONSE_NOT_JSON');
       }
@@ -852,23 +887,34 @@
     }
 
     async function bootstrap() {
+      setDebugStage('storage_hardening');
       hardenStorageAccess();
+      setDebugStage('secure_context_check');
       requireSecureContext();
+      setDebugStage('official_origin_check');
       assertOfficialOrigin();
+      setDebugStage('argon2_runtime_check');
       assertArgon2idReady();
+      setDebugStage('email_fragment_parse');
       state.fragment = parseFragment();
       setLockNotice(false);
       setProcessStep(1);
       setStatus('Menyiapkan data pemulihan dari layanan resmi...', 'loading');
+      setDebugStage('vault_fetch');
       var raw = await fetchVaultOnce(state.fragment);
       state.vaultResponse = raw;
+      setDebugStage('vault_bundle_normalize');
       state.vaultBundle = normalizeVaultBundle(raw);
       setProcessStep(2);
       setStatus('Memvalidasi akses pemulihan melalui kanal resmi...', 'loading');
+      setDebugStage('signed_manifest_extract');
       var signedManifest = extractSignedManifest(raw);
       state.manifestPayload = signedManifest.payload;
+      setDebugStage('manifest_and_vault_verify');
       await verifyManifestAndVault(raw, state.vaultBundle, signedManifest);
+      setDebugStage('network_lock');
       disableAllNetwork();
+      setDebugStage('offline_decrypt_ready');
       armOfflineOnlyDecrypt();
     }
 
@@ -893,10 +939,11 @@
     }, { once: false });
 
     bootstrap().catch(function (error) {
+      recoveryDebug('bootstrap_rejected', error);
       var msg = String(error && error.message || '');
-      if (msg === 'ARGON2ID_WEBASSEMBLY_DISABLED') return deploymentFailClosed('Fitur keamanan perangkat tidak tersedia pada browser ini. Gunakan browser resmi tanpa mode pembatas tambahan.');
-      if (msg === 'ARGON2ID_WASM_MISSING') return deploymentFailClosed('Komponen keamanan halaman belum tersedia. Proses dihentikan secara aman.');
-      if (msg === 'ED25519_PUBLIC_KEY_MISSING') return deploymentFailClosed('Konfigurasi validasi layanan belum tersedia. Proses dihentikan secara aman.');
+      if (msg === 'ARGON2ID_WEBASSEMBLY_DISABLED') return deploymentFailClosed('Fitur keamanan perangkat tidak tersedia pada browser ini. Gunakan browser resmi tanpa mode pembatas tambahan.', error);
+      if (msg === 'ARGON2ID_WASM_MISSING') return deploymentFailClosed('Komponen keamanan halaman belum tersedia. Proses dihentikan secara aman.', error);
+      if (msg === 'ED25519_PUBLIC_KEY_MISSING') return deploymentFailClosed('Konfigurasi validasi layanan belum tersedia. Proses dihentikan secara aman.', error);
       if (/^(RID_INVALID|TOKEN_INVALID|ORIGIN_NOT_ALLOWED|VAULT_FETCH_FAILED|VAULT_RESPONSE_|EXPIRED|MANIFEST_RID_MISMATCH|RECOVERY_LOCKED)/.test(msg)) return renderLockedState();
       return failClosed(error);
     });
