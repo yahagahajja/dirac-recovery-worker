@@ -27306,11 +27306,158 @@ function diracCentralApplyHeadersV146(res) {
   try { res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)'); } catch (_) {}
 }
 
+const DIRAC_RECOVERY_SIGNED_ENVELOPE_PRESERVE_V177 = 'lost-passkey-signed-envelope-preserve-v177';
+
+function diracCentralRecoverySignedEnvelopeDecisionV177(payload) {
+  const ctx = diracCentralCurrentContextV149();
+  if (!ctx || String(ctx.action || '') !== DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
+    return { matched: false, ok: false };
+  }
+
+  if (!payload || payload.ok !== true) return { matched: false, ok: false };
+  const signed = payload.signed_manifest;
+  const manifest = signed && signed.payload;
+  if (!signed || !manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    return { matched: true, ok: false };
+  }
+
+  try {
+    const signature = String(signed.signature_b64 || '').trim();
+    if (!/^[A-Za-z0-9_-]{86}$/.test(signature)) throw new Error('SIGNED_ENVELOPE_SIGNATURE_SHAPE_INVALID');
+    if (String(manifest.manifest_schema || '') !== 'dirac-lost-passkey-signed-security-manifest-v1') throw new Error('SIGNED_ENVELOPE_SCHEMA_INVALID');
+    if (String(manifest.version || '') !== DIRAC_LOST_PASSKEY_VAULT_PATCH_V157) throw new Error('SIGNED_ENVELOPE_VERSION_INVALID');
+    if (String(manifest.purpose || '') !== 'lost_passkey_recovery') throw new Error('SIGNED_ENVELOPE_PURPOSE_INVALID');
+    if (String(manifest.action || '') !== DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) throw new Error('SIGNED_ENVELOPE_ACTION_INVALID');
+    if (String(manifest.signature_alg || '') !== 'Ed25519') throw new Error('SIGNED_ENVELOPE_ALGORITHM_INVALID');
+    const expectedSigningKeyId = String(process.env.DIRAC_LOST_PASSKEY_ED25519_KEY_ID || 'dirac-recovery-ed25519-2026-01');
+    if (String(manifest.key_id || '') !== expectedSigningKeyId) throw new Error('SIGNED_ENVELOPE_KEY_ID_INVALID');
+    if (String(manifest.cipher || '') !== 'AES-256-GCM') throw new Error('SIGNED_ENVELOPE_CIPHER_INVALID');
+    if (String(manifest.kdf || '') !== 'Argon2id+HKDF-SHA256') throw new Error('SIGNED_ENVELOPE_KDF_INVALID');
+
+    const contract = manifest.security_contract;
+    if (!contract || typeof contract !== 'object' || Array.isArray(contract)) throw new Error('SIGNED_ENVELOPE_CONTRACT_MISSING');
+    if (String(contract.version || '') !== 'dirac-lost-passkey-security-contract-v1') throw new Error('SIGNED_ENVELOPE_CONTRACT_VERSION_INVALID');
+    if (contract.central_guard_required !== true || String(contract.central_guard || '') !== DIRAC_CENTRAL_SECURITY_GUARD_V146) throw new Error('SIGNED_ENVELOPE_CENTRAL_GUARD_INVALID');
+    if (String(contract.action || '') !== DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165 || contract.vercel2_only !== true || String(contract.response_format || '') !== 'json') throw new Error('SIGNED_ENVELOPE_ROUTE_CONTRACT_INVALID');
+    if (contract.offline_required !== true || contract.network_locked_after_fetch !== true || contract.one_time_copy !== true) throw new Error('SIGNED_ENVELOPE_OFFLINE_CONTRACT_INVALID');
+    if (Number(contract.recovery_code_length) !== LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157 || Number(contract.email_secret_length) !== LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157 || Number(contract.website_secret_length) !== LOST_PASSKEY_SECRET_100_CHAR_LENGTH_V157) throw new Error('SIGNED_ENVELOPE_LENGTH_CONTRACT_INVALID');
+    if (contract.hpke_required !== true || String(contract.hpke_suite || '') !== DIRAC_RECOVERY_HPKE_SUITE_V159 || !/^[A-Za-z0-9._:-]{1,80}$/.test(String(contract.hpke_key_id || ''))) throw new Error('SIGNED_ENVELOPE_HPKE_CONTRACT_INVALID');
+
+    const signedArgon = manifest.argon2id_params && typeof manifest.argon2id_params === 'object' && !Array.isArray(manifest.argon2id_params) ? manifest.argon2id_params : null;
+    if (!signedArgon) throw new Error('SIGNED_ENVELOPE_ARGON2_MISSING');
+    if (Number(signedArgon.memoryCost) < 1024000 || Number(signedArgon.timeCost) < 4 || Number(signedArgon.parallelism) < 3 || Number(signedArgon.hashLength) < 32) throw new Error('SIGNED_ENVELOPE_ARGON2_DOWNGRADE');
+
+    const createdMs = Date.parse(String(manifest.created_at || ''));
+    const expiresMs = Date.parse(String(manifest.expires_at || ''));
+    const nowMs = Date.now();
+    if (!Number.isFinite(createdMs) || !Number.isFinite(expiresMs) || createdMs > nowMs + 60000 || createdMs >= expiresMs || expiresMs <= nowMs) throw new Error('SIGNED_ENVELOPE_EXPIRED');
+
+    const rawPrivateKey = String(process.env.DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY_PEM || process.env.DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY || '').trim();
+    if (!rawPrivateKey) throw new Error('SIGNED_ENVELOPE_PRIVATE_KEY_MISSING');
+    const pem = rawPrivateKey.includes('-----BEGIN') ? rawPrivateKey.replace(/\\n/g, '\n') : Buffer.from(rawPrivateKey, 'base64').toString('utf8');
+    const privateKey = crypto.createPrivateKey(pem);
+    if (privateKey.asymmetricKeyType && privateKey.asymmetricKeyType !== 'ed25519') throw new Error('SIGNED_ENVELOPE_PRIVATE_KEY_INVALID');
+    const publicKey = crypto.createPublicKey(privateKey);
+    const signatureBytes = Buffer.from(signature, 'base64url');
+    if (signatureBytes.length !== 64 || !crypto.verify(null, Buffer.from(customerSecurityLostPasskeyCanonical(manifest), 'utf8'), publicKey, signatureBytes)) {
+      signatureBytes.fill(0);
+      throw new Error('SIGNED_ENVELOPE_SIGNATURE_INVALID');
+    }
+    signatureBytes.fill(0);
+
+    if (!payload.manifest || customerSecurityLostPasskeyCanonical(payload.manifest) !== customerSecurityLostPasskeyCanonical(manifest)) throw new Error('SIGNED_ENVELOPE_MANIFEST_COPY_INVALID');
+    if (String(payload.signature_b64 || '') !== signature) throw new Error('SIGNED_ENVELOPE_SIGNATURE_COPY_INVALID');
+    if (String(payload.version || '') !== String(manifest.version || '') || String(payload.purpose || '') !== String(manifest.purpose || '') || String(payload.request_id || '') !== String(manifest.request_id || '') || String(payload.expires_at || '') !== String(manifest.expires_at || '')) throw new Error('SIGNED_ENVELOPE_TOP_LEVEL_BINDING_INVALID');
+    if (String(payload.aad_hash || '') !== String(manifest.aad_sha256 || '')) throw new Error('SIGNED_ENVELOPE_AAD_COPY_INVALID');
+
+    const bundle = payload.vault_bundle;
+    if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) throw new Error('SIGNED_ENVELOPE_VAULT_MISSING');
+    if (String(bundle.request_id || '') !== String(manifest.request_id || '')) throw new Error('SIGNED_ENVELOPE_VAULT_RID_INVALID');
+    if (String(bundle.version || '') !== String(manifest.version || '')) throw new Error('SIGNED_ENVELOPE_VAULT_VERSION_INVALID');
+    if (String(bundle.hkdf_info || '') !== String(manifest.hkdf_info || '')) throw new Error('SIGNED_ENVELOPE_HKDF_INFO_INVALID');
+    const bundleArgon = bundle.argon2id_params && typeof bundle.argon2id_params === 'object' && !Array.isArray(bundle.argon2id_params) ? bundle.argon2id_params : null;
+    if (!bundleArgon || customerSecurityLostPasskeyCanonical(bundleArgon) !== customerSecurityLostPasskeyCanonical(signedArgon)) throw new Error('SIGNED_ENVELOPE_ARGON2_BINDING_INVALID');
+
+    const aad = Buffer.from(customerSecurityLostPasskeyCanonical(bundle.metadata && typeof bundle.metadata === 'object' ? bundle.metadata : {}), 'utf8');
+    const ciphertext = Buffer.from(String(bundle.ciphertext || ''), 'base64');
+    const salt = Buffer.from(String(bundle.salt || ''), 'base64');
+    const nonce = Buffer.from(String(bundle.aes_nonce || ''), 'base64');
+    const tag = Buffer.from(String(bundle.auth_tag || ''), 'base64');
+    const hpkePublicKey = Buffer.from(String(manifest.hpke_public_key_b64url || ''), 'base64url');
+
+    const integrityOk =
+      String(manifest.ciphertext_sha256 || '') === customerSecurityLostPasskeySha256B64(ciphertext)
+      && String(manifest.aad_sha256 || '') === customerSecurityLostPasskeySha256B64(aad)
+      && String(manifest.salt_sha256 || '') === customerSecurityLostPasskeySha256B64(salt)
+      && String(manifest.aes_nonce_sha256 || '') === customerSecurityLostPasskeySha256B64(nonce)
+      && String(manifest.auth_tag_sha256 || '') === customerSecurityLostPasskeySha256B64(tag)
+      && String(manifest.vault_id_hash || '') === customerSecurityLostPasskeySha256HexV157(String(bundle.vault_id || ''))
+      && String(manifest.metadata_signature_sha256 || '') === customerSecurityLostPasskeySha256B64(Buffer.from(String(bundle.metadata_signature || ''), 'utf8'))
+      && String(manifest.vault_bundle_sha256 || '') === customerSecurityLostPasskeySha256B64(Buffer.from(customerSecurityLostPasskeyCanonical(bundle), 'utf8'))
+      && String(manifest.hpke_suite || '') === DIRAC_RECOVERY_HPKE_SUITE_V159
+      && String(contract.hpke_public_key_sha256 || '') === customerSecurityLostPasskeySha256B64(hpkePublicKey)
+      && hpkePublicKey.length === 32;
+
+    aad.fill(0);
+    ciphertext.fill(0);
+    salt.fill(0);
+    nonce.fill(0);
+    tag.fill(0);
+    hpkePublicKey.fill(0);
+
+    if (!integrityOk) throw new Error('SIGNED_ENVELOPE_INTEGRITY_INVALID');
+
+    // Return only the protocol allowlist. The signed manifest and hashed vault bundle
+    // are preserved exactly; unrelated or accidentally injected top-level fields are dropped.
+    const preservedEnvelope = {
+      ok: true,
+      version: String(payload.version || ''),
+      purpose: String(payload.purpose || ''),
+      request_id: String(payload.request_id || ''),
+      expires_at: String(payload.expires_at || ''),
+      vault_bundle: bundle,
+      aad_hash: String(payload.aad_hash || ''),
+      signed_manifest: { payload: manifest, signature_b64: signature },
+      manifest,
+      signature_b64: signature
+    };
+    return { matched: true, ok: true, payload: preservedEnvelope };
+  } catch (error) {
+    try {
+      console.error('[dirac-recovery-signed-envelope-v177]', JSON.stringify({
+        diagnostic_version: DIRAC_RECOVERY_SIGNED_ENVELOPE_PRESERVE_V177,
+        event: 'signed_envelope_rejected_before_json',
+        error_code: String(error && error.message || 'SIGNED_ENVELOPE_INVALID').replace(/[^A-Z0-9_-]/gi, '_').slice(0, 100),
+        time: diracNowIso()
+      }));
+    } catch (_) {}
+    return { matched: true, ok: false };
+  }
+}
+
 function diracCentralWrapJsonResponseV146(res) {
   if (!res || typeof res.json !== 'function' || res.__diracCentralJsonWrappedV146) return;
   const originalJson = res.json.bind(res);
   res.json = function diracCentralJsonResponseGuardV146(payload) {
     diracCentralApplyHeadersV146(res);
+
+    // Recovery vault JSON contains a byte-exact Ed25519 signed manifest. The generic
+    // output sanitizer removes fields containing the word "secret", which changes
+    // the signed bytes and makes a valid manifest fail verification in the browser.
+    // This branch does not bypass validation: it performs an additional server-side
+    // Ed25519 + vault hash + contract verification, then preserves the verified JSON
+    // byte structure without mutation. Every other action still uses the old sanitizer.
+    const recoveryEnvelope = diracCentralRecoverySignedEnvelopeDecisionV177(payload);
+    if (recoveryEnvelope.matched) {
+      if (!recoveryEnvelope.ok) {
+        try { if (typeof res.status === 'function') res.status(503); else res.statusCode = 503; } catch (_) {}
+        try { res.setHeader('X-Dirac-Recovery-Signed-Envelope', 'rejected-v177'); } catch (_) {}
+        return originalJson(diracCentralSanitizeOutputV146({ ok: false, code: 'RECOVERY_SIGNED_ENVELOPE_INVALID', message: 'Layanan recovery aman belum siap.' }, 0));
+      }
+      try { res.setHeader('X-Dirac-Recovery-Signed-Envelope', 'verified-preserved-v177'); } catch (_) {}
+      return originalJson(recoveryEnvelope.payload);
+    }
+
     return originalJson(diracCentralSanitizeOutputV146(payload, 0));
   };
   res.__diracCentralJsonWrappedV146 = true;
