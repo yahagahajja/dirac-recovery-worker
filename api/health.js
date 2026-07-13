@@ -8190,20 +8190,41 @@ function customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context = {}) {
     + '</body></html>';
 }
 
+function customerSecurityLostPasskeyOfficialEmailLinkV187(context = {}) {
+  const raw = String(context.recoveryLink || '').trim();
+  try {
+    const url = new URL(raw);
+    const official = new URL(customerSecurityLostPasskeyOfficialBaseUrlV157());
+    const params = new URLSearchParams(String(url.hash || '').replace(/^#/, ''));
+    const requestId = String(params.get('rid') || '');
+    const linkToken = String(params.get('token') || '');
+    const keys = Array.from(params.keys());
+    if (url.protocol !== 'https:' || url.origin !== official.origin || url.pathname !== '/lost-passkey.html' || url.search) return '';
+    if (keys.length !== 2 || keys.some((key) => key !== 'rid' && key !== 'token')) return '';
+    if (!customerSecurityNormalizeLostPasskeyRequestId(requestId) || !customerSecurityLostPasskeyLinkTokenShapeV162(linkToken)) return '';
+    return official.origin + '/lost-passkey.html#rid=' + encodeURIComponent(requestId) + '&token=' + encodeURIComponent(linkToken);
+  } catch (_) {
+    return '';
+  }
+}
+
 async function customerSecuritySendLostPasskeyRecoveryLinkEmailV157(to, context = {}) {
   const email = normalizeAuthEmail(to);
   if (!isValidAuthEmail(email)) return { ok: false, status: 400, code: 'RECOVERY_EMAIL_INVALID', message: 'Email resmi customer tidak valid.' };
+  const recoveryLink = customerSecurityLostPasskeyOfficialEmailLinkV187(context);
+  if (!recoveryLink) return { ok: false, status: 500, code: 'RECOVERY_EMAIL_LINK_INVALID', message: 'Link recovery resmi tidak valid.' };
+  const emailContext = Object.assign({}, context, { recoveryLink });
   const from = String(process.env.DIRAC_RECOVERY_EMAIL_FROM || process.env.DIRAC_EMAIL_FROM || process.env.RESEND_FROM || 'Dirac Secure <no-reply@diracgroup.store>').trim();
   const subject = 'DiracGroup Secure Recovery - Link Pemulihan Passkey';
   const text = [
     'Link recovery Passkey resmi sudah dibuat.',
     'Request ID: ' + String(context.requestId || ''),
     'Berlaku sampai: ' + String(context.expiresAt || ''),
-    'Link resmi: ' + String(context.recoveryLink || ''),
+    'Link resmi: ' + recoveryLink,
     'SECRET_EMAIL_100_CHAR: ' + String(context.emailSecret || ''),
     'Jangan bagikan email secret, link, atau isi pesan ini kepada pihak lain. Website secret hanya tampil di website yang masih login.'
   ].join('\n\n');
-  const html = customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context);
+  const html = customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(emailContext);
 
   if (customerSecurityRecoverySmtpConfig()) {
     const config = customerSecurityRecoverySmtpConfig();
@@ -8561,13 +8582,10 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const recoveryCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('recovery_code', recoveryCode, recoveryCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const bindingHashCommitment = await customerSecurityLostPasskeyArgon2EncodedHashV157('binding', bindingsCanonical, bindingSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
 
-  // Recovery email link must enter SERVER 2 first so Central Guard + Argon2id can return a real HTTP 404 before the static HTML opens.
-  // Endpoint is unchanged: /api/health?action=lost_passkey_recovery_link_open
+  // Recovery email opens the static recovery page; the page then validates the token through Central Guard.
   const recoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157()
-    + '/api/health?action=' + encodeURIComponent(DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165)
-    + '&rid=' + encodeURIComponent(requestId)
-    + '&token=' + encodeURIComponent(linkToken)
-    + '&format=redirect';
+    + '/lost-passkey.html#rid=' + encodeURIComponent(requestId)
+    + '&token=' + encodeURIComponent(linkToken);
   const vaultBundle = {
     version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
     salt: customerSecurityLostPasskeyB64(vaultSalt),
@@ -27040,11 +27058,15 @@ const DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174 = new Set([
 ]);
 
 const DIRAC_CENTRAL_ACTION_ALIASES_V146 = Object.freeze({});
+const DIRAC_CROSS_SERVER_SECURITY_REPORT_V186 = 'cross-server-security-report-v186';
+const DIRAC_SECURITY_REPORT_ACTION_V186 = 'security_report';
+const DIRAC_SECURITY_REPORT_CALLER_V186 = 'vercel2-security-report-v186';
 
 const DIRAC_CENTRAL_ACTIVE_ACTIONS_V146 = new Set([
   ...DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157,
   ...DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165,
-  ...DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174
+  ...DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174,
+  DIRAC_SECURITY_REPORT_ACTION_V186
 ]);
 
 const DIRAC_CENTRAL_DISABLED_ACTIONS_V146 = new Set([]);
@@ -27374,7 +27396,7 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     }
     diracCentralStampV146(ctx, 'server2_secure_host_checked');
 
-    ctx.classification = diracCentralClassifyActionV146(action);
+    ctx.classification = diracCentralClassifyActionV146(action, req);
     diracCentralStampV146(ctx, 'classification_checked');
 
     const edgeWafGuard = diracCentralVercelEdgeWafGuardV185(req, ctx);
@@ -27455,11 +27477,10 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     if (!a2fSignature.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, a2fSignature.reason);
     diracCentralStampV146(ctx, 'a2f_signature_checked');
 
-    if (action === 'security_report') {
+    if (action === DIRAC_SECURITY_REPORT_ACTION_V186) {
       const reportGuard = diracCentralSecurityReportGuardV146(req, ctx);
       if (!reportGuard.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, reportGuard.reason);
       diracCentralStampV146(ctx, 'security_report_checked');
-      return await diracCentralBanAndBlockV146(req, res, ctx, action, method, 'html_security_report');
     }
 
     ctx.skipHeavyScan = false;
@@ -27494,6 +27515,16 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
 
     const integrity = diracCentralIntegrityVerifierV146(ctx);
     if (!integrity.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, integrity.reason);
+
+    if (action === DIRAC_SECURITY_REPORT_ACTION_V186) {
+      if (req && req.__diracSecurityReportVerifiedV186 === true) {
+        const applied = await diracCentralApplySecurityReportV186(ctx);
+        if (!applied.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, applied.reason);
+        req.__diracCentralSecurityGuardPassedV146 = true;
+        return res.status(200).json({ ok: true, action: DIRAC_SECURITY_REPORT_ACTION_V186, applied: applied.wrote });
+      }
+      return await diracCentralBanAndBlockV146(req, res, ctx, action, method, 'html_security_report');
+    }
 
     req.__diracCentralSecurityGuardPassedV146 = true;
     return await nextHandler(req, res);
@@ -27744,7 +27775,8 @@ function diracCentralVercelEdgeWafGuardV185(req, ctx) {
   const forwardedIp = diracCentralNormalizeTrustedIpV185(headers['x-forwarded-for']);
   const realIp = diracCentralNormalizeTrustedIpV185(headers['x-real-ip']);
   const ja4 = String(headers['x-vercel-ja4-digest'] || headers['x-vercel-ja3-digest'] || '').trim();
-  const isSignedServerAction = Boolean(ctx && ctx.classification === 'server' && ctx.action === DIRAC_RECOVERY_WORKER_ACTION);
+  const isSignedServerAction = Boolean(ctx && ctx.classification === 'server'
+    && (ctx.action === DIRAC_RECOVERY_WORKER_ACTION || ctx.action === DIRAC_SECURITY_REPORT_ACTION_V186));
 
   if (!/^[A-Za-z0-9._:-]{8,200}$/.test(vercelId)) return { ok: false, reason: 'vercel_edge_id_missing' };
   if (proto !== 'https') return { ok: false, reason: 'vercel_edge_https_required' };
@@ -27857,6 +27889,11 @@ async function diracCentralCheckPersistentBanV146(req, identity) {
       );
       const blockedUntilMs = Number(record && (record.blocked_until_ms || record.blockedUntilMs) || 0);
       if (!legacyRecoveryHttpBan && blockedUntilMs > now) return { blocked: true, blockedUntilMs };
+      for (const globalKey of diracCentralCrossServerBanKeysFromIdentityV186(req, identity)) {
+        const globalRecord = await readPersistentSecurityJson(globalKey).catch(() => null);
+        const globalBlockedUntilMs = Number(globalRecord && (globalRecord.blocked_until_ms || globalRecord.blockedUntilMs) || 0);
+        if (globalBlockedUntilMs > now) return { blocked: true, blockedUntilMs: globalBlockedUntilMs };
+      }
     }
   } catch (_) {}
 
@@ -27920,8 +27957,9 @@ function diracCentralNormalizeAliasV146(lowerAction) {
   return { ok: true, action: clean };
 }
 
-function diracCentralClassifyActionV146(action) {
+function diracCentralClassifyActionV146(action, req) {
   const clean = String(action || '');
+  if (clean === DIRAC_SECURITY_REPORT_ACTION_V186 && diracCentralSignedSecurityReportRequestV186(req)) return 'server';
   if (DIRAC_CENTRAL_SERVER_ACTIONS_V146.has(clean)) return 'server';
   if (DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean)) return 'recovery_link';
   if (DIRAC_CENTRAL_PUBLIC_READ_ACTIONS_V146.has(clean)) return 'public_read';
@@ -28121,6 +28159,148 @@ function diracCentralIntegrityVerifierV146(ctx) {
   return { ok: true };
 }
 
+
+function diracCentralSignedSecurityReportRequestV186(req) {
+  const caller = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-caller');
+  const timestamp = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-timestamp');
+  const signature = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-signature');
+  return caller === DIRAC_SECURITY_REPORT_CALLER_V186
+    && /^\d{10,16}$/.test(timestamp)
+    && /^[A-Za-z0-9_-]{32,120}$/.test(signature);
+}
+
+function diracCentralCrossServerBanKeyV186(kind, values) {
+  const cleanKind = String(kind || '').trim().toLowerCase();
+  if (!/^(client|binding)$/.test(cleanKind)) return '';
+  const material = Array.isArray(values) ? values.map((value) => String(value || '')).join('\n') : String(values || '');
+  if (!material.trim()) return '';
+  return 'global-ban-v186:' + cleanKind + ':' + crypto.createHash('sha256')
+    .update(DIRAC_CROSS_SERVER_SECURITY_REPORT_V186 + '\n' + cleanKind + '\n' + material)
+    .digest('hex');
+}
+
+function diracCentralCrossServerBanKeysFromIdentityV186(req, identity) {
+  const parts = identity && identity.parts || {};
+  const ip = diracCentralNormalizeTrustedIpV185(parts.ip || diracCentralTrustedClientIpV183(req));
+  const ua = String(parts.ua || req && req.headers && req.headers['user-agent'] || '').slice(0, 500);
+  const keys = [];
+  if (ip && ip !== 'unknown' && ua) {
+    const clientKey = diracCentralCrossServerBanKeyV186('client', [ip, ua]);
+    if (clientKey) keys.push(clientKey);
+    try {
+      const ipHash = customerSecurityLostPasskeyHashHex('ip', ip);
+      const uaHash = customerSecurityLostPasskeyHashHex('ua', ua);
+      const bindingKey = diracCentralCrossServerBanKeyV186('binding', [ipHash, uaHash]);
+      if (bindingKey) keys.push(bindingKey);
+    } catch (_) {}
+  }
+  return Array.from(new Set(keys));
+}
+
+function diracCentralCrossServerBanKeysFromContextV186(req, ctx) {
+  const body = ctx && ctx.body && typeof ctx.body === 'object' ? ctx.body : {};
+  if (ctx && ctx.action === DIRAC_RECOVERY_WORKER_ACTION
+    && /^[a-f0-9]{64}$/i.test(String(body.ip_hash || ''))
+    && /^[a-f0-9]{64}$/i.test(String(body.user_agent_hash || ''))) {
+    const bindingKey = diracCentralCrossServerBanKeyV186('binding', [body.ip_hash, body.user_agent_hash]);
+    return bindingKey ? [bindingKey] : [];
+  }
+  return diracCentralCrossServerBanKeysFromIdentityV186(req, ctx && ctx.identity);
+}
+
+async function diracCentralSecurityReportSignatureGuardV186(req, ctx) {
+  const role = diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE');
+  if (role !== 'vercel1') return { ok: false, reason: 'security_report_receiver_role_invalid' };
+  const caller = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-caller');
+  if (caller !== DIRAC_SECURITY_REPORT_CALLER_V186) return { ok: false, reason: 'security_report_caller_invalid' };
+  const timestampText = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-timestamp');
+  const timestamp = Number(timestampText);
+  if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > customerSecurityRecoveryWorkerClockSkewMs()) {
+    return { ok: false, reason: 'security_report_timestamp_invalid' };
+  }
+  const signature = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-signature');
+  if (!/^[A-Za-z0-9_-]{32,120}$/.test(signature)) return { ok: false, reason: 'security_report_signature_missing' };
+  const body = ctx && ctx.body || {};
+  if (body.action !== DIRAC_SECURITY_REPORT_ACTION_V186 || body.caller_id !== caller) return { ok: false, reason: 'security_report_body_invalid' };
+  const nonce = String(body.nonce || '');
+  if (!/^[A-Za-z0-9_-]{32,120}$/.test(nonce)) return { ok: false, reason: 'security_report_nonce_invalid' };
+  const canonical = customerSecurityLostPasskeyCanonical(body);
+  const expected = customerSecurityRecoveryWorkerSign(caller, timestampText, canonical);
+  if (!safeEqual(signature, expected)) return { ok: false, reason: 'security_report_signature_invalid' };
+  const usedUntilMs = Date.now() + customerSecurityRecoveryWorkerClockSkewMs() + 60000;
+  const nonceClaim = await diracCentralRecoveryWorkerClaimNonceV183(caller, nonce, usedUntilMs);
+  if (!nonceClaim.ok) return { ok: false, reason: String(nonceClaim.reason || 'security_report_nonce_replay') };
+  req.__diracSecurityReportVerifiedV186 = true;
+  return { ok: true };
+}
+
+async function diracCentralApplySecurityReportV186(ctx) {
+  const body = ctx && ctx.body || {};
+  const keys = Array.isArray(body.ban_keys) ? Array.from(new Set(body.ban_keys.map(String))) : [];
+  const blockedUntilMs = Number(body.blocked_until_ms || 0);
+  if (!keys.length || !Number.isSafeInteger(blockedUntilMs) || blockedUntilMs <= Date.now()) return { ok: false, reason: 'security_report_payload_invalid' };
+  const record = {
+    type: 'cross_server_global_ban_v186',
+    reason: String(body.reason || 'security_report').slice(0, 100),
+    source_action: String(body.source_action || '').slice(0, 80),
+    source_method: String(body.source_method || '').slice(0, 12),
+    blocked_until_ms: blockedUntilMs,
+    reported_at: String(body.reported_at || '').slice(0, 40),
+    received_at: new Date().toISOString()
+  };
+  for (const key of keys) {
+    const wrote = await writePersistentSecurityJson(key, record, blockedUntilMs, Math.ceil((blockedUntilMs - Date.now()) / 1000)).catch(() => false);
+    if (!wrote) return { ok: false, reason: 'security_report_write_failed' };
+  }
+  return { ok: true, wrote: keys.length };
+}
+
+async function diracCentralSendSecurityReportV186(req, ctx, action, method, reason, blockedUntilMs) {
+  const role = diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE');
+  if (role !== 'vercel2') return { ok: true, skipped: true };
+  const targetText = typeof diracRecoveryHpkeServer1UrlV159 === 'function' ? diracRecoveryHpkeServer1UrlV159() : '';
+  const secret = customerSecurityRecoveryWorkerSecret();
+  const banKeys = diracCentralCrossServerBanKeysFromContextV186(req, ctx);
+  if (!targetText || !secret || !banKeys.length) return { ok: false, reason: 'security_report_sender_not_ready' };
+  const payload = {
+    action: DIRAC_SECURITY_REPORT_ACTION_V186,
+    caller_id: DIRAC_SECURITY_REPORT_CALLER_V186,
+    nonce: crypto.randomBytes(32).toString('base64url'),
+    reason: String(reason || 'central_security_block').slice(0, 100),
+    source_action: String(action || '').slice(0, 80),
+    source_method: String(method || '').slice(0, 12),
+    blocked_until_ms: Number(blockedUntilMs || 0),
+    reported_at: new Date().toISOString(),
+    ban_keys: banKeys
+  };
+  const timestamp = String(Date.now());
+  const signature = customerSecurityRecoveryWorkerSign(DIRAC_SECURITY_REPORT_CALLER_V186, timestamp, customerSecurityLostPasskeyCanonical(payload));
+  const target = new URL(targetText);
+  target.searchParams.set('action', DIRAC_SECURITY_REPORT_ACTION_V186);
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 5000) : null;
+  try {
+    const response = await fetch(target.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Dirac-Security-Report/186',
+        'X-Dirac-Worker-Caller': DIRAC_SECURITY_REPORT_CALLER_V186,
+        'X-Dirac-Worker-Timestamp': timestamp,
+        'X-Dirac-Worker-Signature': signature
+      },
+      body: JSON.stringify(payload),
+      signal: controller ? controller.signal : undefined
+    });
+    return { ok: response.ok, status: response.status };
+  } catch (_) {
+    return { ok: false, reason: 'security_report_send_failed' };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function diracCentralServerToServerGuardV146(req, res, ctx) {
   if (ctx.classification !== 'server') return { ok: true };
   if (ctx.method !== 'POST') return { ok: false, reason: 'server_action_method_invalid' };
@@ -28136,6 +28316,9 @@ async function diracCentralServerToServerGuardV146(req, res, ctx) {
   }
   if (ctx.action === DIRAC_RECOVERY_WORKER_ACTION) {
     return diracCentralRecoveryWorkerSignatureGuardV146(req, ctx);
+  }
+  if (ctx.action === DIRAC_SECURITY_REPORT_ACTION_V186) {
+    return diracCentralSecurityReportSignatureGuardV186(req, ctx);
   }
   if (ctx.action === 'midtrans_webhook') {
     if (typeof midtransVerifySignature === 'function') {
@@ -28922,6 +29105,27 @@ function diracCentralActionSchemaGuardV185(action, source) {
     return { ok: true };
   }
 
+  if (cleanAction === DIRAC_SECURITY_REPORT_ACTION_V186) {
+    const signedShape = Object.prototype.hasOwnProperty.call(body, 'caller_id')
+      || Object.prototype.hasOwnProperty.call(body, 'ban_keys');
+    if (!signedShape) return { ok: true };
+    if (body.caller_id !== DIRAC_SECURITY_REPORT_CALLER_V186) return { ok: false, reason: 'security_report_caller_id_invalid' };
+    if (typeof body.nonce !== 'string' || !/^[A-Za-z0-9_-]{32,120}$/.test(body.nonce)) return { ok: false, reason: 'security_report_nonce_invalid' };
+    if (!Array.isArray(body.ban_keys) || body.ban_keys.length < 1 || body.ban_keys.length > 2
+      || body.ban_keys.some((key) => !/^global-ban-v186:(?:client|binding):[a-f0-9]{64}$/.test(String(key || '')))) {
+      return { ok: false, reason: 'security_report_ban_keys_invalid' };
+    }
+    if (!Number.isSafeInteger(body.blocked_until_ms) || body.blocked_until_ms <= Date.now()
+      || body.blocked_until_ms > Date.now() + 100 * 365 * 24 * 60 * 60 * 1000) {
+      return { ok: false, reason: 'security_report_block_expiry_invalid' };
+    }
+    if (typeof body.reason !== 'string' || !/^[a-z0-9_-]{3,100}$/.test(body.reason)) return { ok: false, reason: 'security_report_reason_invalid' };
+    if (typeof body.source_action !== 'string' || !/^[a-z0-9_-]{1,80}$/.test(body.source_action)) return { ok: false, reason: 'security_report_source_action_invalid' };
+    if (typeof body.source_method !== 'string' || !/^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(body.source_method)) return { ok: false, reason: 'security_report_source_method_invalid' };
+    if (typeof body.reported_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(body.reported_at)) return { ok: false, reason: 'security_report_time_invalid' };
+    return { ok: true };
+  }
+
   if (cleanAction === DIRAC_RECOVERY_WORKER_ACTION) {
     if (typeof body.worker_action !== 'string' || ![DIRAC_RECOVERY_WORKER_TASK_GENERATE, DIRAC_RECOVERY_WORKER_TASK_VERIFY, DIRAC_RECOVERY_WORKER_TASK_FINALIZE].includes(body.worker_action)) {
       return { ok: false, reason: 'recovery_worker_task_invalid' };
@@ -28969,9 +29173,13 @@ function diracCentralActionSchemaGuardV185(action, source) {
 }
 
 function diracCentralSecurityReportGuardV146(req, ctx) {
-  if (ctx.action !== 'security_report') return { ok: true };
+  if (ctx.action !== DIRAC_SECURITY_REPORT_ACTION_V186) return { ok: true };
   const body = ctx.body || {};
-  if (body.target || body.security_key || body.identity || body.ip || body.customer_id || body.user_id) {
+  if (req && req.__diracSecurityReportVerifiedV186 === true) {
+    const rate = diracCentralRateLimitV146(ctx.identity.key + ':security-report-server', 60 * 1000, 30);
+    return rate.ok ? { ok: true } : { ok: false, reason: 'security_report_rate_limit' };
+  }
+  if (body.target || body.security_key || body.identity || body.ip || body.customer_id || body.user_id || body.ban_keys) {
     return { ok: false, reason: 'security_report_target_forbidden' };
   }
   const reason = String(body.reason || body.type || '').trim().toLowerCase();
@@ -29132,6 +29340,11 @@ async function diracCentralIdorBolaGuardV146(req, ctx) {
   if (ctx && ctx.classification === 'server' && ctx.action === 'midtrans_webhook') return { ok: true, guarded: 'server_to_server_signed_webhook' };
   if (ctx && ctx.classification === 'server' && ctx.action === DIRAC_RECOVERY_WORKER_ACTION) {
     return await diracCentralRecoveryWorkerIdorGuardV146(req, ctx);
+  }
+  if (ctx && ctx.classification === 'server' && ctx.action === DIRAC_SECURITY_REPORT_ACTION_V186) {
+    return req && req.__diracSecurityReportVerifiedV186 === true
+      ? { ok: true, guarded: 'signed_cross_server_security_report' }
+      : { ok: false, reason: 'security_report_signature_required' };
   }
   const ids = diracCentralCollectIdsV146(req, ctx.body);
   if (diracCentralIsAuthBootstrapIdentityOnlyV146(ctx.action, ids)) return { ok: true, guarded: 'auth_bootstrap_identity_only' };
@@ -29926,6 +30139,9 @@ async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason
     source: DIRAC_CENTRAL_SECURITY_GUARD_V146,
     risk: confirmedAttack ? 'critical' : 'high'
   };
+  if (shouldBlockIdentity) {
+    await diracCentralSendSecurityReportV186(req, ctx, action, method, reason, blockedUntilMs).catch(() => null);
+  }
   if (confirmedAttack) {
     await diracCentralWritePersistentBanV146(req, res, action, method, threat).catch(() => null);
   }
@@ -29943,7 +30159,9 @@ async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason
     };
     await writePersistentSecurityJson(identityKey, centralBanRecord, blockedUntilMs, Math.ceil((blockedUntilMs - now) / 1000)).catch(() => false);
   }
-  if (shouldBlockIdentity) diracCentralSetMemoryBanV146(ctx && ctx.identity, blockedUntilMs, reason);
+  if (shouldBlockIdentity) {
+    diracCentralSetMemoryBanV146(ctx && ctx.identity, blockedUntilMs, reason);
+  }
   if (ctx && ctx.action === DIRAC_RECOVERY_WORKER_ACTION && customerSecurityRecoveryWorkerDebugEnabledV158()) {
     try {
       if (res && typeof res.setHeader === 'function') {
@@ -30034,7 +30252,7 @@ function diracCentralContractForActionV146(action) {
   if (DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean)) {
     return { methods: ['GET', 'HEAD', 'POST'], allowed: ['action', 'rid', 'token', 'format'], required: ['rid', 'token'], maxBodyBytes: 4096, maxFieldBytes: 4096, mutation: false };
   }
-  if (!DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)) {
+  if (!DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean) && clean !== DIRAC_SECURITY_REPORT_ACTION_V186) {
     return { methods: [], allowed: [], required: [], maxBodyBytes: 0, maxFieldBytes: 0, mutation: false };
   }
   const commonGet = ['action', '_csrf_boot', '_csrf_a2f', '_csrf_login_final', '_csrf_probe', '_dirac_page_nonce_for', '_page_nonce_for', 'page_nonce_for', '_ts', '_t', '_', 'domain', 'limit', 'type', 'include_expired', 'order_id', 'order_code', 'domain_order_id', 'payment_id', 'transaction_id', 'invoice_id', 'gateway_reference', 'session_id', 'recovery_code_id', 'credential_id', 'project_id', 'document_id', 'item_id', 'email', 'slug'];
@@ -30053,12 +30271,23 @@ function diracCentralContractForActionV146(action) {
     mutation: true,
     allowProtectedFields: true
   };
+  const securityReportPost = {
+    methods: ['POST'],
+    allowed: ['action', 'reason', 'type', 'caller_id', 'nonce', 'ban_keys', 'blocked_until_ms', 'source_action', 'source_method', 'reported_at'],
+    required: ['reason'],
+    maxBodyBytes: 8192,
+    maxFieldBytes: 4096,
+    mutation: true,
+    allowArrayItems: true,
+    allowProtectedFields: true
+  };
   const authLoginPost = { methods: ['POST'], allowed: ['email', 'password', 'fullName', 'full_name', 'name', 'phone'], required: ['email', 'password'], maxBodyBytes: 20 * 1024, maxFieldBytes: 3000, mutation: true };
   const authRegisterPost = { methods: ['POST'], allowed: ['email', 'password', 'fullName', 'full_name', 'name', 'phone'], required: ['email', 'password'], maxBodyBytes: 20 * 1024, maxFieldBytes: 3000, mutation: true };
   const contracts = {
     customer_security_recovery_codes_generate: recoveryGeneratePost,
     customer_security_recovery_code_verify: recoveryVerifyPost,
-    [DIRAC_RECOVERY_WORKER_ACTION]: recoveryWorkerPost
+    [DIRAC_RECOVERY_WORKER_ACTION]: recoveryWorkerPost,
+    [DIRAC_SECURITY_REPORT_ACTION_V186]: securityReportPost
   };
   return contracts[clean] || { methods: [], allowed: [], required: [], maxBodyBytes: 0, maxFieldBytes: 0, mutation: false };
 }
