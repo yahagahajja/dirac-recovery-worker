@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-gRtpqBxt9tUpt8NHzoTUVL7Ty6v4OOdln+ENOSdOe6x1YLDVD9ghvRL5M+3g1sgDwcNbSpTMJqVrySXk3y0HSQ=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-11F1/AnnZvNDB/4hzeZm4FBKNXJX7zHXoU+miN31JiK5HyQp+Y3LGMV0OJYTQ+WdJxeiOWLsZb+Scr1BEJY+ew=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-gRtpqBxt9tUpt8NHzoTUVL7Ty6v4OOdln+ENOSdOe6x1YLDVD9ghvRL5M+3g1sgDwcNbSpTMJqVrySXk3y0HSQ=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-11F1/AnnZvNDB/4hzeZm4FBKNXJX7zHXoU+miN31JiK5HyQp+Y3LGMV0OJYTQ+WdJxeiOWLsZb+Scr1BEJY+ew=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -256,6 +256,7 @@
       vaultApiAction: 'lost_passkey_recovery_link_open',
       htmlActionSignatureVersion: 'dirac-html-action-signature-v180',
       vaultFetchTimeoutMs: 30000,
+      maxVaultResponseBytes: 2 * 1024 * 1024,
       ed25519PublicKeysBase64: Object.freeze({
         'dirac-recovery-ed25519-2026-01': 'Q1j1EngkPw4Ec9ZB3cWhP91B/UhJt9GQVtCCoQxMIqk='
       }),
@@ -264,6 +265,12 @@
         timeCost: 4,
         parallelism: 3,
         hashLength: 32
+      }),
+      maxArgon2id: Object.freeze({
+        memoryCost: 1024000,
+        timeCost: 4,
+        parallelism: 4,
+        hashLength: 64
       }),
       expectedPurpose: 'lost_passkey_recovery',
       expectedLegacyVersion: 'lost-passkey-html-vault-aes256gcm-argon2id-v157',
@@ -546,6 +553,8 @@
         VAULT_FETCH_FAILED: 'Data pemulihan belum dapat diambil. Periksa tautan resmi atau hubungi administrator.',
         VAULT_RESPONSE_NOT_JSON: 'Respons layanan pemulihan tidak sesuai format yang diharapkan.',
         VAULT_RESPONSE_INVALID: 'Respons layanan pemulihan belum valid.',
+        VAULT_RESPONSE_TOO_LARGE: 'Respons layanan pemulihan melebihi batas aman.',
+        VAULT_RESPONSE_JSON_INVALID: 'Respons layanan pemulihan tidak dapat diverifikasi.',
         VAULT_BUNDLE_MISSING: 'Data pemulihan tidak ditemukan pada respons layanan.',
         VAULT_BUNDLE_INCOMPLETE: 'Data pemulihan yang diterima belum lengkap.',
         VAULT_RID_MISMATCH: 'Identitas permintaan tidak sesuai dengan tautan pemulihan.',
@@ -558,6 +567,10 @@
         ARGON2_TIME_DOWNGRADE: 'Standar keamanan waktu proses tidak memenuhi batas minimum.',
         ARGON2_PARALLELISM_INVALID: 'Standar keamanan pemrosesan tidak memenuhi batas minimum.',
         ARGON2_HASHLEN_INVALID: 'Standar keamanan hasil proses tidak memenuhi batas minimum.',
+        ARGON2_MEMORY_EXCESS: 'Parameter memori Argon2id melebihi batas aman perangkat.',
+        ARGON2_TIME_EXCESS: 'Parameter waktu Argon2id melebihi batas aman perangkat.',
+        ARGON2_PARALLELISM_EXCESS: 'Parameter paralel Argon2id melebihi batas aman perangkat.',
+        ARGON2_HASHLEN_EXCESS: 'Panjang hasil Argon2id melebihi batas aman.',
         CIPHERTEXT_HASH_INVALID: 'Validasi data pemulihan tidak sesuai.',
         AAD_HASH_INVALID: 'Validasi metadata pemulihan tidak sesuai.',
         SALT_HASH_INVALID: 'Validasi parameter pemulihan tidak sesuai.',
@@ -1002,6 +1015,61 @@
       };
     }
 
+    async function cancelResponseBody(response) {
+      try {
+        if (response && response.body && typeof response.body.cancel === 'function') {
+          await response.body.cancel();
+        }
+      } catch (_) {}
+    }
+
+    async function readJsonResponseLimited(response, maxBytes) {
+      var limit = Math.max(1024, Number(maxBytes || 0));
+      var declaredLength = Number(response && response.headers && response.headers.get('content-length') || 0);
+      if (Number.isFinite(declaredLength) && declaredLength > limit) throw new Error('VAULT_RESPONSE_TOO_LARGE');
+
+      if (response && response.body && typeof response.body.getReader === 'function') {
+        var reader = response.body.getReader();
+        var chunks = [];
+        var total = 0;
+        try {
+          while (true) {
+            var part = await reader.read();
+            if (part.done) break;
+            var value = part.value instanceof Uint8Array ? part.value : new Uint8Array(part.value || 0);
+            total += value.byteLength;
+            if (total > limit) {
+              try { await reader.cancel(); } catch (_) {}
+              throw new Error('VAULT_RESPONSE_TOO_LARGE');
+            }
+            chunks.push(value);
+          }
+          var bytes = new Uint8Array(total);
+          var offset = 0;
+          for (var i = 0; i < chunks.length; i += 1) {
+            bytes.set(chunks[i], offset);
+            offset += chunks[i].byteLength;
+          }
+          var text = new TextDecoder('utf-8').decode(bytes);
+          bytes.fill(0);
+          for (var j = 0; j < chunks.length; j += 1) chunks[j].fill(0);
+          chunks.length = 0;
+          try { return JSON.parse(text); } catch (_) { throw new Error('VAULT_RESPONSE_JSON_INVALID'); }
+        } finally {
+          try { reader.releaseLock(); } catch (_) {}
+        }
+      }
+
+      var fallbackText = await response.text();
+      var fallbackBytes = new TextEncoder().encode(fallbackText);
+      if (fallbackBytes.byteLength > limit) {
+        fallbackBytes.fill(0);
+        throw new Error('VAULT_RESPONSE_TOO_LARGE');
+      }
+      fallbackBytes.fill(0);
+      try { return JSON.parse(fallbackText); } catch (_) { throw new Error('VAULT_RESPONSE_JSON_INVALID'); }
+    }
+
     async function fetchVaultOnce(fragment) {
       if (state.vaultFetched) throw new Error('VAULT_FETCH_ALREADY_USED');
       state.vaultFetched = true;
@@ -1036,7 +1104,7 @@
             if (response.status === 403 && attempt === 0 && issuedCsrf && issuedPageNonce) {
               csrfToken = issuedCsrf;
               pageNonce = issuedPageNonce;
-              try { await response.text(); } catch (_) {}
+              await cancelResponseBody(response);
               continue;
             }
             var fetchError = new Error('VAULT_FETCH_FAILED');
@@ -1047,7 +1115,7 @@
           if (contentType.indexOf('application/json') === -1) {
             throw new Error('VAULT_RESPONSE_NOT_JSON');
           }
-          var body = await response.json();
+          var body = await readJsonResponseLimited(response, CONFIG.maxVaultResponseBytes);
           if (!body || body.ok !== true) {
             throw new Error('VAULT_RESPONSE_INVALID');
           }
@@ -1122,6 +1190,10 @@
       if (params.timeCost < CONFIG.minArgon2id.timeCost) throw new Error('ARGON2_TIME_DOWNGRADE');
       if (params.parallelism < CONFIG.minArgon2id.parallelism) throw new Error('ARGON2_PARALLELISM_INVALID');
       if (params.hashLength < CONFIG.minArgon2id.hashLength) throw new Error('ARGON2_HASHLEN_INVALID');
+      if (params.memoryCost > CONFIG.maxArgon2id.memoryCost) throw new Error('ARGON2_MEMORY_EXCESS');
+      if (params.timeCost > CONFIG.maxArgon2id.timeCost) throw new Error('ARGON2_TIME_EXCESS');
+      if (params.parallelism > CONFIG.maxArgon2id.parallelism) throw new Error('ARGON2_PARALLELISM_EXCESS');
+      if (params.hashLength > CONFIG.maxArgon2id.hashLength) throw new Error('ARGON2_HASHLEN_EXCESS');
     }
 
     async function verifyEd25519Manifest(payload, signatureB64) {
@@ -1331,6 +1403,7 @@
       try {
         var bundle = state.vaultBundle;
         var params = normalizedArgonParams(bundle.argon2id_params);
+        verifyMinimumArgon2idParams(params);
         var manifest = state.manifestPayload || {};
         var activationRequired = Boolean(manifest.activation_required || manifest.activationRequired);
         if (activationRequired) throw new Error('RECOVERY_LOCKED');
