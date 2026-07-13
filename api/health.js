@@ -29897,6 +29897,16 @@ function diracCentralSoftFailureEscalatesV185(ctx, reason) {
 }
 
 async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason) {
+  if (
+    ctx
+    && ctx.action === DIRAC_RECOVERY_WORKER_ACTION
+    && customerSecurityRecoveryWorkerDebugEnabledV158()
+    && !ctx.__diracRecoveryWorkerDebugV158
+  ) {
+    diracCentralRecoveryWorkerGuardDebugV158(req, ctx, 'central_guard_rejected', reason || 'central_security_block', {
+      guard_passport: Object.keys(ctx.guardPassport || {}).filter((key) => ctx.guardPassport[key] === true)
+    });
+  }
   if (ctx && ctx.action === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
     customerSecurityLostPasskeyLinkFlowDebugV175('central_guard_rejected', req, res, {
       reason: String(reason || 'central_security_block').slice(0, 120),
