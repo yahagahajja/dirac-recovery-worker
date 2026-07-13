@@ -27843,11 +27843,43 @@ function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
 }
 
 
+function diracCentralHtmlActionHeaderValueV179(req, name) {
+  const headers = req && req.headers;
+  if (!headers) return '';
+
+  const requestedName = String(name || '').trim();
+  const normalizedName = requestedName.toLowerCase();
+  if (!normalizedName) return '';
+
+  if (typeof headers.get === 'function') {
+    return String(headers.get(requestedName) || '').trim();
+  }
+
+  const direct = headers[normalizedName] !== undefined
+    ? headers[normalizedName]
+    : headers[requestedName];
+  if (Array.isArray(direct)) {
+    return direct.length === 1 ? String(direct[0] || '').trim() : '';
+  }
+  if (direct !== undefined && direct !== null) {
+    return String(direct).trim();
+  }
+
+  for (const key of Object.keys(headers)) {
+    if (String(key).toLowerCase() !== normalizedName) continue;
+    const value = headers[key];
+    return Array.isArray(value)
+      ? (value.length === 1 ? String(value[0] || '').trim() : '')
+      : String(value || '').trim();
+  }
+  return '';
+}
+
+
 function diracCentralHtmlActionSignaturePayloadV178(req, ctx, parsed, timestamp, nonce) {
-  const headers = req && req.headers || {};
-  const forwardedHost = String(headers['x-forwarded-host'] || '').split(',')[0].trim().toLowerCase();
-  const host = forwardedHost || String(headers.host || '').split(',')[0].trim().toLowerCase();
-  const forwardedProto = String(headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+  const forwardedHost = diracCentralHtmlActionHeaderValueV179(req, 'x-forwarded-host').split(',')[0].trim().toLowerCase();
+  const host = forwardedHost || diracCentralHtmlActionHeaderValueV179(req, 'host').split(',')[0].trim().toLowerCase();
+  const forwardedProto = diracCentralHtmlActionHeaderValueV179(req, 'x-forwarded-proto').split(',')[0].trim().toLowerCase();
   const protocol = forwardedProto || 'https';
   return {
     action: String(ctx && ctx.action || ''),
@@ -27876,11 +27908,10 @@ function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
     return { ok: false, reason: 'html_action_signature_link_invalid' };
   }
 
-  const headers = req && req.headers || {};
-  const version = String(headers['x-dirac-html-signature-version'] || '').trim();
-  const timestampText = String(headers['x-dirac-html-signature-timestamp'] || '').trim();
-  const nonce = String(headers['x-dirac-html-signature-nonce'] || '').trim();
-  const signature = String(headers['x-dirac-html-signature'] || '').trim();
+  const version = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature-version');
+  const timestampText = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature-timestamp');
+  const nonce = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature-nonce');
+  const signature = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature');
   if (version !== 'dirac-html-action-signature-v178') return { ok: false, reason: 'html_action_signature_version_invalid' };
   if (!/^[0-9]{13}$/.test(timestampText)) return { ok: false, reason: 'html_action_signature_timestamp_invalid' };
   if (!/^[A-Za-z0-9_-]{43}$/.test(nonce)) return { ok: false, reason: 'html_action_signature_nonce_invalid' };
