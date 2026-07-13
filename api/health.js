@@ -17724,6 +17724,10 @@ async function diracV107CheckActiveBan(req) {
 
   const rows = await diracV107ReadRows(keys.map((item) => item.key));
   for (const row of rows) {
+    const record = row && row.record_json && typeof row.record_json === 'object' ? row.record_json : {};
+    // Narrow cleanup for the previous post-handler misclassification only.
+    // Real attack bans keep their original reasons and remain fully enforced.
+    if (/^recovery_action_http_\d{3}$/.test(String(record.reason || ''))) continue;
     const blockedUntilMs = Number(row && row.blocked_until_ms || 0);
     if (blockedUntilMs > now) {
       return {
@@ -26851,6 +26855,10 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
 async function diracCentralPersistRecoveryActionFailureV183(req, action, statusCode) {
   const ctx = diracCentralCurrentContextV149();
   if (!ctx || !diracCentralIsServer2RecoveryOnlyActionV166(action)) return false;
+  // A response produced after the complete Central Guard and signed-worker verification
+  // is a business/operational result, not proof of an input attack. Guard failures are
+  // already blocked before the handler and continue to use the existing ban path.
+  if (req && req.__diracCentralSecurityGuardPassedV146 === true) return false;
   const now = Date.now();
   const blockedUntilMs = now + diracCentralBlockMsV146();
   const reason = 'recovery_action_http_' + String(Number(statusCode || 500));
@@ -27736,15 +27744,18 @@ function diracCentralVercelEdgeWafGuardV185(req, ctx) {
   const forwardedIp = diracCentralNormalizeTrustedIpV185(headers['x-forwarded-for']);
   const realIp = diracCentralNormalizeTrustedIpV185(headers['x-real-ip']);
   const ja4 = String(headers['x-vercel-ja4-digest'] || headers['x-vercel-ja3-digest'] || '').trim();
+  const isSignedServerAction = Boolean(ctx && ctx.classification === 'server' && ctx.action === DIRAC_RECOVERY_WORKER_ACTION);
 
   if (!/^[A-Za-z0-9._:-]{8,200}$/.test(vercelId)) return { ok: false, reason: 'vercel_edge_id_missing' };
   if (proto !== 'https') return { ok: false, reason: 'vercel_edge_https_required' };
-  if (!vercelIp || !forwardedIp || !realIp) return { ok: false, reason: 'vercel_trusted_ip_headers_missing' };
-  if (forwardedIp !== realIp) return { ok: false, reason: 'vercel_trusted_ip_headers_mismatch' };
-  if (!/^[A-Za-z0-9_-]{16,200}$/.test(ja4)) return { ok: false, reason: 'vercel_waf_fingerprint_missing' };
+  if (!vercelIp) return { ok: false, reason: 'vercel_trusted_ip_header_missing' };
+  if (forwardedIp && forwardedIp !== vercelIp) return { ok: false, reason: 'vercel_forwarded_ip_mismatch' };
+  if (realIp && realIp !== vercelIp) return { ok: false, reason: 'vercel_real_ip_mismatch' };
+  if (ja4 && !/^[A-Za-z0-9_-]{16,200}$/.test(ja4)) return { ok: false, reason: 'vercel_waf_fingerprint_invalid' };
+  if (!ja4 && !isSignedServerAction) return { ok: false, reason: 'vercel_waf_fingerprint_missing' };
   if (!ctx || !ctx.identity || ctx.identity.ip !== vercelIp) return { ok: false, reason: 'vercel_identity_ip_mismatch' };
 
-  ctx.identity.tlsFingerprint = ja4;
+  if (ja4) ctx.identity.tlsFingerprint = ja4;
   return { ok: true };
 }
 
@@ -27839,8 +27850,13 @@ async function diracCentralCheckPersistentBanV146(req, identity) {
     if (typeof readPersistentSecurityJson === 'function') {
       storageChecked = true;
       const record = await readPersistentSecurityJson(key).catch(() => null);
+      const legacyRecoveryHttpBan = Boolean(
+        record
+        && String(record.type || '') === 'recovery_action_global_ban_v183'
+        && /^recovery_action_http_\d{3}$/.test(String(record.reason || ''))
+      );
       const blockedUntilMs = Number(record && (record.blocked_until_ms || record.blockedUntilMs) || 0);
-      if (blockedUntilMs > now) return { blocked: true, blockedUntilMs };
+      if (!legacyRecoveryHttpBan && blockedUntilMs > now) return { blocked: true, blockedUntilMs };
     }
   } catch (_) {}
 
