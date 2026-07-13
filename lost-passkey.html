@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-zZIEovNUSUBVKQdqVmYHe+MHXy1TsywWDqx9pl06gPu4neLCcVFLmgfNeamXeFaC2YSy8Ho+oqE5lDMzsuCA9A=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-BGdmL3K9S7pIg60WmLnS37GBvM+qn2hzc6s4sid/g5Bb7FwHMEeYNgRhwiayDVXjLazWreX0FicrN1KH6KnulA=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-zZIEovNUSUBVKQdqVmYHe+MHXy1TsywWDqx9pl06gPu4neLCcVFLmgfNeamXeFaC2YSy8Ho+oqE5lDMzsuCA9A=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-BGdmL3K9S7pIg60WmLnS37GBvM+qn2hzc6s4sid/g5Bb7FwHMEeYNgRhwiayDVXjLazWreX0FicrN1KH6KnulA=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -245,13 +245,17 @@
   (function () {
     'use strict';
 
+    var initialRecoveryHash = String(location.hash || '');
+    try { history.replaceState(null, document.title, location.pathname + '#recovery'); } catch (_) {}
+
     var CONFIG = Object.freeze({
       officialServer2Origins: Object.freeze([
         'https://secure.diracgroup.store'
       ]),
       vaultApiPath: '/api/health',
       vaultApiAction: 'lost_passkey_recovery_link_open',
-      htmlActionSignatureVersion: 'dirac-html-action-signature-v178',
+      htmlActionSignatureVersion: 'dirac-html-action-signature-v180',
+      vaultFetchTimeoutMs: 30000,
       ed25519PublicKeysBase64: Object.freeze({
         'dirac-recovery-ed25519-2026-01': 'Q1j1EngkPw4Ec9ZB3cWhP91B/UhJt9GQVtCCoQxMIqk='
       }),
@@ -854,7 +858,8 @@
 
 
     function parseFragment() {
-      var hash = String(location.hash || '').replace(/^#/, '');
+      var hash = String(initialRecoveryHash || '').replace(/^#/, '');
+      initialRecoveryHash = '';
       var params = new URLSearchParams(hash);
       var rid = String(params.get('rid') || '').trim();
       var token = String(params.get('token') || '').trim();
@@ -943,15 +948,18 @@
       return value;
     }
 
-    async function signHtmlActionRequest(fragment) {
+    async function signHtmlActionRequest(fragment, requestBody) {
       var timestamp = Date.now();
       var nonce = randomB64Url32();
       var tokenBytes = utf8(fragment.token);
+      var saltBytes = utf8('dirac-html-action-signature-v180:salt');
+      var infoBytes = utf8('dirac-lost-passkey-recovery-link-open:v180');
       try {
         var payload = {
           action: CONFIG.vaultApiAction,
+          body_sha256: await sha256B64Url(utf8(canonical(requestBody))),
           iat_ms: timestamp,
-          method: 'GET',
+          method: 'POST',
           nonce: nonce,
           origin: location.origin,
           path: CONFIG.vaultApiPath,
@@ -960,16 +968,18 @@
           token_sha256: await sha256B64Url(tokenBytes),
           typ: CONFIG.htmlActionSignatureVersion
         };
-        var key = await crypto.subtle.importKey(
-          'raw',
-          tokenBytes,
-          { name: 'HMAC', hash: 'SHA-256' },
+        var material = await crypto.subtle.importKey('raw', tokenBytes, 'HKDF', false, ['deriveKey']);
+        var key = await crypto.subtle.deriveKey(
+          { name: 'HKDF', hash: 'SHA-256', salt: saltBytes, info: infoBytes },
+          material,
+          { name: 'HMAC', hash: 'SHA-256', length: 256 },
           false,
           ['sign']
         );
         var signature = await crypto.subtle.sign('HMAC', key, utf8(canonical(payload)));
         return {
           'Accept': 'application/json',
+          'Content-Type': 'application/json',
           'X-Dirac-Html-Signature-Version': CONFIG.htmlActionSignatureVersion,
           'X-Dirac-Html-Signature-Timestamp': String(timestamp),
           'X-Dirac-Html-Signature-Nonce': nonce,
@@ -977,6 +987,8 @@
         };
       } finally {
         tokenBytes.fill(0);
+        saltBytes.fill(0);
+        infoBytes.fill(0);
       }
     }
 
@@ -995,34 +1007,46 @@
       state.vaultFetched = true;
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.vaultApiAction);
-      url.searchParams.set('rid', fragment.rid);
-      url.searchParams.set('token', fragment.token);
       url.searchParams.set('format', 'json');
-      var signedHeaders = await signHtmlActionRequest(fragment);
-      var response = await fetch(url.toString(), {
-        method: 'GET',
-        credentials: 'omit',
-        cache: 'no-store',
-        redirect: 'error',
-        referrerPolicy: 'no-referrer',
-        headers: signedHeaders
-      });
-      state.serverDiagnostics = readSafeResponseDiagnostics(response);
-      var contentType = String(response.headers.get('content-type') || '').toLowerCase();
-      if (!response.ok) {
-        var fetchError = new Error('VAULT_FETCH_FAILED');
-        fetchError.httpStatus = Number(response.status || 0);
-        fetchError.responseContentType = contentType;
-        throw fetchError;
+      var requestBody = { action: CONFIG.vaultApiAction, rid: fragment.rid, token: fragment.token };
+      var signedHeaders = await signHtmlActionRequest(fragment, requestBody);
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function () { controller.abort(); }, CONFIG.vaultFetchTimeoutMs);
+      try {
+        var response = await fetch(url.toString(), {
+          method: 'POST',
+          credentials: 'omit',
+          cache: 'no-store',
+          redirect: 'error',
+          referrerPolicy: 'no-referrer',
+          headers: signedHeaders,
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
+        state.serverDiagnostics = readSafeResponseDiagnostics(response);
+        var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (!response.ok) {
+          var fetchError = new Error('VAULT_FETCH_FAILED');
+          fetchError.httpStatus = Number(response.status || 0);
+          fetchError.responseContentType = contentType;
+          throw fetchError;
+        }
+        if (contentType.indexOf('application/json') === -1) {
+          throw new Error('VAULT_RESPONSE_NOT_JSON');
+        }
+        var body = await response.json();
+        if (!body || body.ok !== true) {
+          throw new Error('VAULT_RESPONSE_INVALID');
+        }
+        return body;
+      } catch (error) {
+        if (error && error.name === 'AbortError') throw new Error('VAULT_FETCH_TIMEOUT');
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+        requestBody.token = '';
+        fragment.token = '';
       }
-      if (contentType.indexOf('application/json') === -1) {
-        throw new Error('VAULT_RESPONSE_NOT_JSON');
-      }
-      var body = await response.json();
-      if (!body || body.ok !== true) {
-        throw new Error('VAULT_RESPONSE_INVALID');
-      }
-      return body;
     }
 
     function normalizeVaultBundle(raw) {
