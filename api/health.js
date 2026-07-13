@@ -6948,8 +6948,9 @@ function customerSecurityLostPasskeyParseRecoveryLinkV162(req) {
     // Static HTML API shape:
     // /api/health?action=lost_passkey_recovery_link_open&rid=...&token=...
     if (action === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
-      const requestIdRaw = String(url.searchParams.get('rid') || req && req.query && req.query.rid || '').trim();
-      const linkTokenRaw = String(url.searchParams.get('token') || req && req.query && req.query.token || '').trim();
+      const recoveryBody = req && req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+      const requestIdRaw = String(url.searchParams.get('rid') || req && req.query && req.query.rid || recoveryBody.rid || '').trim();
+      const linkTokenRaw = String(url.searchParams.get('token') || req && req.query && req.query.token || recoveryBody.token || '').trim();
       return {
         matched: true,
         requestId: customerSecurityNormalizeLostPasskeyRequestId(requestIdRaw),
@@ -7153,7 +7154,7 @@ function customerSecurityLostPasskeyLinkRateLimitV162(req, requestId) {
 async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   const method = String(req && req.method || 'GET').toUpperCase();
   customerSecurityLostPasskeyLinkFlowDebugV175('handler_enter', req, res, { response_format: String(req && req.query && req.query.format || '').trim().toLowerCase() });
-  if (method !== 'GET' && method !== 'HEAD') {
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'POST') {
     customerSecurityLostPasskeyLinkFlowDebugV175('method_rejected', req, res, { reason: 'method_not_allowed', status: 404 });
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
@@ -27287,7 +27288,7 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     if (!serverGuard.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, serverGuard.reason);
     diracCentralStampV146(ctx, 'server_guard_checked');
 
-    const htmlActionSignature = diracCentralHtmlActionSignatureGuardV178(req, ctx);
+    const htmlActionSignature = await diracCentralHtmlActionSignatureGuardV178(req, ctx);
     if (!htmlActionSignature.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, htmlActionSignature.reason);
     diracCentralStampV146(ctx, 'html_action_signature_checked');
 
@@ -27976,13 +27977,14 @@ function diracCentralHtmlActionHeaderValueV179(req, name) {
 }
 
 
-function diracCentralHtmlActionSignaturePayloadV178(req, ctx, parsed, timestamp, nonce) {
+function diracCentralHtmlActionSignaturePayloadV180(req, ctx, parsed, requestBody, timestamp, nonce) {
   const forwardedHost = diracCentralHtmlActionHeaderValueV179(req, 'x-forwarded-host').split(',')[0].trim().toLowerCase();
   const host = forwardedHost || diracCentralHtmlActionHeaderValueV179(req, 'host').split(',')[0].trim().toLowerCase();
   const forwardedProto = diracCentralHtmlActionHeaderValueV179(req, 'x-forwarded-proto').split(',')[0].trim().toLowerCase();
   const protocol = forwardedProto || 'https';
   return {
     action: String(ctx && ctx.action || ''),
+    body_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(customerSecurityLostPasskeyCanonical(requestBody), 'utf8')),
     iat_ms: Number(timestamp || 0),
     method: String(ctx && ctx.method || '').toUpperCase(),
     nonce: String(nonce || ''),
@@ -27991,17 +27993,43 @@ function diracCentralHtmlActionSignaturePayloadV178(req, ctx, parsed, timestamp,
     query_format: String(req && req.query && req.query.format || '').trim().toLowerCase(),
     rid: String(parsed && parsed.requestId || ''),
     token_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(String(parsed && parsed.linkToken || ''), 'utf8')),
-    typ: 'dirac-html-action-signature-v178'
+    typ: 'dirac-html-action-signature-v180'
   };
 }
 
-function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
+async function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
   if (!ctx || ctx.classification !== 'recovery_link') return { ok: true, source: 'not_recovery_link' };
   if (ctx.action !== DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) return { ok: false, reason: 'html_action_signature_action_invalid' };
   const responseFormat = String(req && req.query && req.query.format || '').trim().toLowerCase();
   if (ctx.method === 'HEAD') return { ok: true, source: 'recovery_link_head' };
   if (ctx.method === 'GET' && responseFormat === 'redirect') return { ok: true, source: 'recovery_link_redirect_entry' };
-  if (ctx.method !== 'GET') return { ok: false, reason: 'html_action_signature_method_invalid' };
+  if (ctx.method !== 'POST') return { ok: false, reason: 'html_action_signature_method_invalid' };
+  if (responseFormat !== 'json') return { ok: false, reason: 'html_action_signature_contract_invalid' };
+
+  const contentType = String(diracCentralHtmlActionHeaderValueV179(req, 'content-type') || '').toLowerCase();
+  if (!/^application\/json(?:\s*;|$)/.test(contentType)) {
+    return { ok: false, reason: 'html_action_signature_content_type_invalid' };
+  }
+
+  let requestBody;
+  try {
+    requestBody = await readLimitedJsonBody(req, 4096);
+  } catch (_) {
+    return { ok: false, reason: 'html_action_signature_body_invalid' };
+  }
+  if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) {
+    return { ok: false, reason: 'html_action_signature_body_invalid' };
+  }
+  const bodyKeys = Object.keys(requestBody).sort();
+  if (bodyKeys.length !== 3 || bodyKeys[0] !== 'action' || bodyKeys[1] !== 'rid' || bodyKeys[2] !== 'token') {
+    return { ok: false, reason: 'html_action_signature_body_contract_invalid' };
+  }
+  if (String(requestBody.action || '').trim().toLowerCase() !== DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
+    return { ok: false, reason: 'html_action_signature_body_action_invalid' };
+  }
+  ctx.body = requestBody;
+  req.__parsedBody = requestBody;
+  req.__diracCentralParsedBodyV146 = requestBody;
 
   const parsed = customerSecurityLostPasskeyParseRecoveryLinkV162(req);
   if (!parsed || !parsed.matched || !parsed.requestId || !customerSecurityLostPasskeyLinkTokenShapeV162(parsed.linkToken)) {
@@ -28012,7 +28040,7 @@ function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
   const timestampText = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature-timestamp');
   const nonce = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature-nonce');
   const signature = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature');
-  if (version !== 'dirac-html-action-signature-v178') return { ok: false, reason: 'html_action_signature_version_invalid' };
+  if (version !== 'dirac-html-action-signature-v180') return { ok: false, reason: 'html_action_signature_version_invalid' };
   if (!/^[0-9]{13}$/.test(timestampText)) return { ok: false, reason: 'html_action_signature_timestamp_invalid' };
   if (!/^[A-Za-z0-9_-]{43}$/.test(nonce)) return { ok: false, reason: 'html_action_signature_nonce_invalid' };
   if (!/^[A-Za-z0-9_-]{43}$/.test(signature)) return { ok: false, reason: 'html_action_signature_missing' };
@@ -28022,13 +28050,26 @@ function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
     return { ok: false, reason: 'html_action_signature_stale' };
   }
 
-  const payload = diracCentralHtmlActionSignaturePayloadV178(req, ctx, parsed, timestamp, nonce);
+  const payload = diracCentralHtmlActionSignaturePayloadV180(req, ctx, parsed, requestBody, timestamp, nonce);
   if (payload.origin !== 'https://secure.diracgroup.store' || payload.query_format !== 'json') {
     return { ok: false, reason: 'html_action_signature_contract_invalid' };
   }
-  const expected = crypto.createHmac('sha256', Buffer.from(parsed.linkToken, 'utf8'))
+  let signingKey;
+  try {
+    signingKey = crypto.hkdfSync(
+      'sha256',
+      Buffer.from(parsed.linkToken, 'utf8'),
+      Buffer.from('dirac-html-action-signature-v180:salt', 'utf8'),
+      Buffer.from('dirac-lost-passkey-recovery-link-open:v180', 'utf8'),
+      32
+    );
+  } catch (_) {
+    return { ok: false, reason: 'html_action_signature_key_derivation_failed' };
+  }
+  const expected = crypto.createHmac('sha256', signingKey)
     .update(customerSecurityLostPasskeyCanonical(payload))
     .digest('base64url');
+  try { if (Buffer.isBuffer(signingKey)) signingKey.fill(0); } catch (_) {}
   if (!safeEqual(signature, expected)) return { ok: false, reason: 'html_action_signature_invalid' };
 
   const now = Date.now();
@@ -28042,7 +28083,7 @@ function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
   }
   DIRAC_CENTRAL_HTML_ACTION_SIGNATURE_NONCES_V178.set(nonceKey, now + 120000);
   req.__diracHtmlActionSignatureVerifiedV178 = true;
-  return { ok: true, source: 'html_action_signature_v178' };
+  return { ok: true, source: 'html_action_signature_v180' };
 }
 
 function diracCentralPageBrowserAuthenticityGuardV146(req, ctx) {
@@ -29590,7 +29631,7 @@ function diracCentralStableMfaReadGateV146(req, res, ctx) {
 function diracCentralContractForActionV146(action) {
   const clean = String(action || '');
   if (DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean)) {
-    return { methods: ['GET', 'HEAD'], allowed: ['action', 'rid', 'token', 'format'], required: ['rid', 'token'], maxBodyBytes: 0, maxFieldBytes: 4096, mutation: false };
+    return { methods: ['GET', 'HEAD', 'POST'], allowed: ['action', 'rid', 'token', 'format'], required: ['rid', 'token'], maxBodyBytes: 4096, maxFieldBytes: 4096, mutation: false };
   }
   if (!DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)) {
     return { methods: [], allowed: [], required: [], maxBodyBytes: 0, maxFieldBytes: 0, mutation: false };
