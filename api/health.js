@@ -27753,7 +27753,7 @@ function diracCentralVercelEdgeWafGuardV185(req, ctx) {
   if (realIp && realIp !== vercelIp) return { ok: false, reason: 'vercel_real_ip_mismatch' };
   if (ja4 && !/^[A-Za-z0-9_-]{16,200}$/.test(ja4)) return { ok: false, reason: 'vercel_waf_fingerprint_invalid' };
   if (!ja4 && !isSignedServerAction) return { ok: false, reason: 'vercel_waf_fingerprint_missing' };
-  if (!ctx || !ctx.identity || ctx.identity.ip !== vercelIp) return { ok: false, reason: 'vercel_identity_ip_mismatch' };
+  if (!ctx || !ctx.identity || !ctx.identity.parts || ctx.identity.parts.ip !== vercelIp) return { ok: false, reason: 'vercel_identity_ip_mismatch' };
 
   if (ja4) ctx.identity.tlsFingerprint = ja4;
   return { ok: true };
