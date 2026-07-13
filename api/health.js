@@ -6914,13 +6914,18 @@ function customerSecurityLostPasskeyParseRecoveryLinkV162(req) {
   try {
     const host = String(req && req.headers && (req.headers.host || req.headers['x-forwarded-host']) || 'secure.diracgroup.store').split(',')[0].trim() || 'secure.diracgroup.store';
     const url = new URL(String(req && req.url || '/'), 'https://' + host);
-    const action = String(url.searchParams.get('action') || req && req.query && req.query.action || '').trim().toLowerCase();
+    const body = req && (
+      req.__diracCentralParsedBodyV146
+      || req.__parsedBody
+      || (req.body && typeof req.body === 'object' ? req.body : null)
+    ) || {};
+    const action = String(url.searchParams.get('action') || req && req.query && req.query.action || body.action || '').trim().toLowerCase();
 
-    // Static HTML API shape:
-    // /api/health?action=lost_passkey_recovery_link_open&rid=...&token=...
+    // Signed static HTML API shape. The secret token is accepted only from the JSON body,
+    // never from the request URL, so it cannot appear in Vercel/proxy query logs.
     if (action === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
-      const requestIdRaw = String(url.searchParams.get('rid') || req && req.query && req.query.rid || '').trim();
-      const linkTokenRaw = String(url.searchParams.get('token') || req && req.query && req.query.token || '').trim();
+      const requestIdRaw = String(body.rid || '').trim();
+      const linkTokenRaw = String(body.token || '').trim();
       return {
         matched: true,
         requestId: customerSecurityNormalizeLostPasskeyRequestId(requestIdRaw),
@@ -6931,19 +6936,7 @@ function customerSecurityLostPasskeyParseRecoveryLinkV162(req) {
       };
     }
 
-    // Legacy path remains parseable only for generic-invalid handling/backward compatibility.
-    const parts = url.pathname.split('/').filter(Boolean);
-    if (parts.length !== 4 || parts[0] !== 'recovery' || parts[1] !== 'r') return { matched: false };
-    const requestIdRaw = decodeURIComponent(parts[2] || '');
-    const linkTokenRaw = decodeURIComponent(parts[3] || '');
-    return {
-      matched: true,
-      requestId: customerSecurityNormalizeLostPasskeyRequestId(requestIdRaw),
-      linkToken: String(linkTokenRaw || '').trim(),
-      requestIdRaw,
-      linkTokenRaw,
-      api: false
-    };
+    return { matched: false };
   } catch (_) {
     return { matched: false };
   }
@@ -7002,6 +6995,11 @@ function customerSecurityLostPasskeySetVaultJsonHeadersV169(res) {
   try { res.setHeader('Referrer-Policy', 'no-referrer'); } catch (_) {}
   try { res.setHeader('X-Content-Type-Options', 'nosniff'); } catch (_) {}
   try { res.setHeader('X-Frame-Options', 'DENY'); } catch (_) {}
+  try { res.setHeader('Cross-Origin-Opener-Policy', 'same-origin'); } catch (_) {}
+  try { res.setHeader('Cross-Origin-Resource-Policy', 'same-origin'); } catch (_) {}
+  try { res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()'); } catch (_) {}
+  try { res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload'); } catch (_) {}
+  try { res.setHeader('Content-Security-Policy', "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; object-src 'none'"); } catch (_) {}
 }
 
 function customerSecurityLostPasskeyEd25519SignManifestB64V169(payload) {
@@ -7121,20 +7119,70 @@ function customerSecurityLostPasskeyLinkRateLimitV162(req, requestId) {
   return { ok: true };
 }
 
+async function customerSecurityLostPasskeyAcquireOpenLockV180(requestId) {
+  const table = String(LOGIN_SECURITY_PERSIST_TABLE || '').trim();
+  if (!table) return { ok: false, reason: 'recovery_open_lock_store_missing' };
+  const now = Date.now();
+  const lockUntil = now + 30000;
+  const owner = 'rov180_' + crypto.randomBytes(18).toString('base64url');
+  const securityKey = 'dirac:lost-passkey-open-lock:v180:' + customerSecurityLostPasskeySha256HexV157(String(requestId || ''));
+  const record = {
+    type: 'lost_passkey_open_single_flight_v180',
+    owner_id: owner,
+    request_id_hash: customerSecurityLostPasskeySha256HexV157(String(requestId || '')),
+    locked_at_ms: now,
+    locked_until_ms: lockUntil
+  };
+  const rowPayload = {
+    record_json: record,
+    blocked_until_ms: lockUntil,
+    updated_at: new Date(now).toISOString(),
+    expires_at: new Date(lockUntil + 60000).toISOString()
+  };
+  const patchPath = '/rest/v1/' + encodeURIComponent(table)
+    + '?security_key=eq.' + encodeURIComponent(securityKey)
+    + '&blocked_until_ms=lte.' + encodeURIComponent(String(now));
+  const patched = await supabaseFetch(patchPath, {
+    method: 'PATCH',
+    auth: 'service',
+    prefer: 'return=representation',
+    body: rowPayload
+  }).catch(() => null);
+  if (patched && patched.ok && Array.isArray(patched.data) && patched.data.some((row) => (
+    String(row && row.security_key || '') === securityKey
+    && String(row && row.record_json && row.record_json.owner_id || '') === owner
+  ))) return { ok: true, owner, lockUntil };
+
+  const inserted = await supabaseFetch('/rest/v1/' + encodeURIComponent(table) + '?on_conflict=security_key', {
+    method: 'POST',
+    auth: 'service',
+    prefer: 'resolution=ignore-duplicates,return=representation',
+    body: [{ security_key: securityKey, ...rowPayload }]
+  }).catch(() => null);
+  if (inserted && inserted.ok && Array.isArray(inserted.data) && inserted.data.some((row) => (
+    String(row && row.security_key || '') === securityKey
+    && String(row && row.record_json && row.record_json.owner_id || '') === owner
+  ))) return { ok: true, owner, lockUntil };
+
+  if (!patched || patched.ok !== true || !inserted || inserted.ok !== true) {
+    return { ok: false, reason: 'recovery_open_lock_store_unavailable' };
+  }
+  return { ok: false, reason: 'recovery_open_lock_busy', retryAfterSeconds: 30 };
+}
+
 async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   const method = String(req && req.method || 'GET').toUpperCase();
   customerSecurityLostPasskeyLinkFlowDebugV175('handler_enter', req, res, { response_format: String(req && req.query && req.query.format || '').trim().toLowerCase() });
-  if (method !== 'GET' && method !== 'HEAD') {
-    customerSecurityLostPasskeyLinkFlowDebugV175('method_rejected', req, res, { reason: 'method_not_allowed', status: 404 });
+  if (method !== 'POST') {
+    customerSecurityLostPasskeyLinkFlowDebugV175('method_rejected', req, res, { reason: 'signed_post_required', status: 404 });
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
   if (!diracCentralGuardPassedForHandlerV168(req)) {
     customerSecurityLostPasskeyLinkFlowDebugV175('central_guard_missing', req, res, { reason: 'central_guard_required', status: 404 });
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
-  const responseFormatV178 = String(req && req.query && req.query.format || '').trim().toLowerCase();
-  if (method !== 'HEAD' && responseFormatV178 !== 'redirect' && req.__diracHtmlActionSignatureVerifiedV178 !== true) {
-    customerSecurityLostPasskeyLinkFlowDebugV175('html_action_signature_missing', req, res, { reason: 'html_action_signature_required', status: 404 });
+  if (req.__diracHtmlActionSignatureVerifiedV178 !== true || req.__diracHtmlActionDurableNonceVerifiedV180 !== true) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('html_action_signature_missing', req, res, { reason: 'html_action_signature_and_durable_nonce_required', status: 404 });
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
 
@@ -7186,6 +7234,18 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
       hash_present: Boolean(linkTokenHash)
     });
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
+  }
+
+  const openLock = await customerSecurityLostPasskeyAcquireOpenLockV180(parsed.requestId);
+  if (!openLock.ok) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('single_flight_rejected', req, res, {
+      reason: String(openLock.reason || 'recovery_open_lock_failed'),
+      status: openLock.reason === 'recovery_open_lock_busy' ? 429 : 503
+    });
+    if (openLock.retryAfterSeconds) {
+      try { res.setHeader('Retry-After', String(openLock.retryAfterSeconds)); } catch (_) {}
+    }
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, openLock.reason === 'recovery_open_lock_busy' ? 429 : 503);
   }
 
   const argon2VerifyStartedAt = Date.now();
@@ -7246,31 +7306,9 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
 
-  customerSecurityLostPasskeySetLinkSecurityHeadersV162(res);
-  if (method === 'HEAD') {
-    try { res.statusCode = 200; } catch (_) {}
-    try { if (typeof res.status === 'function') res.status(200); } catch (_) {}
-    return res.end();
-  }
-
   const responseFormat = String(req && req.query && req.query.format || '').trim().toLowerCase();
-  if (responseFormat === 'redirect') {
-    customerSecurityLostPasskeyLinkFlowDebugV175('redirect_allowed', req, res, { status: 302, response_format: 'redirect' });
-    const redirectUrl = customerSecurityLostPasskeyOfficialBaseUrlV157()
-      + '/lost-passkey.html#rid=' + encodeURIComponent(parsed.requestId)
-      + '&token=' + encodeURIComponent(parsed.linkToken);
-    try { res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0'); } catch (_) {}
-    try { res.setHeader('Pragma', 'no-cache'); } catch (_) {}
-    try { res.setHeader('Expires', '0'); } catch (_) {}
-    try { res.setHeader('Referrer-Policy', 'no-referrer'); } catch (_) {}
-    try { res.setHeader('X-Content-Type-Options', 'nosniff'); } catch (_) {}
-    try { res.setHeader('X-Frame-Options', 'DENY'); } catch (_) {}
-    try { res.setHeader('Location', redirectUrl); } catch (_) {}
-    return res.status(302).end();
-  }
-
-  if (parsed.api || responseFormat === 'json') {
-    customerSecurityLostPasskeyLinkFlowDebugV175('vault_json_allowed', req, res, { status: 200, response_format: responseFormat || 'api' });
+  if (parsed.api && responseFormat === 'json') {
+    customerSecurityLostPasskeyLinkFlowDebugV175('vault_json_allowed', req, res, { status: 200, response_format: 'json' });
     return customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata);
   }
 
@@ -8477,13 +8515,12 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const recoveryCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('recovery_code', recoveryCode, recoveryCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const bindingHashCommitment = await customerSecurityLostPasskeyArgon2EncodedHashV157('binding', bindingsCanonical, bindingSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
 
-  // Recovery email link must enter SERVER 2 first so Central Guard + Argon2id can return a real HTTP 404 before the static HTML opens.
-  // Endpoint is unchanged: /api/health?action=lost_passkey_recovery_link_open
+  // The recovery secret stays in the URL fragment. Fragments are not sent in HTTP requests,
+  // so the token cannot appear in Vercel/proxy request-query logs. The HTML then calls the
+  // unchanged /api/health endpoint using a signed POST body through the Central Guard.
   const recoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157()
-    + '/api/health?action=' + encodeURIComponent(DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165)
-    + '&rid=' + encodeURIComponent(requestId)
-    + '&token=' + encodeURIComponent(linkToken)
-    + '&format=redirect';
+    + '/lost-passkey.html#rid=' + encodeURIComponent(requestId)
+    + '&token=' + encodeURIComponent(linkToken);
   const vaultBundle = {
     version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
     salt: customerSecurityLostPasskeyB64(vaultSalt),
@@ -27187,7 +27224,7 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     if (!serverGuard.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, serverGuard.reason);
     diracCentralStampV146(ctx, 'server_guard_checked');
 
-    const htmlActionSignature = diracCentralHtmlActionSignatureGuardV178(req, ctx);
+    const htmlActionSignature = await diracCentralHtmlActionSignatureGuardV178(req, ctx);
     if (!htmlActionSignature.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, htmlActionSignature.reason);
     diracCentralStampV146(ctx, 'html_action_signature_checked');
 
@@ -27664,6 +27701,14 @@ function diracCentralVercel2OnlyActionGuardV150(action) {
     || diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED');
   if (!actionsEnabled) return { ok: false, reason: 'vercel2_actions_not_enabled' };
 
+  if (clean === DIRAC_RECOVERY_WORKER_ACTION) {
+    const senderUrlPresent = Boolean(String(process.env.DIRAC_RECOVERY_WORKER_URL || '').trim());
+    const senderCallerPresent = Boolean(String(process.env.DIRAC_RECOVERY_WORKER_CALLER || '').trim());
+    if (senderUrlPresent || senderCallerPresent) {
+      return { ok: false, reason: 'vercel2_sender_env_must_be_absent' };
+    }
+  }
+
   return { ok: true };
 }
 
@@ -27768,7 +27813,7 @@ async function diracCentralServerToServerGuardV146(req, res, ctx) {
     return body;
   }
   if (ctx.action === DIRAC_RECOVERY_WORKER_ACTION) {
-    return diracCentralRecoveryWorkerSignatureGuardV146(req, ctx);
+    return await diracCentralRecoveryWorkerSignatureGuardV146(req, ctx);
   }
   if (ctx.action === 'midtrans_webhook') {
     if (typeof midtransVerifySignature === 'function') {
@@ -27779,7 +27824,61 @@ async function diracCentralServerToServerGuardV146(req, res, ctx) {
   return { ok: true };
 }
 
-function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
+const DIRAC_CENTRAL_SIGNED_NONCE_CACHE_MAX_V180 = 1024;
+
+function diracCentralSignedNonceLocalSeenV180(cache, key, nowMs = Date.now()) {
+  if (!cache || !key) return true;
+  for (const [entryKey, until] of cache.entries()) {
+    if (Number(until || 0) <= nowMs) cache.delete(entryKey);
+  }
+  return cache.has(key);
+}
+
+function diracCentralSignedNonceLocalRememberV180(cache, key, untilMs) {
+  if (!cache || !key) return;
+  while (cache.size >= DIRAC_CENTRAL_SIGNED_NONCE_CACHE_MAX_V180) {
+    const oldest = cache.keys().next();
+    if (oldest.done) break;
+    cache.delete(oldest.value);
+  }
+  cache.set(key, Number(untilMs || Date.now() + 120000));
+}
+
+async function diracCentralConsumeDurableSignedNonceV180(kind, scope, nonce, ttlMs) {
+  const table = String(LOGIN_SECURITY_PERSIST_TABLE || '').trim();
+  if (!table) return { ok: false, reason: 'signed_nonce_persistent_store_missing' };
+  const now = Date.now();
+  const ttl = Math.max(60000, Math.min(10 * 60 * 1000, Number(ttlMs || 120000)));
+  const securityKey = 'dirac:signed-nonce:v180:' + customerSecurityLostPasskeySha256HexV157([
+    String(kind || ''),
+    String(scope || ''),
+    String(nonce || '')
+  ].join('|'));
+  const payload = [{
+    security_key: securityKey,
+    record_json: {
+      type: 'dirac_signed_nonce_v180',
+      kind: String(kind || '').slice(0, 80),
+      scope_hash: customerSecurityLostPasskeySha256HexV157(String(scope || '')),
+      created_at_ms: now
+    },
+    blocked_until_ms: now + ttl,
+    updated_at: new Date(now).toISOString(),
+    expires_at: new Date(now + ttl + 60000).toISOString()
+  }];
+  const result = await supabaseFetch('/rest/v1/' + encodeURIComponent(table) + '?on_conflict=security_key', {
+    method: 'POST',
+    auth: 'service',
+    prefer: 'resolution=ignore-duplicates,return=representation',
+    body: payload
+  }).catch(() => null);
+  if (!result || result.ok !== true) return { ok: false, reason: 'signed_nonce_persistent_write_failed' };
+  const inserted = Array.isArray(result.data) && result.data.some((row) => String(row && row.security_key || '') === securityKey);
+  if (!inserted) return { ok: false, reason: 'signed_nonce_replay' };
+  return { ok: true, securityKey, untilMs: now + ttl };
+}
+
+async function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
   if (!customerSecurityRecoveryWorkerLocalEnabled()) {
     return diracCentralRecoveryWorkerGuardFailV158(req, ctx, 'env_local_worker', 'recovery_worker_not_enabled');
   }
@@ -27816,12 +27915,8 @@ function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
     return diracCentralRecoveryWorkerGuardFailV158(req, ctx, 'body_nonce', 'recovery_worker_nonce_invalid');
   }
   const now = Date.now();
-  for (const [key, until] of DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.entries()) {
-    if (Number(until || 0) <= now) DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.delete(key);
-    if (DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.size <= 5000) break;
-  }
   const nonceKey = caller + ':' + nonce;
-  if (DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.has(nonceKey)) {
+  if (diracCentralSignedNonceLocalSeenV180(DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157, nonceKey, now)) {
     return diracCentralRecoveryWorkerGuardFailV158(req, ctx, 'body_nonce', 'recovery_worker_nonce_replay');
   }
   const canonical = customerSecurityLostPasskeyCanonical(body);
@@ -27832,7 +27927,20 @@ function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
       signature_length: String(signature || '').length
     });
   }
-  DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.set(nonceKey, now + customerSecurityRecoveryWorkerClockSkewMs() + 60000);
+  const durableNonce = await diracCentralConsumeDurableSignedNonceV180(
+    'recovery_worker',
+    caller,
+    nonce,
+    customerSecurityRecoveryWorkerClockSkewMs() + 60000
+  );
+  if (!durableNonce.ok) {
+    const reason = durableNonce.reason === 'signed_nonce_replay'
+      ? 'recovery_worker_nonce_replay'
+      : 'recovery_worker_nonce_store_unavailable';
+    return diracCentralRecoveryWorkerGuardFailV158(req, ctx, 'body_nonce_persistent', reason);
+  }
+  diracCentralSignedNonceLocalRememberV180(DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157, nonceKey, durableNonce.untilMs);
+  req.__diracRecoveryWorkerDurableNonceVerifiedV180 = true;
   req.__diracRecoveryWorkerVerified = true;
   if (customerSecurityRecoveryWorkerDebugEnabledV158()) {
     diracCentralRecoveryWorkerGuardDebugV158(req, ctx, 'passed', 'recovery_worker_signature_valid', {
@@ -27883,6 +27991,7 @@ function diracCentralHtmlActionSignaturePayloadV178(req, ctx, parsed, timestamp,
   const protocol = forwardedProto || 'https';
   return {
     action: String(ctx && ctx.action || ''),
+    body_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(customerSecurityLostPasskeyCanonical(ctx && ctx.body || {}), 'utf8')),
     iat_ms: Number(timestamp || 0),
     method: String(ctx && ctx.method || '').toUpperCase(),
     nonce: String(nonce || ''),
@@ -27891,28 +28000,31 @@ function diracCentralHtmlActionSignaturePayloadV178(req, ctx, parsed, timestamp,
     query_format: String(req && req.query && req.query.format || '').trim().toLowerCase(),
     rid: String(parsed && parsed.requestId || ''),
     token_sha256: customerSecurityLostPasskeySha256B64(Buffer.from(String(parsed && parsed.linkToken || ''), 'utf8')),
-    typ: 'dirac-html-action-signature-v178'
+    typ: 'dirac-html-action-signature-v180'
   };
 }
 
-function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
+async function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
   if (!ctx || ctx.classification !== 'recovery_link') return { ok: true, source: 'not_recovery_link' };
   if (ctx.action !== DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) return { ok: false, reason: 'html_action_signature_action_invalid' };
   const responseFormat = String(req && req.query && req.query.format || '').trim().toLowerCase();
-  if (ctx.method === 'HEAD') return { ok: true, source: 'recovery_link_head' };
-  if (ctx.method === 'GET' && responseFormat === 'redirect') return { ok: true, source: 'recovery_link_redirect_entry' };
-  if (ctx.method !== 'GET') return { ok: false, reason: 'html_action_signature_method_invalid' };
+  if (ctx.method !== 'POST') return { ok: false, reason: 'html_action_signature_method_invalid' };
 
+  const bodyRead = await diracCentralBodyHandlingGuardV146(req, ctx, 4096);
+  if (!bodyRead.ok) return { ok: false, reason: bodyRead.reason || 'html_action_signature_body_invalid' };
   const parsed = customerSecurityLostPasskeyParseRecoveryLinkV162(req);
   if (!parsed || !parsed.matched || !parsed.requestId || !customerSecurityLostPasskeyLinkTokenShapeV162(parsed.linkToken)) {
     return { ok: false, reason: 'html_action_signature_link_invalid' };
+  }
+  if (String(ctx.body && ctx.body.action || '') !== DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
+    return { ok: false, reason: 'html_action_signature_body_action_invalid' };
   }
 
   const version = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature-version');
   const timestampText = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature-timestamp');
   const nonce = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature-nonce');
   const signature = diracCentralHtmlActionHeaderValueV179(req, 'x-dirac-html-signature');
-  if (version !== 'dirac-html-action-signature-v178') return { ok: false, reason: 'html_action_signature_version_invalid' };
+  if (version !== 'dirac-html-action-signature-v180') return { ok: false, reason: 'html_action_signature_version_invalid' };
   if (!/^[0-9]{13}$/.test(timestampText)) return { ok: false, reason: 'html_action_signature_timestamp_invalid' };
   if (!/^[A-Za-z0-9_-]{43}$/.test(nonce)) return { ok: false, reason: 'html_action_signature_nonce_invalid' };
   if (!/^[A-Za-z0-9_-]{43}$/.test(signature)) return { ok: false, reason: 'html_action_signature_missing' };
@@ -27923,26 +28035,52 @@ function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
   }
 
   const payload = diracCentralHtmlActionSignaturePayloadV178(req, ctx, parsed, timestamp, nonce);
-  if (payload.origin !== 'https://secure.diracgroup.store' || payload.query_format !== 'json') {
+  if (payload.origin !== 'https://secure.diracgroup.store'
+    || payload.query_format !== 'json'
+    || payload.method !== 'POST'
+    || payload.typ !== 'dirac-html-action-signature-v180') {
     return { ok: false, reason: 'html_action_signature_contract_invalid' };
   }
-  const expected = crypto.createHmac('sha256', Buffer.from(parsed.linkToken, 'utf8'))
-    .update(customerSecurityLostPasskeyCanonical(payload))
-    .digest('base64url');
+  const key = Buffer.from(crypto.hkdfSync(
+    'sha256',
+    Buffer.from(parsed.linkToken, 'utf8'),
+    Buffer.from('dirac-html-action-signature-v180:salt', 'utf8'),
+    Buffer.from('dirac-lost-passkey-recovery-link-open:v180', 'utf8'),
+    32
+  ));
+  let expected = '';
+  try {
+    expected = crypto.createHmac('sha256', key)
+      .update(customerSecurityLostPasskeyCanonical(payload))
+      .digest('base64url');
+  } finally {
+    key.fill(0);
+  }
   if (!safeEqual(signature, expected)) return { ok: false, reason: 'html_action_signature_invalid' };
 
   const now = Date.now();
-  for (const [key, until] of DIRAC_CENTRAL_HTML_ACTION_SIGNATURE_NONCES_V178.entries()) {
-    if (Number(until || 0) <= now) DIRAC_CENTRAL_HTML_ACTION_SIGNATURE_NONCES_V178.delete(key);
-    if (DIRAC_CENTRAL_HTML_ACTION_SIGNATURE_NONCES_V178.size <= 5000) break;
-  }
   const nonceKey = customerSecurityLostPasskeySha256HexV157(parsed.requestId + ':' + nonce);
-  if (DIRAC_CENTRAL_HTML_ACTION_SIGNATURE_NONCES_V178.has(nonceKey)) {
+  if (diracCentralSignedNonceLocalSeenV180(DIRAC_CENTRAL_HTML_ACTION_SIGNATURE_NONCES_V178, nonceKey, now)) {
     return { ok: false, reason: 'html_action_signature_replay' };
   }
-  DIRAC_CENTRAL_HTML_ACTION_SIGNATURE_NONCES_V178.set(nonceKey, now + 120000);
+  const durableNonce = await diracCentralConsumeDurableSignedNonceV180(
+    'html_recovery_link',
+    parsed.requestId,
+    nonce,
+    120000
+  );
+  if (!durableNonce.ok) {
+    return {
+      ok: false,
+      reason: durableNonce.reason === 'signed_nonce_replay'
+        ? 'html_action_signature_replay'
+        : 'html_action_signature_nonce_store_unavailable'
+    };
+  }
+  diracCentralSignedNonceLocalRememberV180(DIRAC_CENTRAL_HTML_ACTION_SIGNATURE_NONCES_V178, nonceKey, durableNonce.untilMs);
+  req.__diracHtmlActionDurableNonceVerifiedV180 = true;
   req.__diracHtmlActionSignatureVerifiedV178 = true;
-  return { ok: true, source: 'html_action_signature_v178' };
+  return { ok: true, source: 'html_action_signature_v180' };
 }
 
 function diracCentralPageBrowserAuthenticityGuardV146(req, ctx) {
@@ -29490,7 +29628,7 @@ function diracCentralStableMfaReadGateV146(req, res, ctx) {
 function diracCentralContractForActionV146(action) {
   const clean = String(action || '');
   if (DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean)) {
-    return { methods: ['GET', 'HEAD'], allowed: ['action', 'rid', 'token', 'format'], required: ['rid', 'token'], maxBodyBytes: 0, maxFieldBytes: 4096, mutation: false };
+    return { methods: ['POST'], allowed: ['action', 'rid', 'token'], required: ['action', 'rid', 'token'], maxBodyBytes: 4096, maxFieldBytes: 4096, mutation: true };
   }
   if (!DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)) {
     return { methods: [], allowed: [], required: [], maxBodyBytes: 0, maxFieldBytes: 0, mutation: false };
