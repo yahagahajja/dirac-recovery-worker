@@ -809,9 +809,15 @@ function getLoginSecurityIdentity(req, actionName) {
 }
 
 function getLoginSecurityIp(req) {
+  try {
+    if (typeof diracCentralTrustedClientIpV183 === 'function') {
+      return diracCentralTrustedClientIpV183(req);
+    }
+  } catch (_) {}
   const headers = (req && req.headers) || {};
+  const vercelForwarded = String(headers['x-vercel-forwarded-for'] || '').split(',')[0].trim();
   const forwarded = String(headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return forwarded || String(headers['x-real-ip'] || req.socket && req.socket.remoteAddress || '').trim() || 'unknown';
+  return vercelForwarded || forwarded || String(headers['x-real-ip'] || req.socket && req.socket.remoteAddress || '').trim() || 'unknown';
 }
 
 function maskLoginSecurityIp(ip) {
@@ -27363,12 +27369,24 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     ctx.classification = diracCentralClassifyActionV146(action);
     diracCentralStampV146(ctx, 'classification_checked');
 
+    const edgeWafGuard = diracCentralVercelEdgeWafGuardV185(req, ctx);
+    if (!edgeWafGuard.ok) {
+      return await diracCentralBanAndBlockV146(req, res, ctx, action, method, edgeWafGuard.reason);
+    }
+    diracCentralStampV146(ctx, 'edge_waf_checked');
+
     const distributedRate = await diracCentralDistributedRateLimitGuardV146(req, ctx);
     if (!distributedRate.ok) {
       if (action === DIRAC_RECOVERY_WORKER_ACTION) diracCentralRecoveryWorkerGuardDebugV158(req, ctx, 'distributed_rate_limit', distributedRate.reason);
       return await diracCentralBanAndBlockV146(req, res, ctx, action, method, distributedRate.reason);
     }
     diracCentralStampV146(ctx, 'rate_checked');
+
+    const contentTypeGuard = diracCentralStrictJsonContentTypeGuardV185(req, ctx);
+    if (!contentTypeGuard.ok) {
+      return await diracCentralBanAndBlockV146(req, res, ctx, action, method, contentTypeGuard.reason);
+    }
+    diracCentralStampV146(ctx, 'content_type_checked');
 
     const serverGuard = await diracCentralServerToServerGuardV146(req, res, ctx);
     if (!serverGuard.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, serverGuard.reason);
@@ -27683,19 +27701,64 @@ function diracCentralSanitizeOutputV146(value, depth) {
   return value;
 }
 
+function diracCentralNormalizeTrustedIpV185(value) {
+  let clean = String(value || '').split(',')[0].trim();
+  if (!clean) return '';
+  if (/^\[[0-9a-f:]+\](?::\d+)?$/i.test(clean)) clean = clean.slice(1, clean.indexOf(']'));
+  if (/^::ffff:\d{1,3}(?:\.\d{1,3}){3}$/i.test(clean)) clean = clean.slice(7);
+  try {
+    const isIp = require('net').isIP(clean);
+    return isIp ? clean.toLowerCase() : '';
+  } catch (_) {
+    return /^[0-9a-f:.]{3,64}$/i.test(clean) ? clean.toLowerCase() : '';
+  }
+}
+
 function diracCentralTrustedClientIpV183(req) {
   const headers = req && req.headers || {};
-  const rawForwarded = String(headers['x-forwarded-for'] || '').trim();
-  if (rawForwarded) {
-    const chain = rawForwarded.split(',').map((value) => value.trim()).filter(Boolean);
-    const candidate = chain.length ? chain[chain.length - 1] : '';
-    if (/^[0-9a-f:.]{3,64}$/i.test(candidate)) return candidate;
-  }
-  const realIp = String(headers['x-real-ip'] || '').trim();
-  if (/^[0-9a-f:.]{3,64}$/i.test(realIp)) return realIp;
-  const socketIp = String(req && req.socket && req.socket.remoteAddress || '').trim();
-  if (/^[0-9a-f:.]{3,64}$/i.test(socketIp)) return socketIp;
-  return 'unknown';
+  const vercelForwarded = diracCentralNormalizeTrustedIpV185(headers['x-vercel-forwarded-for']);
+  if (vercelForwarded) return vercelForwarded;
+  const forwarded = diracCentralNormalizeTrustedIpV185(headers['x-forwarded-for']);
+  if (forwarded) return forwarded;
+  const realIp = diracCentralNormalizeTrustedIpV185(headers['x-real-ip']);
+  if (realIp) return realIp;
+  if (process.env.NODE_ENV === 'production') return 'unknown';
+  const socketIp = diracCentralNormalizeTrustedIpV185(req && req.socket && req.socket.remoteAddress);
+  return socketIp || 'unknown';
+}
+
+function diracCentralVercelEdgeWafGuardV185(req, ctx) {
+  if (!diracCentralIsProductionV146()) return { ok: true };
+  const headers = req && req.headers || {};
+  const vercelId = String(headers['x-vercel-id'] || '').trim();
+  const proto = String(headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+  const vercelIp = diracCentralNormalizeTrustedIpV185(headers['x-vercel-forwarded-for']);
+  const forwardedIp = diracCentralNormalizeTrustedIpV185(headers['x-forwarded-for']);
+  const realIp = diracCentralNormalizeTrustedIpV185(headers['x-real-ip']);
+  const ja4 = String(headers['x-vercel-ja4-digest'] || headers['x-vercel-ja3-digest'] || '').trim();
+
+  if (!/^[A-Za-z0-9._:-]{8,200}$/.test(vercelId)) return { ok: false, reason: 'vercel_edge_id_missing' };
+  if (proto !== 'https') return { ok: false, reason: 'vercel_edge_https_required' };
+  if (!vercelIp || !forwardedIp || !realIp) return { ok: false, reason: 'vercel_trusted_ip_headers_missing' };
+  if (forwardedIp !== realIp) return { ok: false, reason: 'vercel_trusted_ip_headers_mismatch' };
+  if (!/^[A-Za-z0-9_-]{16,200}$/.test(ja4)) return { ok: false, reason: 'vercel_waf_fingerprint_missing' };
+  if (!ctx || !ctx.identity || ctx.identity.ip !== vercelIp) return { ok: false, reason: 'vercel_identity_ip_mismatch' };
+
+  ctx.identity.tlsFingerprint = ja4;
+  return { ok: true };
+}
+
+function diracCentralStrictJsonContentTypeGuardV185(req, ctx) {
+  const method = String(ctx && ctx.method || req && req.method || '').toUpperCase();
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return { ok: true };
+  const headers = req && req.headers || {};
+  const raw = String(headers['content-type'] || '').trim().toLowerCase();
+  const mediaType = raw.split(';')[0].trim();
+  if (mediaType !== 'application/json') return { ok: false, reason: 'content_type_application_json_required' };
+  const encoding = String(headers['content-encoding'] || '').trim().toLowerCase();
+  if (encoding && encoding !== 'identity') return { ok: false, reason: 'content_encoding_not_allowed' };
+  if (headers['transfer-encoding'] && headers['content-length']) return { ok: false, reason: 'request_framing_ambiguous' };
+  return { ok: true };
 }
 
 async function diracCentralBuildIdentityV146(req) {
@@ -27709,7 +27772,8 @@ async function diracCentralBuildIdentityV146(req) {
     headers['sec-ch-ua-platform'],
     headers['sec-ch-ua-mobile'],
     headers['accept-language'],
-    headers.accept
+    headers.accept,
+    headers['x-vercel-ja4-digest'] || headers['x-vercel-ja3-digest']
   ].map((v) => String(v || '').slice(0, 160)).join('|');
 
   const sessionMaterial = [
@@ -27922,21 +27986,66 @@ function diracCentralEnvTrueV150(name) {
 // Sender-only ENV must stay on Vercel 1; receiver-only ENV must stay on Vercel 2.
 // DOMAIN_COOKIE_SAMESITE is intentionally not restricted here.
 function diracCentralVercel2RecoveryEnvPartitionGuardV183(action) {
-  if (!diracCentralIsServer2RecoveryOnlyActionV166(action)) return { ok: true };
-
+  const cleanAction = String(action || '').trim().toLowerCase();
   const role = diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE')
     || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE');
+  const isServer2Action = diracCentralIsServer2RecoveryOnlyActionV166(cleanAction);
+  const server1OnlyEnv = [
+    'DIRAC_RECOVERY_WORKER_URL',
+    'DIRAC_RECOVERY_WORKER_CALLER',
+    'DIRAC_RECOVERY_HPKE_ALLOWED_CALLER'
+  ];
+  const server2OnlyEnv = [
+    'DIRAC_RECOVERY_WORKER_ALLOWED_CALLER',
+    'DIRAC_RECOVERY_WORKER_MAX_BODY_BYTES',
+    'DIRAC_RECOVERY_WORKER_CLOCK_SKEW_SECONDS',
+    'DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB',
+    'DIRAC_LOST_PASSKEY_ARGON2_TIME_COST',
+    'DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM',
+    'DIRAC_LOST_PASSKEY_ROOT_SECRET',
+    'DIRAC_LOST_PASSKEY_ROOT_SECRET_VERSION',
+    'DIRAC_LOST_PASSKEY_DB_PEPPER',
+    'DIRAC_LOST_PASSKEY_MAX_RUNNING',
+    'DIRAC_LOST_PASSKEY_QUEUE_MAX',
+    'DIRAC_LOST_PASSKEY_PROCESSING_LOCK_TTL_SECONDS',
+    'DIRAC_RECOVERY_SERVER1_URL',
+    'DIRAC_RECOVERY_HPKE_PRIVATE_KEY',
+    'DIRAC_RECOVERY_HPKE_KEY_ID',
+    'DIRAC_RECOVERY_HPKE_PEPPER',
+    'DIRAC_RECOVERY_HPKE_PEPPER_KEY_ID',
+    'DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB',
+    'DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST',
+    'DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY',
+    'DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY_PEM',
+    'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_KIB',
+    'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_TIME_COST',
+    'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_PARALLELISM',
+    'DIRAC_LOST_PASSKEY_QUEUE_DISABLED',
+    'DIRAC_LOST_PASSKEY_QUEUE_LOCK_TTL_SECONDS',
+    'DIRAC_LOST_PASSKEY_QUEUE_MAX_WAIT_SECONDS',
+    'DIRAC_LOST_PASSKEY_QUEUE_POLL_MS'
+  ];
+  const present = (name) => Boolean(String(process.env[name] || '').trim());
+
+  if (diracCentralIsProductionV146() && role !== 'vercel1' && role !== 'vercel2') {
+    return { ok: false, reason: 'deployment_role_required' };
+  }
+
+  if (role === 'vercel1') {
+    if (isServer2Action) return { ok: false, reason: 'vercel2_action_forbidden_on_vercel1' };
+    if (server2OnlyEnv.some(present)) return { ok: false, reason: 'vercel2_env_present_on_vercel1' };
+    return { ok: true };
+  }
+
+  if (!isServer2Action) {
+    return role === 'vercel2' ? { ok: false, reason: 'non_vercel2_action_forbidden_on_vercel2' } : { ok: true };
+  }
+
   const enabled = diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')
     || diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED');
   if (role !== 'vercel2') return { ok: false, reason: 'vercel2_env_role_invalid' };
   if (!enabled) return { ok: false, reason: 'vercel2_env_actions_disabled' };
-
-  if (String(process.env.DIRAC_RECOVERY_WORKER_URL || '').trim()) {
-    return { ok: false, reason: 'vercel2_sender_url_env_forbidden' };
-  }
-  if (String(process.env.DIRAC_RECOVERY_WORKER_CALLER || '').trim()) {
-    return { ok: false, reason: 'vercel2_sender_caller_env_forbidden' };
-  }
+  if (server1OnlyEnv.some(present)) return { ok: false, reason: 'server1_env_present_on_vercel2' };
 
   const secret = String(process.env.DIRAC_RECOVERY_WORKER_SECRET || '');
   const allowedCaller = String(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER || '').trim();
@@ -27967,7 +28076,9 @@ function diracCentralIntegrityVerifierV146(ctx) {
     'vercel2_env_partition_checked',
     'server2_secure_host_checked',
     'classification_checked',
+    'edge_waf_checked',
     'rate_checked',
+    'content_type_checked',
     'server_guard_checked',
     'html_action_signature_checked',
     'browser_auth_checked',
@@ -28705,7 +28816,8 @@ async function diracCentralDistributedRateLimitGuardV146(req, ctx) {
 
 function diracCentralNeedsDistributedRateLimitV146(action) {
   const clean = String(action || '').trim().toLowerCase();
-  return DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)
+  return DIRAC_CENTRAL_ACTIVE_ACTIONS_V146.has(clean)
+    || DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.has(clean)
     || DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165.has(clean);
 }
 
@@ -28774,8 +28886,70 @@ function diracCentralContractGuardV146(req, ctx) {
     const format = diracCentralValidateFieldFormatV146(key, item.value);
     if (!format.ok) return { ok: false, reason: format.reason };
   }
+  const actionSchema = diracCentralActionSchemaGuardV185(ctx.action, source);
+  if (!actionSchema.ok) return actionSchema;
   if (ctx.method === 'GET' && contract.mutation) return { ok: false, reason: 'mutation_get_rejected' };
   return { ok: true };
+}
+
+function diracCentralActionSchemaGuardV185(action, source) {
+  const cleanAction = String(action || '').trim().toLowerCase();
+  const body = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
+  if (Object.prototype.hasOwnProperty.call(body, 'action') && String(body.action || '').trim().toLowerCase() !== cleanAction) {
+    return { ok: false, reason: 'body_action_mismatch' };
+  }
+
+  if (cleanAction === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
+    if (typeof body.rid !== 'string' || !customerSecurityNormalizeLostPasskeyRequestId(body.rid)) return { ok: false, reason: 'recovery_link_rid_invalid' };
+    if (typeof body.token !== 'string' || !customerSecurityLostPasskeyLinkTokenShapeV162(body.token)) return { ok: false, reason: 'recovery_link_token_invalid' };
+    if (body.format !== undefined && (typeof body.format !== 'string' || body.format !== 'json')) return { ok: false, reason: 'recovery_link_format_invalid' };
+    return { ok: true };
+  }
+
+  if (cleanAction === DIRAC_RECOVERY_WORKER_ACTION) {
+    if (typeof body.worker_action !== 'string' || ![DIRAC_RECOVERY_WORKER_TASK_GENERATE, DIRAC_RECOVERY_WORKER_TASK_VERIFY, DIRAC_RECOVERY_WORKER_TASK_FINALIZE].includes(body.worker_action)) {
+      return { ok: false, reason: 'recovery_worker_task_invalid' };
+    }
+    if (typeof body.caller_id !== 'string' || !customerSecurityRecoveryWorkerAsciiToken(body.caller_id)) return { ok: false, reason: 'recovery_worker_caller_id_invalid' };
+    if (typeof body.nonce !== 'string' || !/^[A-Za-z0-9_-]{32,120}$/.test(body.nonce)) return { ok: false, reason: 'recovery_worker_nonce_invalid' };
+    for (const key of ['auth_user_id', 'customer_id']) {
+      if (typeof body[key] !== 'string' || !diracCentralLooksLikeUuidV146(body[key])) return { ok: false, reason: key + '_format_invalid' };
+    }
+    if (typeof body.email !== 'string' || !isStrictDomainLoginEmail(normalizeAuthEmail(body.email))) return { ok: false, reason: 'recovery_worker_email_invalid' };
+    for (const key of ['email_binding_hash', 'customer_binding_hash', 'auth_user_binding_hash', 'device_binding_hash', 'session_hash', 'ip_hash', 'user_agent_hash']) {
+      if (typeof body[key] !== 'string' || !/^[a-f0-9]{64}$/i.test(body[key])) return { ok: false, reason: key + '_format_invalid' };
+    }
+    if (body.active_passkey_count !== undefined && (!Number.isSafeInteger(body.active_passkey_count) || body.active_passkey_count < 0 || body.active_passkey_count > 100)) {
+      return { ok: false, reason: 'active_passkey_count_invalid' };
+    }
+    if (body.requested_at !== undefined) {
+      if (typeof body.requested_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(body.requested_at) || !Number.isFinite(Date.parse(body.requested_at))) {
+        return { ok: false, reason: 'requested_at_invalid' };
+      }
+    }
+    for (const key of ['password_latest_material', 'password_latest_proof']) {
+      if (body[key] !== undefined && (typeof body[key] !== 'string' || !customerSecurityLostPasskeyNormalizePasswordV157(body[key]))) {
+        return { ok: false, reason: key + '_format_invalid' };
+      }
+    }
+    if (body.request_id !== undefined && (typeof body.request_id !== 'string' || !customerSecurityNormalizeLostPasskeyRequestId(body.request_id))) return { ok: false, reason: 'request_id_invalid' };
+    for (const key of ['recovery_code', 'code']) {
+      if (body[key] !== undefined && (typeof body[key] !== 'string' || !/^[A-Za-z0-9_-]{1200}$/.test(body[key]))) return { ok: false, reason: key + '_format_invalid' };
+    }
+    return { ok: true };
+  }
+
+  if (typeof DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159 !== 'undefined' && cleanAction === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) {
+    if (typeof diracRecoveryHpkeValidateEnvelopeV159 !== 'function') return { ok: false, reason: 'recovery_hpke_schema_guard_missing' };
+    for (const key of ['action', 'version', 'request_id', 'hpke_suite', 'hpke_key_id', 'enc', 'ciphertext']) {
+      if (typeof body[key] !== 'string') return { ok: false, reason: 'recovery_hpke_' + key + '_type_invalid' };
+    }
+    if (!Number.isSafeInteger(body.sent_at_ms) || !Number.isSafeInteger(body.expires_at_ms)) return { ok: false, reason: 'recovery_hpke_time_type_invalid' };
+    const validated = diracRecoveryHpkeValidateEnvelopeV159(body);
+    return validated && validated.ok ? { ok: true } : { ok: false, reason: 'recovery_hpke_' + String(validated && validated.reason || 'invalid') };
+  }
+
+  return { ok: false, reason: 'action_schema_missing' };
 }
 
 function diracCentralSecurityReportGuardV146(req, ctx) {
@@ -29684,6 +29858,28 @@ function diracCentralCircuitBreakerV146(req, ctx, event) {
   return { ok: true };
 }
 
+function diracCentralConfirmedAttackReasonV185(reason) {
+  return /(?:sql|xss|scanner|command|rce|ssrf|path_traversal|lfi|rfi|prototype|nosql|xxe|ssti|log4shell|crlf|smuggling|webshell|secret_file|oauth_token|graphql|jwt|bola|idor|signature_invalid|signature_missing|nonce_replay|service_role|egress_|private_or_metadata|action_shadow|action_foreign|html_security_report)/i.test(String(reason || ''));
+}
+
+function diracCentralBlockDurationV185(reason) {
+  if (diracCentralConfirmedAttackReasonV185(reason)) return diracCentralBlockMsV146();
+  return 15 * 60 * 1000;
+}
+
+function diracCentralOperationalFailureV185(reason) {
+  return /(?:configuration|deployment_role_required|env_|storage_required|storage_unavailable|write_failed|root_secret_invalid|guard_missing|body_reader_missing|central_guard_error)/i.test(String(reason || ''));
+}
+
+function diracCentralSoftFailureEscalatesV185(ctx, reason) {
+  if (diracCentralOperationalFailureV185(reason)) return false;
+  const identityKey = String(ctx && ctx.identity && ctx.identity.key || '').trim();
+  if (!identityKey) return false;
+  const reasonKey = crypto.createHash('sha256').update(String(reason || 'soft_failure')).digest('hex').slice(0, 24);
+  const rate = diracCentralRateLimitV146(identityKey + ':soft-failure:' + reasonKey, 60 * 1000, 5);
+  return !rate.ok;
+}
+
 async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason) {
   if (ctx && ctx.action === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
     customerSecurityLostPasskeyLinkFlowDebugV175('central_guard_rejected', req, res, {
@@ -29694,16 +29890,21 @@ async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason
   }
   try { await Promise.resolve(diracCentralCircuitBreakerV146(req, ctx, reason || 'block')); } catch (_) {}
   const now = Date.now();
-  const blockedUntilMs = now + diracCentralBlockMsV146();
+  const confirmedAttack = diracCentralConfirmedAttackReasonV185(reason);
+  const temporaryBlock = !confirmedAttack && diracCentralSoftFailureEscalatesV185(ctx, reason);
+  const shouldBlockIdentity = confirmedAttack || temporaryBlock;
+  const blockedUntilMs = shouldBlockIdentity ? now + diracCentralBlockDurationV185(reason) : 0;
   const threat = {
     detected: true,
     kind: String(reason || 'central_security_block').slice(0, 100),
     source: DIRAC_CENTRAL_SECURITY_GUARD_V146,
-    risk: 'critical'
+    risk: confirmedAttack ? 'critical' : 'high'
   };
-  await diracCentralWritePersistentBanV146(req, res, action, method, threat).catch(() => null);
+  if (confirmedAttack) {
+    await diracCentralWritePersistentBanV146(req, res, action, method, threat).catch(() => null);
+  }
   const identityKey = String(ctx && ctx.identity && ctx.identity.key || '').trim();
-  if (identityKey && typeof writePersistentSecurityJson === 'function') {
+  if (shouldBlockIdentity && identityKey && typeof writePersistentSecurityJson === 'function') {
     const centralBanRecord = {
       type: 'central_guard_global_ban_v146',
       action: String(action || '').slice(0, 80),
@@ -29714,12 +29915,9 @@ async function diracCentralBanAndBlockV146(req, res, ctx, action, method, reason
       blocked_until_ms: blockedUntilMs,
       created_at: new Date(now).toISOString()
     };
-    if (threat.kind === 'central_guard_error' && ctx && ctx.centralErrorDebugV155) {
-      centralBanRecord.safe_debug = ctx.centralErrorDebugV155;
-    }
     await writePersistentSecurityJson(identityKey, centralBanRecord, blockedUntilMs, Math.ceil((blockedUntilMs - now) / 1000)).catch(() => false);
   }
-  diracCentralSetMemoryBanV146(ctx && ctx.identity, blockedUntilMs, reason);
+  if (shouldBlockIdentity) diracCentralSetMemoryBanV146(ctx && ctx.identity, blockedUntilMs, reason);
   if (ctx && ctx.action === DIRAC_RECOVERY_WORKER_ACTION && customerSecurityRecoveryWorkerDebugEnabledV158()) {
     try {
       if (res && typeof res.setHeader === 'function') {
