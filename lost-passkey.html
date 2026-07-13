@@ -251,6 +251,7 @@
       ]),
       vaultApiPath: '/api/health',
       vaultApiAction: 'lost_passkey_recovery_link_open',
+      htmlActionSignatureVersion: 'dirac-html-action-signature-v178',
       ed25519PublicKeysBase64: Object.freeze({
         'dirac-recovery-ed25519-2026-01': 'Q1j1EngkPw4Ec9ZB3cWhP91B/UhJt9GQVtCCoQxMIqk='
       }),
@@ -933,6 +934,52 @@
       return out;
     }
 
+
+    function randomB64Url32() {
+      var bytes = new Uint8Array(32);
+      crypto.getRandomValues(bytes);
+      var value = bytesToB64Url(bytes);
+      bytes.fill(0);
+      return value;
+    }
+
+    async function signHtmlActionRequest(fragment) {
+      var timestamp = Date.now();
+      var nonce = randomB64Url32();
+      var tokenBytes = utf8(fragment.token);
+      try {
+        var payload = {
+          action: CONFIG.vaultApiAction,
+          iat_ms: timestamp,
+          method: 'GET',
+          nonce: nonce,
+          origin: location.origin,
+          path: CONFIG.vaultApiPath,
+          query_format: 'json',
+          rid: fragment.rid,
+          token_sha256: await sha256B64Url(tokenBytes),
+          typ: CONFIG.htmlActionSignatureVersion
+        };
+        var key = await crypto.subtle.importKey(
+          'raw',
+          tokenBytes,
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['sign']
+        );
+        var signature = await crypto.subtle.sign('HMAC', key, utf8(canonical(payload)));
+        return {
+          'Accept': 'application/json',
+          'X-Dirac-Html-Signature-Version': CONFIG.htmlActionSignatureVersion,
+          'X-Dirac-Html-Signature-Timestamp': String(timestamp),
+          'X-Dirac-Html-Signature-Nonce': nonce,
+          'X-Dirac-Html-Signature': bytesToB64Url(new Uint8Array(signature))
+        };
+      } finally {
+        tokenBytes.fill(0);
+      }
+    }
+
     function readSafeResponseDiagnostics(response) {
       if (!response || !response.headers || typeof response.headers.get !== 'function') return null;
       return {
@@ -951,13 +998,14 @@
       url.searchParams.set('rid', fragment.rid);
       url.searchParams.set('token', fragment.token);
       url.searchParams.set('format', 'json');
+      var signedHeaders = await signHtmlActionRequest(fragment);
       var response = await fetch(url.toString(), {
         method: 'GET',
         credentials: 'omit',
         cache: 'no-store',
         redirect: 'error',
         referrerPolicy: 'no-referrer',
-        headers: { 'Accept': 'application/json' }
+        headers: signedHeaders
       });
       state.serverDiagnostics = readSafeResponseDiagnostics(response);
       var contentType = String(response.headers.get('content-type') || '').toLowerCase();
