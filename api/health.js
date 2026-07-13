@@ -6813,7 +6813,7 @@ function customerSecurityLostPasskeyLinkFlowDebugEnabledV175() {
 }
 
 function customerSecurityLostPasskeyLinkFlowDebugV175(stage, req, res, extra = {}) {
-  if (!customerSecurityLostPasskeyLinkFlowDebugEnabledV175()) return null;
+  const debugEnabled = customerSecurityLostPasskeyLinkFlowDebugEnabledV175();
   const parsed = customerSecurityLostPasskeyParseRecoveryLinkV162(req);
   const headers = req && req.headers || {};
   const safeExtra = {};
@@ -6843,14 +6843,28 @@ function customerSecurityLostPasskeyLinkFlowDebugV175(stage, req, res, extra = {
     time: diracNowIso()
   };
   try {
+    if (req && typeof req === 'object') {
+      req.__diracLostPasskeyLinkStageV184 = payload.stage;
+      req.__diracLostPasskeyLinkReasonV184 = safeExtra.reason ? String(safeExtra.reason).slice(0, 120) : '';
+    }
     if (res && typeof res.setHeader === 'function') {
       res.setHeader('X-Dirac-Recovery-Link-Debug', DIRAC_LOST_PASSKEY_LINK_FLOW_DEBUG_V175);
       res.setHeader('X-Dirac-Recovery-Link-Stage', payload.stage);
       if (safeExtra.reason) res.setHeader('X-Dirac-Recovery-Link-Reason', String(safeExtra.reason).slice(0, 120));
     }
   } catch (_) {}
-  try { console.error('[dirac-lost-passkey-link-flow-v175]', JSON.stringify(payload)); } catch (_) {}
+  if (debugEnabled) {
+    try { console.error('[dirac-lost-passkey-link-flow-v175]', JSON.stringify(payload)); } catch (_) {}
+  }
   return payload;
+}
+
+function customerSecurityLostPasskeySafeExceptionCodeV184(error) {
+  const name = String(error && error.name || '').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 48);
+  const code = String(error && error.code || '').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 64);
+  if (code) return code;
+  if (name) return name;
+  return 'UNCLASSIFIED_EXCEPTION';
 }
 
 function customerSecurityLostPasskeyLinkOpenArgon2DebugEnabledV174() {
@@ -7195,6 +7209,7 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 429);
   }
 
+  customerSecurityLostPasskeyLinkFlowDebugV175('vault_secret_check', req, res, { status: 200 });
   const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
   if (!vaultSecrets.ok) {
     customerSecurityLostPasskeyLinkFlowDebugV175('vault_env_rejected', req, res, { reason: String(vaultSecrets.code || 'vault_secret_invalid'), status: 503 });
@@ -7202,6 +7217,7 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   }
 
   const select = 'id,request_id,customer_id,auth_user_id,status,created_at,expires_at,used_at,revoked_at,locked_at,metadata,encrypted_file_key_text,file_key_wrap_nonce,file_key_wrap_tag,salt,file_sha256,aad_hash,server_signature';
+  customerSecurityLostPasskeyLinkFlowDebugV175('vault_row_read_start', req, res, { status: 200 });
   const result = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?select=' + encodeURIComponent(select) + '&request_id=eq.' + encodeURIComponent(parsed.requestId) + '&limit=1', { method: 'GET', auth: 'service' });
   if (!result.ok) {
     customerSecurityLostPasskeyLinkFlowDebugV175('vault_row_read_rejected', req, res, { reason: 'vault_row_read_failed', status: 404, db_status: Number(result.status || 0) });
@@ -7224,6 +7240,10 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   customerSecurityLostPasskeyLinkOpenArgon2DebugV174('argon2_verify_start', req, parsed.requestId, linkTokenHash, argon2VerifyStartedAt);
 
   let tokenOk = false;
+  customerSecurityLostPasskeyLinkFlowDebugV175('argon2_verify_start', req, res, {
+    status: 200,
+    argon2id_params: customerSecurityLostPasskeyArgon2EncodedParamsV171(linkTokenHash)
+  });
   try {
     tokenOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('link_token', parsed.linkToken, linkTokenHash, vaultSecrets.pepper, vaultSecrets.rootSecret);
   } catch (error) {
@@ -7302,7 +7322,7 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
   }
 
   if (parsed.api || responseFormat === 'json') {
-    customerSecurityLostPasskeyLinkFlowDebugV175('vault_json_allowed', req, res, { status: 200, response_format: responseFormat || 'api' });
+    customerSecurityLostPasskeyLinkFlowDebugV175('vault_json_build_start', req, res, { status: 200, response_format: responseFormat || 'api' });
     return customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata);
   }
 
@@ -26858,11 +26878,35 @@ module.exports = async function diracRecoveryWorkerWrapper(req, res) {
     return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_ONLY', message: 'Endpoint worker hanya menerima action internal recovery.' });
   }
   if (isRecoveryLinkRoute) {
-    const result = await customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
-    if (Number(res && res.statusCode || 200) >= 400) {
-      await diracCentralPersistRecoveryActionFailureV183(req, DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165, res.statusCode);
+    try {
+      const result = await customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
+      if (Number(res && res.statusCode || 200) >= 400) {
+        await diracCentralPersistRecoveryActionFailureV183(req, DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165, res.statusCode);
+      }
+      return result;
+    } catch (error) {
+      const exceptionCode = customerSecurityLostPasskeySafeExceptionCodeV184(error);
+      const lastStage = String(req && req.__diracLostPasskeyLinkStageV184 || 'recovery_link_handler_enter').slice(0, 80);
+      customerSecurityLostPasskeyLinkFlowDebugV175('recovery_link_handler_exception', req, res, {
+        reason: exceptionCode,
+        status: 500,
+        error_name: String(error && error.name || '').slice(0, 80),
+        error_code: String(error && error.code || '').slice(0, 80)
+      });
+      try {
+        res.setHeader('X-Dirac-Recovery-Link-Exception-Stage', lastStage);
+        res.setHeader('X-Dirac-Recovery-Link-Exception-Code', exceptionCode);
+        res.setHeader('Cache-Control', 'no-store');
+      } catch (_) {}
+      await diracCentralPersistRecoveryActionFailureV183(req, DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165, 500);
+      return res.status(500).json({
+        ok: false,
+        code: 'RECOVERY_LINK_INTERNAL_ERROR',
+        stage: lastStage,
+        reason: exceptionCode,
+        message: 'Layanan recovery belum dapat menyelesaikan permintaan.'
+      });
     }
-    return result;
   }
   const action = rawAction === DIRAC_RECOVERY_WORKER_ACTION ? DIRAC_RECOVERY_WORKER_ACTION : rawAction;
   if (action === DIRAC_RECOVERY_WORKER_ACTION) {
