@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-11F1/AnnZvNDB/4hzeZm4FBKNXJX7zHXoU+miN31JiK5HyQp+Y3LGMV0OJYTQ+WdJxeiOWLsZb+Scr1BEJY+ew=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-6ySCg65i8q3Kyorq/hUC7SWmLnO0bjTUWwkUVP0aly3604qVVSt87TEyO8C6YPy/b4dh9LGQuBe2yIS3pej0Pg=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -24,7 +24,7 @@
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-11F1/AnnZvNDB/4hzeZm4FBKNXJX7zHXoU+miN31JiK5HyQp+Y3LGMV0OJYTQ+WdJxeiOWLsZb+Scr1BEJY+ew=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-6ySCg65i8q3Kyorq/hUC7SWmLnO0bjTUWwkUVP0aly3604qVVSt87TEyO8C6YPy/b4dh9LGQuBe2yIS3pej0Pg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -486,7 +486,13 @@
           signed_envelope: safeDiagnosticText(state.serverDiagnostics.signed_envelope, 80),
           recovery_link_stage: safeDiagnosticText(state.serverDiagnostics.recovery_link_stage, 80),
           recovery_link_reason: safeDiagnosticText(state.serverDiagnostics.recovery_link_reason, 80),
-          central_guard: safeDiagnosticText(state.serverDiagnostics.central_guard, 80)
+          recovery_link_exception_stage: safeDiagnosticText(state.serverDiagnostics.recovery_link_exception_stage, 80),
+          recovery_link_exception_code: safeDiagnosticText(state.serverDiagnostics.recovery_link_exception_code, 80),
+          central_guard: safeDiagnosticText(state.serverDiagnostics.central_guard, 80),
+          response_code: safeDiagnosticText(state.serverDiagnostics.response_code, 80),
+          response_stage: safeDiagnosticText(state.serverDiagnostics.response_stage, 80),
+          response_reason: safeDiagnosticText(state.serverDiagnostics.response_reason, 80),
+          response_source: safeDiagnosticText(state.serverDiagnostics.response_source, 80)
         } : null
       };
       state.lastDiagnostic = safe;
@@ -1011,7 +1017,13 @@
         signed_envelope: safeDiagnosticText(response.headers.get('x-dirac-recovery-signed-envelope'), 80),
         recovery_link_stage: safeDiagnosticText(response.headers.get('x-dirac-recovery-link-stage'), 80),
         recovery_link_reason: safeDiagnosticText(response.headers.get('x-dirac-recovery-link-reason'), 80),
-        central_guard: safeDiagnosticText(response.headers.get('x-dirac-central-security-guard'), 80)
+        recovery_link_exception_stage: safeDiagnosticText(response.headers.get('x-dirac-recovery-link-exception-stage'), 80),
+        recovery_link_exception_code: safeDiagnosticText(response.headers.get('x-dirac-recovery-link-exception-code'), 80),
+        central_guard: safeDiagnosticText(response.headers.get('x-dirac-central-security-guard'), 80),
+        response_code: null,
+        response_stage: null,
+        response_reason: null,
+        response_source: null
       };
     }
 
@@ -1106,6 +1118,19 @@
               pageNonce = issuedPageNonce;
               await cancelResponseBody(response);
               continue;
+            }
+            var safeErrorBody = null;
+            if (contentType.indexOf('application/json') !== -1) {
+              try { safeErrorBody = await readJsonResponseLimited(response, 64 * 1024); } catch (_) { safeErrorBody = null; }
+            } else {
+              await cancelResponseBody(response);
+            }
+            if (!state.serverDiagnostics || typeof state.serverDiagnostics !== 'object') state.serverDiagnostics = {};
+            if (safeErrorBody && typeof safeErrorBody === 'object' && !Array.isArray(safeErrorBody)) {
+              state.serverDiagnostics.response_code = safeDiagnosticText(safeErrorBody.code, 80);
+              state.serverDiagnostics.response_stage = safeDiagnosticText(safeErrorBody.stage, 80);
+              state.serverDiagnostics.response_reason = safeDiagnosticText(safeErrorBody.reason, 80);
+              state.serverDiagnostics.response_source = safeDiagnosticText(safeErrorBody.source, 80);
             }
             var fetchError = new Error('VAULT_FETCH_FAILED');
             fetchError.httpStatus = Number(response.status || 0);
