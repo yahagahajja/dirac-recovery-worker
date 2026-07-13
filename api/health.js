@@ -26571,7 +26571,7 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
         attempt_count: nextAttempts,
         status: lock ? 'locked' : row.status,
         locked_at: lock ? diracNowIso() : row.locked_at || null,
-        metadata: { last_failed_verify_at: diracNowIso(), failed_verify_source: action, patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157 }
+        metadata: { ...metadata, last_failed_verify_at: diracNowIso(), failed_verify_source: action, patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157 }
       }
     }).catch(() => null);
     await customerSecurityRegisterFailedVerification(req, action, lock ? 'recovery_code_locked' : 'recovery_code_not_matched', access.customerId).catch(() => null);
@@ -30678,10 +30678,13 @@ const DIRAC_RECOVERY_HPKE_ARGON2_PROFILE_V159 = 'argon2id-salt-pepper-v1';
 const DIRAC_RECOVERY_HPKE_PURPOSE_V159 = 'lost_passkey_recovery';
 const DIRAC_RECOVERY_HPKE_ORIGIN_V159 = 'https://secure.diracgroup.store';
 const DIRAC_RECOVERY_HPKE_REPLAY_V159 = globalThis.__DIRAC_RECOVERY_HPKE_REPLAY_V159__ || new Map();
+const DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187 = globalThis.__DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187__ || { running: 0 };
 globalThis.__DIRAC_RECOVERY_HPKE_REPLAY_V159__ = DIRAC_RECOVERY_HPKE_REPLAY_V159;
+globalThis.__DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187__ = DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187;
 
 CUSTOMER_SECURITY_GUARDED_ACTIONS.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
 DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
+DIRAC_CENTRAL_ACTIVE_ACTIONS_V146.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
 DIRAC_CENTRAL_KNOWN_ACTION_INPUTS_V146.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
 
 const __diracRecoveryHpkePreviousContractV159 = diracCentralContractForActionV146;
@@ -30755,6 +30758,16 @@ function diracRecoveryHpkeEnvIntegerV159(name, minimum, maximum) {
   const value = Number(diracRecoveryHpkeEnvTextV159(name));
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) return 0;
   return value;
+}
+
+function diracRecoveryHpkeArgon2ClaimV187() {
+  if (DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187.running !== 0) return false;
+  DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187.running = 1;
+  return true;
+}
+
+function diracRecoveryHpkeArgon2ReleaseV187() {
+  DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187.running = 0;
 }
 
 function diracRecoveryHpkeAsciiV159(value, minLength, maxLength) {
@@ -30979,7 +30992,7 @@ function diracRecoveryHpkeValidatePlaintextV159(plaintext, requestId) {
   if (parsed.version !== DIRAC_RECOVERY_HPKE_PLAINTEXT_VERSION_V159) return { ok: false };
   if (customerSecurityNormalizeLostPasskeyRequestId(parsed.request_id) !== requestId) return { ok: false };
   const recoveryCode = customerSecurityNormalizeRecoveryCodeInput(parsed.recovery_code || '');
-  if (Array.from(recoveryCode).length !== LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157) return { ok: false };
+  if (Array.from(recoveryCode).length !== LOST_PASSKEY_RECOVERY_CODE_LENGTH_V157 || !/^[A-Za-z0-9_-]+$/.test(recoveryCode)) return { ok: false };
   return { ok: true, recoveryCode };
 }
 
@@ -30991,8 +31004,8 @@ function diracRecoveryHpkeEnvGuardV159() {
   const keyId = diracRecoveryHpkeAsciiV159(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_KEY_ID'), 1, 80);
   const pepper = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_PEPPER');
   const server1Url = diracRecoveryHpkeServer1UrlV159();
-  const minimumMemory = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB', 65536, 2097152);
-  const minimumTime = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST', 3, 10);
+  const minimumMemory = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB', 1024000, 1024000);
+  const minimumTime = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST', 4, 4);
   const server1OnlyEnv = [
     'DIRAC_RECOVERY_WORKER_URL',
     'DIRAC_RECOVERY_WORKER_CALLER',
@@ -31036,7 +31049,9 @@ function diracRecoveryHpkeArgon2PolicyV159(encodedHash, minimumMemory, minimumTi
   const parallelism = Number(matched[3]);
   return {
     ok: Number.isSafeInteger(memory) && Number.isSafeInteger(time) && Number.isSafeInteger(parallelism)
-      && memory >= minimumMemory && time >= minimumTime && parallelism >= 1 && parallelism <= 8,
+      && memory >= minimumMemory && memory <= 1024000
+      && time >= minimumTime && time <= 4
+      && parallelism >= 3 && parallelism <= 4,
     memory,
     time,
     parallelism
@@ -31384,6 +31399,7 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
   let plaintext = null;
   let recoveryCode = '';
   let consumeClaim = false;
+  let argon2GateClaimed = false;
   try {
     const request = await diracRecoveryHpkeReadRequestV159(envelope.requestId);
     if (!request.ok) return res.status(503).json({ ok: false, code: 'RECOVERY_REQUEST_STORAGE_UNAVAILABLE', message: 'Recovery request belum dapat diperiksa.' });
@@ -31410,6 +31426,10 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
       consumeClaim = true;
       return res.status(503).json({ ok: false, code: 'RECOVERY_ARGON2_POLICY_INVALID', message: 'Kebijakan verifikasi recovery tidak valid.' });
     }
+    if (!diracRecoveryHpkeArgon2ClaimV187()) {
+      return res.status(429).json({ ok: false, code: 'RECOVERY_ARGON2_BUSY', message: 'Verifikasi recovery sedang diproses. Silakan coba kembali.' });
+    }
+    argon2GateClaimed = true;
 
     const metadata = row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata) ? row.metadata : {};
     const bindings = metadata.binding_hashes && typeof metadata.binding_hashes === 'object' && !Array.isArray(metadata.binding_hashes)
@@ -31519,6 +31539,7 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
   } finally {
     recoveryCode = '';
     if (plaintext) plaintext.fill(0);
+    if (argon2GateClaimed) diracRecoveryHpkeArgon2ReleaseV187();
     if (consumeClaim) diracRecoveryHpkeConsumeEnvelopeV159(claim);
     else diracRecoveryHpkeReleaseEnvelopeV159(claim);
   }
