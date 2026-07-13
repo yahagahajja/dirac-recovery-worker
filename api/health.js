@@ -7130,7 +7130,9 @@ function customerSecurityLostPasskeyReturnVaultJsonV169(res, row, metadata) {
 }
 
 function customerSecurityLostPasskeyLinkRateKeyV162(req, requestId) {
-  const ip = typeof getLoginSecurityIp === 'function' ? getLoginSecurityIp(req || {}) : String(req && req.headers && (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) || 'unknown').split(',')[0].trim();
+  const ip = typeof diracCentralTrustedClientIpV183 === 'function'
+    ? diracCentralTrustedClientIpV183(req || {})
+    : String(req && req.socket && req.socket.remoteAddress || 'unknown').trim();
   const ua = typeof requestUserAgent === 'function' ? requestUserAgent(req || {}) : String(req && req.headers && req.headers['user-agent'] || '');
   return customerSecurityLostPasskeySha256HexV157(['lost-passkey-link-v162', ip, String(ua || '').slice(0, 160), String(requestId || '')].join('|'));
 }
@@ -26820,6 +26822,31 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
   return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_TASK_INVALID', message: 'Worker task recovery tidak valid.' });
 }
 
+async function diracCentralPersistRecoveryActionFailureV183(req, action, statusCode) {
+  const ctx = diracCentralCurrentContextV149();
+  if (!ctx || !diracCentralIsServer2RecoveryOnlyActionV166(action)) return false;
+  const now = Date.now();
+  const blockedUntilMs = now + diracCentralBlockMsV146();
+  const reason = 'recovery_action_http_' + String(Number(statusCode || 500));
+  const threat = { detected: true, kind: reason, source: DIRAC_CENTRAL_SECURITY_GUARD_V146, risk: 'critical' };
+  await diracCentralWritePersistentBanV146(req, null, action, String(req && req.method || 'GET').toUpperCase(), threat).catch(() => null);
+  const identityKey = String(ctx.identity && ctx.identity.key || '').trim();
+  if (identityKey && typeof writePersistentSecurityJson === 'function') {
+    await writePersistentSecurityJson(identityKey, {
+      type: 'recovery_action_global_ban_v183',
+      action: String(action || '').slice(0, 80),
+      reason,
+      status_code: Number(statusCode || 500),
+      source: DIRAC_CENTRAL_SECURITY_GUARD_V146,
+      risk: 'critical',
+      blocked_until_ms: blockedUntilMs,
+      created_at: new Date(now).toISOString()
+    }, blockedUntilMs, Math.ceil((blockedUntilMs - now) / 1000)).catch(() => false);
+  }
+  diracCentralSetMemoryBanV146(ctx.identity, blockedUntilMs, reason);
+  return true;
+}
+
 const __diracRecoveryWorkerPreviousHandler = module.exports;
 module.exports = async function diracRecoveryWorkerWrapper(req, res) {
   const rawAction = String(req && req.query && req.query.action || '').trim().toLowerCase();
@@ -26831,11 +26858,19 @@ module.exports = async function diracRecoveryWorkerWrapper(req, res) {
     return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_ONLY', message: 'Endpoint worker hanya menerima action internal recovery.' });
   }
   if (isRecoveryLinkRoute) {
-    return customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
+    const result = await customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res);
+    if (Number(res && res.statusCode || 200) >= 400) {
+      await diracCentralPersistRecoveryActionFailureV183(req, DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165, res.statusCode);
+    }
+    return result;
   }
   const action = rawAction === DIRAC_RECOVERY_WORKER_ACTION ? DIRAC_RECOVERY_WORKER_ACTION : rawAction;
   if (action === DIRAC_RECOVERY_WORKER_ACTION) {
-    return customerSecurityHandleRecoveryWorkerGenerate(req, res, action);
+    const result = await customerSecurityHandleRecoveryWorkerGenerate(req, res, action);
+    if (Number(res && res.statusCode || 200) >= 400) {
+      await diracCentralPersistRecoveryActionFailureV183(req, action, res.statusCode);
+    }
+    return result;
   }
   if (
     customerSecurityRecoveryWorkerLocalEnabled()
@@ -27268,6 +27303,13 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     }
     diracCentralStampV146(ctx, 'vercel2_action_checked');
 
+    const vercel2EnvPartition = diracCentralVercel2RecoveryEnvPartitionGuardV183(action);
+    if (!vercel2EnvPartition.ok) {
+      if (action === DIRAC_RECOVERY_WORKER_ACTION) diracCentralRecoveryWorkerGuardDebugV158(req, ctx, 'vercel2_env_partition', vercel2EnvPartition.reason);
+      return await diracCentralBanAndBlockV146(req, res, ctx, action, method, vercel2EnvPartition.reason);
+    }
+    diracCentralStampV146(ctx, 'vercel2_env_partition_checked');
+
     const server2SecureHost = diracCentralServer2SecureHostGuardV169(req, ctx);
     if (!server2SecureHost.ok) {
       return await diracCentralBanAndBlockV146(req, res, ctx, action, method, server2SecureHost.reason);
@@ -27597,14 +27639,27 @@ function diracCentralSanitizeOutputV146(value, depth) {
   return value;
 }
 
+function diracCentralTrustedClientIpV183(req) {
+  const headers = req && req.headers || {};
+  const rawForwarded = String(headers['x-forwarded-for'] || '').trim();
+  if (rawForwarded) {
+    const chain = rawForwarded.split(',').map((value) => value.trim()).filter(Boolean);
+    const candidate = chain.length ? chain[chain.length - 1] : '';
+    if (/^[0-9a-f:.]{3,64}$/i.test(candidate)) return candidate;
+  }
+  const realIp = String(headers['x-real-ip'] || '').trim();
+  if (/^[0-9a-f:.]{3,64}$/i.test(realIp)) return realIp;
+  const socketIp = String(req && req.socket && req.socket.remoteAddress || '').trim();
+  if (/^[0-9a-f:.]{3,64}$/i.test(socketIp)) return socketIp;
+  return 'unknown';
+}
+
 async function diracCentralBuildIdentityV146(req) {
   const headers = req && req.headers || {};
   const cookies = typeof parseCookies === 'function' ? parseCookies(req) : {};
   const origin = diracCentralNormalizeOriginV146(headers.origin || headers.referer || headers.referrer || '');
   const ua = String(headers['user-agent'] || '').slice(0, 500);
-  const ip = typeof getLoginSecurityIp === 'function'
-    ? getLoginSecurityIp(req || {})
-    : String(headers['x-forwarded-for'] || headers['x-real-ip'] || '').split(',')[0].trim();
+  const ip = diracCentralTrustedClientIpV183(req || {});
   const deviceHint = [
     headers['sec-ch-ua'],
     headers['sec-ch-ua-platform'],
@@ -27779,11 +27834,20 @@ function diracCentralIsServer2RecoveryOnlyActionV166(action) {
 function diracCentralServer2SecureHostGuardV169(req, ctx) {
   if (!ctx || !diracCentralIsServer2RecoveryOnlyActionV166(ctx.action)) return { ok: true };
   const headers = req && req.headers || {};
-  const forwardedHost = String(headers['x-forwarded-host'] || '').split(',')[0].trim().toLowerCase();
-  const host = (forwardedHost || String(headers.host || '').split(',')[0].trim()).toLowerCase();
-  const forwardedProto = String(headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
-  if (host !== 'secure.diracgroup.store') return { ok: false, reason: 'server2_secure_host_required' };
-  if (forwardedProto && forwardedProto !== 'https') return { ok: false, reason: 'server2_https_required' };
+  const requiredHost = 'secure.diracgroup.store';
+  const host = diracCentralNormalizeHostV146(headers.host || '');
+  const forwardedHostRaw = String(headers['x-forwarded-host'] || '').trim();
+  const forwardedHosts = forwardedHostRaw ? forwardedHostRaw.split(',').map((value) => diracCentralNormalizeHostV146(value)).filter(Boolean) : [];
+  const forwardedProtoRaw = String(headers['x-forwarded-proto'] || '').trim().toLowerCase();
+  const forwardedProtos = forwardedProtoRaw ? forwardedProtoRaw.split(',').map((value) => value.trim()).filter(Boolean) : [];
+
+  if (host !== requiredHost) return { ok: false, reason: 'server2_secure_host_required' };
+  if (forwardedHostRaw && (!forwardedHosts.length || forwardedHosts.some((value) => value !== requiredHost))) {
+    return { ok: false, reason: 'server2_forwarded_host_mismatch' };
+  }
+  if (forwardedProtoRaw && (!forwardedProtos.length || forwardedProtos.some((value) => value !== 'https'))) {
+    return { ok: false, reason: 'server2_https_required' };
+  }
   return { ok: true };
 }
 
@@ -27810,6 +27874,36 @@ function diracCentralEnvTrueV150(name) {
   return /^(1|true|yes|on|enabled|enable)$/i.test(String(process.env[name] || '').trim());
 }
 
+// Narrow Vercel-2 receiver partition for Lost Passkey only.
+// Sender-only ENV must stay on Vercel 1; receiver-only ENV must stay on Vercel 2.
+// DOMAIN_COOKIE_SAMESITE is intentionally not restricted here.
+function diracCentralVercel2RecoveryEnvPartitionGuardV183(action) {
+  if (!diracCentralIsServer2RecoveryOnlyActionV166(action)) return { ok: true };
+
+  const role = diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE')
+    || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE');
+  const enabled = diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')
+    || diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED');
+  if (role !== 'vercel2') return { ok: false, reason: 'vercel2_env_role_invalid' };
+  if (!enabled) return { ok: false, reason: 'vercel2_env_actions_disabled' };
+
+  if (String(process.env.DIRAC_RECOVERY_WORKER_URL || '').trim()) {
+    return { ok: false, reason: 'vercel2_sender_url_env_forbidden' };
+  }
+  if (String(process.env.DIRAC_RECOVERY_WORKER_CALLER || '').trim()) {
+    return { ok: false, reason: 'vercel2_sender_caller_env_forbidden' };
+  }
+
+  const secret = String(process.env.DIRAC_RECOVERY_WORKER_SECRET || '');
+  const allowedCaller = String(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER || '').trim();
+  if (Buffer.byteLength(secret, 'utf8') < 64) return { ok: false, reason: 'vercel2_worker_secret_invalid' };
+  if (!customerSecurityRecoveryWorkerAsciiToken(allowedCaller)) return { ok: false, reason: 'vercel2_allowed_caller_invalid' };
+  if (!String(LOGIN_SECURITY_PERSIST_TABLE || '').trim()) return { ok: false, reason: 'vercel2_persistent_security_table_required' };
+
+  try { diracCentralRootSecretV146(); } catch (_) { return { ok: false, reason: 'vercel2_root_secret_invalid' }; }
+  return { ok: true };
+}
+
 function diracCentralStampV146(ctx, name) {
   if (!ctx) return;
   if (!ctx.guardPassport || typeof ctx.guardPassport !== 'object') ctx.guardPassport = Object.create(null);
@@ -27825,30 +27919,31 @@ function diracCentralIntegrityVerifierV146(ctx) {
     'action_format_checked',
     'alias_checked',
     'whitelist_checked',
+    'vercel2_action_checked',
+    'vercel2_env_partition_checked',
+    'server2_secure_host_checked',
     'classification_checked',
     'rate_checked',
+    'server_guard_checked',
+    'html_action_signature_checked',
+    'browser_auth_checked',
+    'csrf_checked',
+    'page_nonce_checked',
+    'browser_signal_checked',
+    'device_checked',
+    'admin_checked',
+    'public_read_checked',
     'body_checked',
     'light_checked',
     'contract_checked',
+    'a2f_signature_checked',
+    'sample_checked',
+    'threat_checked',
+    'zeroday_checked',
     'idor_checked',
     'circuit_checked',
-    'mfa_checked',
-    'vercel2_action_checked',
-    'server2_secure_host_checked'
+    'mfa_checked'
   ];
-  if (ctx && ctx.classification === 'server') required.push('server_guard_checked');
-  if (ctx && ctx.classification === 'public_read') required.push('public_read_checked', 'sample_checked', 'threat_checked', 'zeroday_checked');
-  const recoveryFormat = String(ctx && ctx.req && ctx.req.query && ctx.req.query.format || '').trim().toLowerCase();
-  const signedRecoveryFetch = ctx && ctx.classification === 'recovery_link' && ctx.method !== 'HEAD' && recoveryFormat !== 'redirect';
-  if (ctx && (ctx.classification === 'browser' || ctx.classification === 'admin' || signedRecoveryFetch || DIRAC_CENTRAL_SENSITIVE_ACTIONS_V146.has(ctx.action))) {
-    required.push('browser_auth_checked', 'csrf_checked', 'page_nonce_checked', 'browser_signal_checked', 'device_checked');
-  }
-  if (ctx && ctx.classification === 'recovery_link') required.push('html_action_signature_checked');
-  if (ctx && ctx.isA2FAction) required.push('a2f_signature_checked');
-  if (ctx && ctx.classification === 'admin') required.push('admin_checked');
-  if (ctx && !ctx.skipHeavyScan && ctx.classification !== 'server' && ctx.classification !== 'public_read') {
-    required.push('sample_checked', 'threat_checked', 'zeroday_checked');
-  }
   for (const stamp of required) {
     if (!pass[stamp]) return { ok: false, reason: 'central_guard_integrity_missing_' + stamp };
   }
@@ -27880,7 +27975,40 @@ async function diracCentralServerToServerGuardV146(req, res, ctx) {
   return { ok: true };
 }
 
-function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
+async function diracCentralRecoveryWorkerClaimNonceV183(caller, nonce, usedUntilMs) {
+  const table = String(LOGIN_SECURITY_PERSIST_TABLE || '').trim();
+  if (!table) return { ok: false, reason: 'recovery_worker_nonce_table_missing' };
+  const nonceDigest = customerSecurityLostPasskeySha256HexV157(String(caller || '') + ':' + String(nonce || ''));
+  const securityKey = 'recovery-worker-nonce-v183:' + nonceDigest;
+  const now = Date.now();
+  const expiresAtMs = Math.max(now + 60_000, Number(usedUntilMs || 0));
+  const payload = [{
+    security_key: securityKey,
+    record_json: {
+      type: 'recovery_worker_nonce_claim_v183',
+      caller_hash: customerSecurityLostPasskeySha256HexV157(String(caller || '')),
+      nonce_hash: customerSecurityLostPasskeySha256HexV157(String(nonce || '')),
+      claimed_at_ms: now,
+      used_until_ms: expiresAtMs
+    },
+    blocked_until_ms: expiresAtMs,
+    updated_at: new Date(now).toISOString(),
+    expires_at: new Date(expiresAtMs + 24 * 60 * 60 * 1000).toISOString()
+  }];
+  const result = await supabaseFetch('/rest/v1/' + encodeURIComponent(table) + '?on_conflict=security_key', {
+    method: 'POST',
+    auth: 'service',
+    prefer: 'resolution=ignore-duplicates,return=representation',
+    body: payload
+  }).catch(() => null);
+  if (!result || !result.ok) return { ok: false, reason: 'recovery_worker_nonce_persist_failed' };
+  if (!Array.isArray(result.data) || !result.data.some((row) => String(row && row.security_key || '') === securityKey)) {
+    return { ok: false, reason: 'recovery_worker_nonce_replay' };
+  }
+  return { ok: true, key: securityKey };
+}
+
+async function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
   if (!customerSecurityRecoveryWorkerLocalEnabled()) {
     return diracCentralRecoveryWorkerGuardFailV158(req, ctx, 'env_local_worker', 'recovery_worker_not_enabled');
   }
@@ -27933,7 +28061,12 @@ function diracCentralRecoveryWorkerSignatureGuardV146(req, ctx) {
       signature_length: String(signature || '').length
     });
   }
-  DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.set(nonceKey, now + customerSecurityRecoveryWorkerClockSkewMs() + 60000);
+  const usedUntilMs = now + customerSecurityRecoveryWorkerClockSkewMs() + 60000;
+  const persistentNonce = await diracCentralRecoveryWorkerClaimNonceV183(caller, nonce, usedUntilMs);
+  if (!persistentNonce.ok) {
+    return diracCentralRecoveryWorkerGuardFailV158(req, ctx, 'body_nonce_persistent', persistentNonce.reason || 'recovery_worker_nonce_persist_failed');
+  }
+  DIRAC_CENTRAL_RECOVERY_WORKER_NONCES_V157.set(nonceKey, usedUntilMs);
   req.__diracRecoveryWorkerVerified = true;
   if (customerSecurityRecoveryWorkerDebugEnabledV158()) {
     diracCentralRecoveryWorkerGuardDebugV158(req, ctx, 'passed', 'recovery_worker_signature_valid', {
