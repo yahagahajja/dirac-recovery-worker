@@ -18024,26 +18024,33 @@ function diracUltraInstallSafeJsonInterceptor(res) {
   } catch (_) {}
 }
 
-function diracUltraRedactPayload(payload, depth = 0, parentKey = '') {
+function diracUltraRedactPayload(payload, depth = 0, parentKey = '', fieldPath = '') {
   if (depth > 10) return '[redacted-depth]';
   if (payload === null || payload === undefined) return payload;
 
   const parent = String(parentKey || '').toLowerCase();
+  const path = String(fieldPath || '').toLowerCase();
   if (typeof payload === 'string') {
     // HOTFIX: setupToken/mfaSetupToken adalah challenge sementara A2F/Passkey
     // yang memang WAJIB sampai ke browser. Jangan dianggap JWT secret, karena
     // kalau diredact browser mengirim token palsu dan muncul "Challenge Passkey tidak valid".
     if (diracUltraIsSafeChallengeResponseKey(parent)) return payload;
+    // Preserve only the three byte-exact, canonical Base64URL fields of the
+    // already-encrypted recovery response. The generic secret-pattern redactor
+    // can otherwise replace random "pk/rk/sk" substrings inside ciphertext.
+    // Malformed/non-canonical values are NOT preserved and remain fail-closed.
+    if (diracUltraIsCanonicalSealedRecoveryField(path, payload)) return payload;
     return diracUltraRedactString(payload);
   }
 
   if (typeof payload !== 'object') return payload;
-  if (Array.isArray(payload)) return payload.map((item) => diracUltraRedactPayload(item, depth + 1, parentKey));
+  if (Array.isArray(payload)) return payload.map((item) => diracUltraRedactPayload(item, depth + 1, parentKey, fieldPath));
 
   const out = {};
   for (const [key, value] of Object.entries(payload)) {
     const cleanKey = String(key || '');
     const lower = cleanKey.toLowerCase();
+    const childPath = path ? path + '.' + lower : lower;
 
     if (diracUltraIsSafeChallengeResponseKey(lower)) {
       out[cleanKey] = value;
@@ -18058,9 +18065,33 @@ function diracUltraRedactPayload(payload, depth = 0, parentKey = '') {
       out[cleanKey] = '[redacted]';
       continue;
     }
-    out[cleanKey] = diracUltraRedactPayload(value, depth + 1, cleanKey);
+    out[cleanKey] = diracUltraRedactPayload(value, depth + 1, cleanKey, childPath);
   }
   return out;
+}
+
+function diracUltraIsCanonicalSealedRecoveryField(fieldPath, value) {
+  const path = String(fieldPath || '').toLowerCase();
+  const expectedLength = path === 'sealed_recovery.aead_nonce' ? 12
+    : path === 'sealed_recovery.transcript_sha512' ? 64
+    : path === 'sealed_recovery.ciphertext' ? null
+    : undefined;
+  if (expectedLength === undefined) return false;
+
+  const text = String(value == null ? '' : value);
+  if (!text || text.length > 64 * 1024 || !/^[A-Za-z0-9_-]+$/.test(text) || text.length % 4 === 1) return false;
+
+  let decoded = null;
+  try {
+    decoded = Buffer.from(text, 'base64url');
+    if (decoded.toString('base64url') !== text) return false;
+    if (expectedLength !== null) return decoded.length === expectedLength;
+    return decoded.length >= 17 && decoded.length <= 64 * 1024;
+  } catch (_) {
+    return false;
+  } finally {
+    try { if (decoded) decoded.fill(0); } catch (_) {}
+  }
 }
 
 function diracUltraIsSafeChallengeResponseKey(key) {
