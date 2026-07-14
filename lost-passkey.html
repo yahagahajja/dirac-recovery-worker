@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-6ySCg65i8q3Kyorq/hUC7SWmLnO0bjTUWwkUVP0aly3604qVVSt87TEyO8C6YPy/b4dh9LGQuBe2yIS3pej0Pg=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-adKH26Mdk6krOrpI5fwhQLIaXNU30yU1nWCMTRG2D7Ik+M2dwygXddmguM9Re4ophk+WyllTK4mp3M420NkA8w=='; worker-src 'none'; form-action 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -23,8 +23,8 @@
     X-Frame-Options: DENY
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Resource-Policy: same-origin
-    Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=()
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'self' 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-6ySCg65i8q3Kyorq/hUC7SWmLnO0bjTUWwkUVP0aly3604qVVSt87TEyO8C6YPy/b4dh9LGQuBe2yIS3pej0Pg=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-adKH26Mdk6krOrpI5fwhQLIaXNU30yU1nWCMTRG2D7Ik+M2dwygXddmguM9Re4ophk+WyllTK4mp3M420NkA8w=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -214,11 +214,11 @@
 
       <section id="resultBox" class="result" aria-labelledby="resultTitle">
         <h2 id="resultTitle">Kode pemulihan siap</h2>
-        <p class="danger">Kode sengaja tidak ditampilkan di layar. Tekan tombol di bawah tepat satu kali, lalu segera tempelkan kode pada layanan resmi untuk membuat passkey baru.</p>
+        <p class="danger">Kode sengaja tidak ditampilkan di layar. Saat disalin, kode masuk ke clipboard sistem dan dapat dibaca aplikasi lain. Tekan tombol tepat satu kali, lalu segera tempelkan kode pada layanan resmi.</p>
         <div class="row">
           <button id="copyRecoveryButton" class="primary" type="button">Salin kode pemulihan — hanya 1×</button>
         </div>
-        <p id="copyState" class="small" role="status" aria-live="polite">Setelah penyalinan berhasil, seluruh buffer dan referensi data pemulihan di halaman ini langsung dibersihkan.</p>
+        <p id="copyState" class="small" role="status" aria-live="polite">Setelah penyalinan berhasil, halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik. Browser tidak menjamin penghapusan clipboard berhasil.</p>
       </section>
 
       <h2>Proses aman</h2>
@@ -300,6 +300,7 @@
       sensitiveBuffers: [],
       recoveryMaterialBytes: null,
       recoveryCopied: false,
+      clipboardClearTimer: null,
       debugStage: 'init',
       serverDiagnostics: null,
       lastDiagnostic: null
@@ -745,7 +746,7 @@
         try { el.resultBox.classList.remove('show'); } catch (_) {}
         try { el.copyRecoveryButton.disabled = false; } catch (_) {}
         try { el.copyRecoveryButton.textContent = 'Salin kode pemulihan — hanya 1×'; } catch (_) {}
-        try { el.copyState.textContent = 'Setelah penyalinan berhasil, seluruh buffer dan referensi data pemulihan di halaman ini langsung dibersihkan.'; } catch (_) {}
+        try { el.copyState.textContent = 'Setelah penyalinan berhasil, halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik. Browser tidak menjamin penghapusan clipboard berhasil.'; } catch (_) {}
       }
     }
 
@@ -811,6 +812,19 @@
       return legacyCopyText(text);
     }
 
+    function clearClipboardBestEffort() {
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return Promise.resolve(false);
+      return navigator.clipboard.writeText('').then(function () { return true; }, function () { return false; });
+    }
+
+    function scheduleClipboardClearAttempt() {
+      try { if (state.clipboardClearTimer) clearTimeout(state.clipboardClearTimer); } catch (_) {}
+      state.clipboardClearTimer = setTimeout(function () {
+        state.clipboardClearTimer = null;
+        clearClipboardBestEffort().catch(function () {});
+      }, 30000);
+    }
+
     async function copyRecoveryMaterialOnce() {
       if (state.recoveryCopied || !state.recoveryMaterialBytes || !state.recoveryMaterialBytes.byteLength) return;
       assertNotExpired();
@@ -830,10 +844,11 @@
         return;
       }
       clearAllRecoveryReferencesAfterCopy();
+      scheduleClipboardClearAttempt();
       try { history.replaceState(null, document.title, location.pathname + '#completed'); } catch (_) {}
       el.copyRecoveryButton.disabled = true;
       el.copyRecoveryButton.textContent = 'Kode sudah disalin dan memori dibersihkan';
-      el.copyState.textContent = 'Penyalinan satu kali berhasil. Data pemulihan di halaman telah dihapus. Tempelkan kode sekarang pada layanan resmi; halaman ini tidak dapat menyalinnya lagi.';
+      el.copyState.textContent = 'Penyalinan berhasil. Tempelkan kode sekarang pada layanan resmi. Clipboard akan dicoba dikosongkan setelah 30 detik, tetapi browser tidak menjamin penghapusan berhasil.';
       el.resultBox.classList.add('show');
       setLockNotice(false);
       setProcessStep(3);
@@ -869,6 +884,14 @@
       if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') throw new Error('HTTPS_REQUIRED');
     }
 
+    function assertTopLevelContext() {
+      if (window.top !== window.self) throw new Error('FRAME_CONTEXT_INVALID');
+    }
+
+    function assertNoControllingServiceWorker() {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) throw new Error('SERVICE_WORKER_CONTROLLED');
+    }
+
     function assertOfficialOrigin() {
       if (CONFIG.officialServer2Origins.indexOf(location.origin) === -1) {
         throw new Error('ORIGIN_NOT_ALLOWED');
@@ -897,7 +920,7 @@
     }
 
     function fromUtf8(bytes) {
-      return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
     }
 
     function normalizeSecret(value) {
@@ -1397,23 +1420,15 @@
     }
 
     function verifyInnerPayload(plaintextBytes) {
-      var text = fromUtf8(plaintextBytes).trim();
-      if (!text) throw new Error('PLAINTEXT_EMPTY');
-      try {
-        var parsed = JSON.parse(text);
-        if (parsed && typeof parsed === 'object') {
-          if (parsed.magic && parsed.magic !== 'DIRAC_LOST_PASSKEY_RECOVERY') throw new Error('INNER_MAGIC_INVALID');
-          if (parsed.purpose && parsed.purpose !== 'lost_passkey_recovery') throw new Error('INNER_PURPOSE_INVALID');
-          if (parsed.request_id && parsed.request_id !== state.fragment.rid) throw new Error('INNER_RID_INVALID');
-          if (parsed.expires_at && Date.parse(parsed.expires_at) <= Date.now()) throw new Error('INNER_EXPIRED');
-          var parsedMaterial = parsed.recovery_material || parsed.recovery_code || parsed.code || text;
-          return rememberBuffer(utf8(String(parsedMaterial)));
-        }
-      } catch (error) {
-        if (/^INNER_/.test(String(error && error.message || ''))) throw error;
+      if (!(plaintextBytes instanceof Uint8Array) || plaintextBytes.byteLength !== 1200) {
+        throw new Error('INNER_RECOVERY_LENGTH_INVALID');
       }
-      if (text.length < 16 || text.length > 5000) throw new Error('PLAINTEXT_SHAPE_INVALID');
-      return rememberBuffer(utf8(text));
+      for (var i = 0; i < plaintextBytes.byteLength; i += 1) {
+        var byte = plaintextBytes[i];
+        var valid = (byte >= 48 && byte <= 57) || (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) || byte === 45 || byte === 95;
+        if (!valid) throw new Error('INNER_RECOVERY_ALPHABET_INVALID');
+      }
+      return rememberBuffer(plaintextBytes.slice());
     }
 
     async function decryptSubmit(event) {
@@ -1452,24 +1467,33 @@
           return hkdfSha256(argonRaw, prepared.saltBytes, bundle.hkdf_info, 32);
         });
 
-        var plaintext = await runLoadingStage('Membuka vault AES-GCM', async function () {
-          try {
-            return await decryptAesGcm(aesKey, prepared.nonceBytes, prepared.ciphertextBytes, prepared.tagBytes, prepared.aadBytes);
-          } catch (_) {
-            throw new Error('AES_GCM_DECRYPT_FAILED');
-          }
-        });
+        var plaintext = null;
+        var recoveryMaterialBytes = null;
+        try {
+          plaintext = await runLoadingStage('Membuka vault AES-GCM', async function () {
+            try {
+              return await decryptAesGcm(aesKey, prepared.nonceBytes, prepared.ciphertextBytes, prepared.tagBytes, prepared.aadBytes);
+            } catch (_) {
+              throw new Error('AES_GCM_DECRYPT_FAILED');
+            }
+          });
 
-        var recoveryMaterialBytes = await runLoadingStage('Memvalidasi hasil pemulihan', function () {
-          return verifyInnerPayload(plaintext);
-        });
+          recoveryMaterialBytes = await runLoadingStage('Memvalidasi hasil pemulihan', function () {
+            return verifyInnerPayload(plaintext);
+          });
+        } finally {
+          try { if (plaintext) plaintext.fill(0); } catch (_) {}
+          try { if (aesKey) aesKey.fill(0); } catch (_) {}
+          plaintext = null;
+          aesKey = null;
+        }
 
         await runLoadingStage('Menyiapkan tombol salin satu kali', function () {
           keepOnlyRecoveryBuffer(recoveryMaterialBytes);
           state.recoveryCopied = false;
           el.copyRecoveryButton.disabled = false;
           el.copyRecoveryButton.textContent = 'Salin kode pemulihan — hanya 1×';
-          el.copyState.textContent = 'Kode tidak ditampilkan. Tekan tombol satu kali; setelah berhasil disalin, data di halaman langsung dibersihkan.';
+          el.copyState.textContent = 'Kode tidak ditampilkan. Saat disalin, kode masuk ke clipboard sistem. Tempelkan segera; halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik.';
           el.resultBox.classList.add('show');
         });
 
@@ -1492,6 +1516,10 @@
 
     async function bootstrap() {
       await runLoadingStage('Memeriksa keamanan halaman', function () {
+        setDebugStage('top_level_context_check');
+        assertTopLevelContext();
+        setDebugStage('service_worker_controller_check');
+        assertNoControllingServiceWorker();
         setDebugStage('storage_hardening');
         hardenStorageAccess();
         setDebugStage('secure_context_check');
@@ -1561,6 +1589,22 @@
     window.addEventListener('offline', function () {
       if (state.offlineDecryptRequired && !state.permanentLocked) updateOfflineDecryptState();
     }, { once: false });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden' && state.recoveryMaterialBytes) renderLockedState();
+    }, { once: false });
+    document.addEventListener('freeze', function () {
+      if (state.recoveryMaterialBytes) renderLockedState();
+    }, { once: false });
+    window.addEventListener('pageshow', function (event) {
+      if (event && event.persisted) renderLockedState();
+    }, { once: false });
+    try {
+      if (navigator.serviceWorker && typeof navigator.serviceWorker.addEventListener === 'function') {
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (!state.permanentLocked) renderLockedState();
+        });
+      }
+    } catch (_) {}
 
     bootstrap().catch(function (error) {
       recoveryDebug('bootstrap_rejected', error);
