@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-adKH26Mdk6krOrpI5fwhQLIaXNU30yU1nWCMTRG2D7Ik+M2dwygXddmguM9Re4ophk+WyllTK4mp3M420NkA8w=='; worker-src 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-L6JPibYvE8UIijKJb4mtgT/Uh3t41hi6Rt0uVeid/+32VxRqIsKeORKHDiw9x4zslzen8LjhdtmP+OhLbScFyQ=='; script-src-attr 'none'; worker-src 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -22,9 +22,14 @@
     X-Content-Type-Options: nosniff
     X-Frame-Options: DENY
     Cross-Origin-Opener-Policy: same-origin
+    Cross-Origin-Embedder-Policy: require-corp
     Cross-Origin-Resource-Policy: same-origin
+    Origin-Agent-Cluster: ?1
+    Strict-Transport-Security: max-age=63072000
+    X-DNS-Prefetch-Control: off
+    X-Permitted-Cross-Domain-Policies: none
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src 'self' data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-adKH26Mdk6krOrpI5fwhQLIaXNU30yU1nWCMTRG2D7Ik+M2dwygXddmguM9Re4ophk+WyllTK4mp3M420NkA8w=='; worker-src 'none'; frame-ancestors 'none'; form-action 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-L6JPibYvE8UIijKJb4mtgT/Uh3t41hi6Rt0uVeid/+32VxRqIsKeORKHDiw9x4zslzen8LjhdtmP+OhLbScFyQ=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -867,16 +872,27 @@
 
     function disableAllNetwork() {
       if (state.networkLocked) return;
-      state.networkLocked = true;
       var blocked = function () { return Promise.reject(new Error('DIRAC_NETWORK_DISABLED')); };
       var blockedCtor = function () { throw new Error('DIRAC_NETWORK_DISABLED'); };
+      var blockedBeacon = function () { return false; };
       try { window.fetch = blocked; } catch (_) {}
+      try { Object.defineProperty(window, 'fetch', { configurable: false, writable: false, value: blocked }); } catch (_) {}
       try { window.XMLHttpRequest = blockedCtor; } catch (_) {}
+      try { Object.defineProperty(window, 'XMLHttpRequest', { configurable: false, writable: false, value: blockedCtor }); } catch (_) {}
       try { window.WebSocket = blockedCtor; } catch (_) {}
       try { window.EventSource = blockedCtor; } catch (_) {}
-      try { navigator.sendBeacon = function () { return false; }; } catch (_) {}
+      try { navigator.sendBeacon = blockedBeacon; } catch (_) {}
+      try { Object.defineProperty(navigator, 'sendBeacon', { configurable: false, writable: false, value: blockedBeacon }); } catch (_) {}
       try { window.Worker = blockedCtor; } catch (_) {}
       try { window.SharedWorker = blockedCtor; } catch (_) {}
+      if (typeof window.fetch === 'function' && window.fetch !== blocked) throw new Error('DIRAC_NETWORK_LOCK_FAILED');
+      if (typeof window.XMLHttpRequest === 'function' && window.XMLHttpRequest !== blockedCtor) throw new Error('DIRAC_NETWORK_LOCK_FAILED');
+      if (typeof window.WebSocket === 'function' && window.WebSocket !== blockedCtor) throw new Error('DIRAC_NETWORK_LOCK_FAILED');
+      if (typeof window.EventSource === 'function' && window.EventSource !== blockedCtor) throw new Error('DIRAC_NETWORK_LOCK_FAILED');
+      if (typeof window.Worker === 'function' && window.Worker !== blockedCtor) throw new Error('DIRAC_NETWORK_LOCK_FAILED');
+      if (typeof window.SharedWorker === 'function' && window.SharedWorker !== blockedCtor) throw new Error('DIRAC_NETWORK_LOCK_FAILED');
+      if (typeof navigator.sendBeacon === 'function' && navigator.sendBeacon !== blockedBeacon) throw new Error('DIRAC_NETWORK_LOCK_FAILED');
+      state.networkLocked = true;
     }
 
     function requireSecureContext() {
@@ -903,6 +919,14 @@
       var hash = String(initialRecoveryHash || '').replace(/^#/, '');
       initialRecoveryHash = '';
       var params = new URLSearchParams(hash);
+      var seen = Object.create(null);
+      var count = 0;
+      params.forEach(function (_value, key) {
+        count += 1;
+        if ((key !== 'rid' && key !== 'token') || seen[key]) throw new Error('FRAGMENT_CONTRACT_INVALID');
+        seen[key] = true;
+      });
+      if (count !== 2 || seen.rid !== true || seen.token !== true) throw new Error('FRAGMENT_CONTRACT_INVALID');
       var rid = String(params.get('rid') || '').trim();
       var token = String(params.get('token') || '').trim();
       if (!/^[A-Za-z0-9_-]{16,120}$/.test(rid)) {
@@ -946,11 +970,24 @@
     }
 
     function b64ToBytes(value) {
-      var raw = String(value || '').trim().replace(/-/g, '+').replace(/_/g, '/');
-      while (raw.length % 4) raw += '=';
-      var bin = atob(raw);
+      var raw = String(value == null ? '' : value);
+      if (!raw || raw !== raw.trim()) throw new Error('BASE64_CANONICAL_INVALID');
+      var isUrl = /^[A-Za-z0-9_-]+$/.test(raw);
+      var isStandard = /^[A-Za-z0-9+/]+={0,2}$/.test(raw) && raw.length % 4 === 0;
+      if (!isUrl && !isStandard) throw new Error('BASE64_CANONICAL_INVALID');
+      if (isUrl && raw.length % 4 === 1) throw new Error('BASE64_CANONICAL_INVALID');
+      var normalized = isUrl ? raw.replace(/-/g, '+').replace(/_/g, '/') : raw;
+      while (normalized.length % 4) normalized += '=';
+      var bin;
+      try { bin = atob(normalized); } catch (_) { throw new Error('BASE64_CANONICAL_INVALID'); }
       var out = new Uint8Array(bin.length);
       for (var i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+      var canonicalValue = btoa(bin);
+      var expected = isUrl ? canonicalValue.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '') : canonicalValue;
+      if (expected !== raw) {
+        out.fill(0);
+        throw new Error('BASE64_CANONICAL_INVALID');
+      }
       return out;
     }
 
@@ -1067,6 +1104,8 @@
         var reader = response.body.getReader();
         var chunks = [];
         var total = 0;
+        var bytes = null;
+        var text = '';
         try {
           while (true) {
             var part = await reader.read();
@@ -1079,30 +1118,37 @@
             }
             chunks.push(value);
           }
-          var bytes = new Uint8Array(total);
+          bytes = new Uint8Array(total);
           var offset = 0;
           for (var i = 0; i < chunks.length; i += 1) {
             bytes.set(chunks[i], offset);
             offset += chunks[i].byteLength;
           }
-          var text = new TextDecoder('utf-8').decode(bytes);
-          bytes.fill(0);
-          for (var j = 0; j < chunks.length; j += 1) chunks[j].fill(0);
-          chunks.length = 0;
+          try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch (_) { throw new Error('VAULT_RESPONSE_UTF8_INVALID'); }
           try { return JSON.parse(text); } catch (_) { throw new Error('VAULT_RESPONSE_JSON_INVALID'); }
         } finally {
+          try { if (bytes) bytes.fill(0); } catch (_) {}
+          for (var j = 0; j < chunks.length; j += 1) {
+            try { chunks[j].fill(0); } catch (_) {}
+          }
+          chunks.length = 0;
+          text = '';
           try { reader.releaseLock(); } catch (_) {}
         }
       }
 
-      var fallbackText = await response.text();
-      var fallbackBytes = new TextEncoder().encode(fallbackText);
-      if (fallbackBytes.byteLength > limit) {
-        fallbackBytes.fill(0);
-        throw new Error('VAULT_RESPONSE_TOO_LARGE');
+      if (!response || typeof response.arrayBuffer !== 'function') throw new Error('VAULT_RESPONSE_STREAM_UNAVAILABLE');
+      var fallbackBytes = null;
+      var fallbackText = '';
+      try {
+        fallbackBytes = new Uint8Array(await response.arrayBuffer());
+        if (fallbackBytes.byteLength > limit) throw new Error('VAULT_RESPONSE_TOO_LARGE');
+        try { fallbackText = new TextDecoder('utf-8', { fatal: true }).decode(fallbackBytes); } catch (_) { throw new Error('VAULT_RESPONSE_UTF8_INVALID'); }
+        try { return JSON.parse(fallbackText); } catch (_) { throw new Error('VAULT_RESPONSE_JSON_INVALID'); }
+      } finally {
+        try { if (fallbackBytes) fallbackBytes.fill(0); } catch (_) {}
+        fallbackText = '';
       }
-      fallbackBytes.fill(0);
-      try { return JSON.parse(fallbackText); } catch (_) { throw new Error('VAULT_RESPONSE_JSON_INVALID'); }
     }
 
     async function fetchVaultOnce(fragment) {
@@ -1250,13 +1296,21 @@
       if (!keyId || !publicKeyB64 || publicKeyB64.indexOf('PASTE_') === 0) {
         throw new Error('ED25519_PUBLIC_KEY_MISSING');
       }
-      var publicKeyBytes = b64ToBytes(publicKeyB64);
-      var signatureBytes = b64ToBytes(signatureB64);
-      if (publicKeyBytes.byteLength !== 32 || signatureBytes.byteLength !== 64) throw new Error('ED25519_SIGNATURE_INVALID');
-      var publicKey = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
-      var ok = await crypto.subtle.verify({ name: 'Ed25519' }, publicKey, signatureBytes, utf8(canonical(payload)));
-      if (!ok) {
-        throw new Error('ED25519_SIGNATURE_INVALID');
+      var publicKeyBytes = null;
+      var signatureBytes = null;
+      var messageBytes = null;
+      try {
+        publicKeyBytes = b64ToBytes(publicKeyB64);
+        signatureBytes = b64ToBytes(signatureB64);
+        messageBytes = utf8(canonical(payload));
+        if (publicKeyBytes.byteLength !== 32 || signatureBytes.byteLength !== 64) throw new Error('ED25519_SIGNATURE_INVALID');
+        var publicKey = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
+        var ok = await crypto.subtle.verify({ name: 'Ed25519' }, publicKey, signatureBytes, messageBytes);
+        if (!ok) throw new Error('ED25519_SIGNATURE_INVALID');
+      } finally {
+        try { if (publicKeyBytes) publicKeyBytes.fill(0); } catch (_) {}
+        try { if (signatureBytes) signatureBytes.fill(0); } catch (_) {}
+        try { if (messageBytes) messageBytes.fill(0); } catch (_) {}
       }
     }
 
@@ -1299,11 +1353,16 @@
 
       if (String(payload.hpke_suite || '') !== CONFIG.expectedHpkeSuite || String(payload.hpke_key_id || '') === '' || !/^[A-Za-z0-9._:-]{1,80}$/.test(String(payload.hpke_key_id || ''))) throw new Error('HPKE_IDENTITY_INVALID');
       if (!/^[A-Za-z0-9_-]{43}$/.test(String(payload.hpke_public_key_b64url || ''))) throw new Error('HPKE_PUBLIC_KEY_INVALID');
-      var hpkePublicKeyBytes = b64ToBytes(payload.hpke_public_key_b64url);
-      if (hpkePublicKeyBytes.byteLength !== 32) throw new Error('HPKE_PUBLIC_KEY_INVALID');
-      if (contract.hpke_required !== true || String(contract.hpke_suite || '') !== String(payload.hpke_suite || '') || String(contract.hpke_key_id || '') !== String(payload.hpke_key_id || '')) throw new Error('HPKE_SECURITY_CONTRACT_INVALID');
-      var hpkePublicKeyHash = await sha256B64Url(hpkePublicKeyBytes);
-      hpkePublicKeyBytes.fill(0);
+      var hpkePublicKeyBytes = null;
+      var hpkePublicKeyHash = '';
+      try {
+        hpkePublicKeyBytes = b64ToBytes(payload.hpke_public_key_b64url);
+        if (hpkePublicKeyBytes.byteLength !== 32) throw new Error('HPKE_PUBLIC_KEY_INVALID');
+        if (contract.hpke_required !== true || String(contract.hpke_suite || '') !== String(payload.hpke_suite || '') || String(contract.hpke_key_id || '') !== String(payload.hpke_key_id || '')) throw new Error('HPKE_SECURITY_CONTRACT_INVALID');
+        hpkePublicKeyHash = await sha256B64Url(hpkePublicKeyBytes);
+      } finally {
+        try { if (hpkePublicKeyBytes) hpkePublicKeyBytes.fill(0); } catch (_) {}
+      }
       if (String(contract.hpke_public_key_sha256 || '') !== hpkePublicKeyHash) throw new Error('HPKE_PUBLIC_KEY_HASH_INVALID');
 
       var params = await runLoadingStage('Memeriksa parameter Argon2id', function () {
@@ -1315,34 +1374,45 @@
       });
 
       await runLoadingStage('Memeriksa integritas vault terenkripsi', async function () {
-        var ciphertextBytes = b64ToBytes(bundle.ciphertext);
-        var aadBytes = utf8(canonical(bundle.metadata));
-        var saltBytes = b64ToBytes(bundle.salt);
-        var nonceBytes = b64ToBytes(bundle.aes_nonce);
-        var tagBytes = b64ToBytes(bundle.auth_tag);
+        var ciphertextBytes = null;
+        var aadBytes = null;
+        var saltBytes = null;
+        var nonceBytes = null;
+        var tagBytes = null;
+        var vaultIdBytes = null;
+        var metadataSignatureBytes = null;
+        var vaultBundleBytes = null;
+        try {
+          ciphertextBytes = b64ToBytes(bundle.ciphertext);
+          aadBytes = utf8(canonical(bundle.metadata));
+          saltBytes = b64ToBytes(bundle.salt);
+          nonceBytes = b64ToBytes(bundle.aes_nonce);
+          tagBytes = b64ToBytes(bundle.auth_tag);
+          vaultIdBytes = utf8(bundle.vault_id);
+          metadataSignatureBytes = utf8(bundle.metadata_signature);
+          vaultBundleBytes = utf8(canonical(bundle));
 
-        var requiredHashes = [
-          'ciphertext_sha256', 'aad_sha256', 'salt_sha256', 'aes_nonce_sha256',
-          'auth_tag_sha256', 'vault_id_hash', 'metadata_signature_sha256', 'vault_bundle_sha256'
-        ];
-        for (var i = 0; i < requiredHashes.length; i += 1) {
-          if (!String(payload[requiredHashes[i]] || '')) throw new Error('SIGNED_SECURITY_HASH_MISSING');
+          var requiredHashes = [
+            'ciphertext_sha256', 'aad_sha256', 'salt_sha256', 'aes_nonce_sha256',
+            'auth_tag_sha256', 'vault_id_hash', 'metadata_signature_sha256', 'vault_bundle_sha256'
+          ];
+          for (var i = 0; i < requiredHashes.length; i += 1) {
+            if (!String(payload[requiredHashes[i]] || '')) throw new Error('SIGNED_SECURITY_HASH_MISSING');
+          }
+
+          if (String(payload.ciphertext_sha256) !== await sha256B64Url(ciphertextBytes)) throw new Error('CIPHERTEXT_HASH_INVALID');
+          if (String(payload.aad_sha256) !== await sha256B64Url(aadBytes)) throw new Error('AAD_HASH_INVALID');
+          if (String(payload.salt_sha256) !== await sha256B64Url(saltBytes)) throw new Error('SALT_HASH_INVALID');
+          if (String(payload.aes_nonce_sha256) !== await sha256B64Url(nonceBytes)) throw new Error('AES_NONCE_HASH_INVALID');
+          if (String(payload.auth_tag_sha256) !== await sha256B64Url(tagBytes)) throw new Error('AUTH_TAG_HASH_INVALID');
+          if (String(payload.vault_id_hash) !== await sha256Hex(vaultIdBytes)) throw new Error('VAULT_ID_HASH_INVALID');
+          if (String(payload.metadata_signature_sha256) !== await sha256B64Url(metadataSignatureBytes)) throw new Error('METADATA_SIGNATURE_HASH_INVALID');
+          if (String(payload.vault_bundle_sha256) !== await sha256B64Url(vaultBundleBytes)) throw new Error('VAULT_BUNDLE_HASH_INVALID');
+        } finally {
+          [ciphertextBytes, aadBytes, saltBytes, nonceBytes, tagBytes, vaultIdBytes, metadataSignatureBytes, vaultBundleBytes].forEach(function (bytes) {
+            try { if (bytes) bytes.fill(0); } catch (_) {}
+          });
         }
-
-        if (String(payload.ciphertext_sha256) !== await sha256B64Url(ciphertextBytes)) throw new Error('CIPHERTEXT_HASH_INVALID');
-        if (String(payload.aad_sha256) !== await sha256B64Url(aadBytes)) throw new Error('AAD_HASH_INVALID');
-        if (String(payload.salt_sha256) !== await sha256B64Url(saltBytes)) throw new Error('SALT_HASH_INVALID');
-        if (String(payload.aes_nonce_sha256) !== await sha256B64Url(nonceBytes)) throw new Error('AES_NONCE_HASH_INVALID');
-        if (String(payload.auth_tag_sha256) !== await sha256B64Url(tagBytes)) throw new Error('AUTH_TAG_HASH_INVALID');
-        if (String(payload.vault_id_hash) !== await sha256Hex(utf8(bundle.vault_id))) throw new Error('VAULT_ID_HASH_INVALID');
-        if (String(payload.metadata_signature_sha256) !== await sha256B64Url(utf8(bundle.metadata_signature))) throw new Error('METADATA_SIGNATURE_HASH_INVALID');
-        if (String(payload.vault_bundle_sha256) !== await sha256B64Url(utf8(canonical(bundle)))) throw new Error('VAULT_BUNDLE_HASH_INVALID');
-
-        ciphertextBytes.fill(0);
-        aadBytes.fill(0);
-        saltBytes.fill(0);
-        nonceBytes.fill(0);
-        tagBytes.fill(0);
       });
       return params;
     }
@@ -1371,35 +1441,75 @@
           parallelism: params.parallelism,
           hashLength: params.hashLength
         });
-        return rememberBuffer(new Uint8Array(raw));
+        var rawView = raw instanceof Uint8Array ? raw : new Uint8Array(raw || 0);
+        var rawCopy = new Uint8Array(rawView.byteLength);
+        rawCopy.set(rawView);
+        try { rawView.fill(0); } catch (_) {}
+        if (rawCopy.byteLength !== params.hashLength) {
+          rawCopy.fill(0);
+          throw new Error('ARGON2ID_WASM_OUTPUT_INVALID');
+        }
+        return rememberBuffer(rawCopy);
       }
 
-      var result = await window.argon2.hash({
-        pass: passwordBytes,
-        salt: saltBytes,
-        type: window.argon2.ArgonType ? window.argon2.ArgonType.Argon2id : 2,
-        mem: params.memoryCost,
-        time: params.timeCost,
-        parallelism: params.parallelism,
-        hashLen: params.hashLength,
-        raw: true
-      });
-      if (result && result.hash) return rememberBuffer(new Uint8Array(result.hash));
-      throw new Error('ARGON2ID_WASM_OUTPUT_INVALID');
+      var result = null;
+      var resultView = null;
+      try {
+        result = await window.argon2.hash({
+          pass: passwordBytes,
+          salt: saltBytes,
+          type: window.argon2.ArgonType ? window.argon2.ArgonType.Argon2id : 2,
+          mem: params.memoryCost,
+          time: params.timeCost,
+          parallelism: params.parallelism,
+          hashLen: params.hashLength,
+          raw: true
+        });
+        if (!result || !result.hash) throw new Error('ARGON2ID_WASM_OUTPUT_INVALID');
+        resultView = result.hash instanceof Uint8Array ? result.hash : new Uint8Array(result.hash);
+        var resultCopy = new Uint8Array(resultView.byteLength);
+        resultCopy.set(resultView);
+        if (resultCopy.byteLength !== params.hashLength) {
+          resultCopy.fill(0);
+          throw new Error('ARGON2ID_WASM_OUTPUT_INVALID');
+        }
+        return rememberBuffer(resultCopy);
+      } finally {
+        try { if (resultView) resultView.fill(0); } catch (_) {}
+        try { if (result && result.hash && result.hash !== resultView && typeof result.hash.fill === 'function') result.hash.fill(0); } catch (_) {}
+        try { if (window.argon2 && typeof window.argon2.unloadRuntime === 'function') window.argon2.unloadRuntime(); } catch (_) {}
+        result = null;
+        resultView = null;
+      }
     }
 
     async function hkdfSha256(ikmBytes, saltBytes, info, length) {
-      var key = await crypto.subtle.importKey('raw', ikmBytes, 'HKDF', false, ['deriveBits']);
-      var bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: saltBytes, info: utf8(info) }, key, length * 8);
-      return rememberBuffer(new Uint8Array(bits));
+      var infoBytes = utf8(info);
+      var bitsView = null;
+      try {
+        var key = await crypto.subtle.importKey('raw', ikmBytes, 'HKDF', false, ['deriveBits']);
+        var bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: saltBytes, info: infoBytes }, key, length * 8);
+        bitsView = new Uint8Array(bits);
+        var output = new Uint8Array(bitsView.byteLength);
+        output.set(bitsView);
+        return rememberBuffer(output);
+      } finally {
+        try { infoBytes.fill(0); } catch (_) {}
+        try { if (bitsView) bitsView.fill(0); } catch (_) {}
+      }
     }
 
     async function decryptAesGcm(aesKeyBytes, nonceBytes, ciphertextBytes, tagBytes, aadBytes) {
-      var key = await crypto.subtle.importKey('raw', aesKeyBytes.slice(0, 32), { name: 'AES-GCM' }, false, ['decrypt']);
+      var keyMaterial = aesKeyBytes.slice(0, 32);
       var combined = concatBytes(ciphertextBytes, tagBytes);
-      rememberBuffer(combined);
-      var plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonceBytes, additionalData: aadBytes, tagLength: 128 }, key, combined);
-      return rememberBuffer(new Uint8Array(plaintext));
+      try {
+        var key = await crypto.subtle.importKey('raw', keyMaterial, { name: 'AES-GCM' }, false, ['decrypt']);
+        var plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonceBytes, additionalData: aadBytes, tagLength: 128 }, key, combined);
+        return rememberBuffer(new Uint8Array(plaintext));
+      } finally {
+        try { keyMaterial.fill(0); } catch (_) {}
+        try { combined.fill(0); } catch (_) {}
+      }
     }
 
     function buildVaultMaterial(passwordMaterial, emailSecret, websiteSecret, bundle) {
