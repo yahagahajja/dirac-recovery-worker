@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-VjpLdYRa/6MqnqdtnCCmJn9SJ43nWB3/O6tjfOjrNCr3BngFADcIVLYJVfcK03MSo6AFSvBxMagQVXEB0VaMxw=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-EEibXfWICnv0X9GzWXn/BHnXvZu6j2G/dTIbCh/jIvcYXQT1Z14KrVB9g989C2rsLxTDpg7XSLnSsiUSzDM8ow=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -29,7 +29,7 @@
     X-DNS-Prefetch-Control: off
     X-Permitted-Cross-Domain-Policies: none
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-VjpLdYRa/6MqnqdtnCCmJn9SJ43nWB3/O6tjfOjrNCr3BngFADcIVLYJVfcK03MSo6AFSvBxMagQVXEB0VaMxw=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-EEibXfWICnv0X9GzWXn/BHnXvZu6j2G/dTIbCh/jIvcYXQT1Z14KrVB9g989C2rsLxTDpg7XSLnSsiUSzDM8ow=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 atau ML-DSA-87 public key belum diisi.
@@ -330,7 +330,8 @@
       debugStage: 'init',
       serverDiagnostics: null,
       lastDiagnostic: null,
-      bootstrapCompleted: false
+      bootstrapCompleted: false,
+      flowPhase: 'bootstrap'
     };
 
     var el = {
@@ -633,6 +634,7 @@
       setProcessStep(2);
       setStatus(describeRecoveryError(error), 'err');
       if (!state.permanentLocked && (!state.offlineDecryptRequired || navigator.onLine === false)) {
+        state.flowPhase = state.offlineDecryptRequired ? 'offline_credentials' : state.flowPhase;
         state.formRevealed = true;
         setCredentialFieldsLocked(false);
         revealCredentialForm();
@@ -664,6 +666,7 @@
       wipeMemory();
       state.permanentLocked = true;
       state.offlineDecryptRequired = false;
+      state.flowPhase = 'locked';
       try { if (state.expiryTimer) clearTimeout(state.expiryTimer); } catch (_) {}
       state.expiryTimer = null;
       try { document.body.classList.add('locked'); } catch (_) {}
@@ -699,13 +702,67 @@
       state.expiryTimer = setTimeout(renderLockedState, Math.min(delay, 2147483647));
     }
 
+    function browserIsOnline() {
+      return navigator.onLine !== false;
+    }
+
+    function assertOfflinePhase(code) {
+      assertNotPermanentlyLocked();
+      assertNotExpired();
+      if (browserIsOnline()) throw new Error(String(code || 'OFFLINE_REQUIRED'));
+    }
+
+    function waitForConnectivity(requiredOnline, message) {
+      var expectedOnline = Boolean(requiredOnline);
+      if (browserIsOnline() === expectedOnline) return Promise.resolve();
+      if (message) setStatus(message, 'waiting');
+      return new Promise(function (resolve, reject) {
+        var eventName = expectedOnline ? 'online' : 'offline';
+        var intervalId = null;
+        var expiryId = null;
+
+        function cleanup() {
+          try { window.removeEventListener(eventName, check); } catch (_) {}
+          try { if (intervalId) clearInterval(intervalId); } catch (_) {}
+          try { if (expiryId) clearTimeout(expiryId); } catch (_) {}
+          intervalId = null;
+          expiryId = null;
+        }
+
+        function check() {
+          if (state.permanentLocked) {
+            cleanup();
+            reject(new Error('RECOVERY_LOCKED'));
+            return;
+          }
+          if (state.expiresAtMs && Date.now() >= state.expiresAtMs) {
+            cleanup();
+            renderLockedState();
+            reject(new Error('EXPIRED'));
+            return;
+          }
+          if (browserIsOnline() === expectedOnline) {
+            cleanup();
+            resolve();
+          }
+        }
+
+        window.addEventListener(eventName, check, { once: false });
+        intervalId = setInterval(check, 250);
+        if (state.expiresAtMs) expiryId = setTimeout(check, Math.max(1, state.expiresAtMs - Date.now()));
+        check();
+      });
+    }
+
     function updateOfflineDecryptState() {
       if (!state.offlineDecryptRequired || state.permanentLocked) return;
       assertNotExpired();
       setLockNotice(false);
       setProcessStep(2);
 
-      if (navigator.onLine !== false) {
+      if (browserIsOnline()) {
+        if (state.flowPhase === 'offline_credentials') wipeMemory();
+        state.flowPhase = 'await_offline_credentials';
         state.offlineUnlockSeen = false;
         state.formRevealInProgress = false;
         state.formRevealed = false;
@@ -714,6 +771,7 @@
         return;
       }
 
+      state.flowPhase = 'offline_credentials';
       state.offlineUnlockSeen = true;
       if (state.formRevealed) {
         setCredentialFieldsLocked(false);
@@ -726,14 +784,15 @@
       (async function () {
         try {
           await runLoadingStage('Status offline terdeteksi', function () {});
-          if (navigator.onLine !== false || state.permanentLocked) return renderLockedState();
+          assertOfflinePhase('OFFLINE_REQUIRED_BEFORE_FORM');
 
           await runLoadingStage('Membuka formulir verifikasi', function () {
             setCredentialFieldsLocked(false);
             revealCredentialForm();
           });
-          if (navigator.onLine !== false || state.permanentLocked) return renderLockedState();
+          assertOfflinePhase('OFFLINE_REQUIRED_BEFORE_FORM');
 
+          state.flowPhase = 'offline_credentials';
           state.formRevealed = true;
           el.status.className = 'status ok';
         } catch (error) {
@@ -746,7 +805,8 @@
 
     function armOfflineOnlyDecrypt() {
       state.offlineDecryptRequired = true;
-      state.offlineUnlockSeen = navigator.onLine === false;
+      state.flowPhase = 'await_offline_credentials';
+      state.offlineUnlockSeen = !browserIsOnline();
       hideCredentialForm();
       updateOfflineDecryptState();
     }
@@ -808,6 +868,7 @@
       state.offlineUnlockSeen = false;
       state.expiresAtMs = 0;
       state.permanentLocked = true;
+      state.flowPhase = 'completed';
       state.recoveryCopied = true;
     }
 
@@ -1863,7 +1924,8 @@
         credentials: 'same-origin',
         cache: 'no-store',
         redirect: 'error',
-        referrerPolicy: 'no-referrer',
+        referrer: location.origin + location.pathname,
+        referrerPolicy: 'same-origin',
         headers: { 'Accept': 'application/json' }
       });
       var csrf = String(response.headers.get('x-csrf-token') || response.headers.get('x-dirac-csrf-token') || '').trim();
@@ -1884,7 +1946,8 @@
           credentials: 'same-origin',
           cache: 'no-store',
           redirect: 'error',
-          referrerPolicy: 'no-referrer',
+          referrer: location.origin + location.pathname,
+          referrerPolicy: 'same-origin',
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
@@ -1942,42 +2005,63 @@
       event.preventDefault();
       if (state.permanentLocked) return renderLockedState();
       assertNotExpired();
-      if (navigator.onLine === false) {
-        setStatus('Koneksi internet yang aman diperlukan untuk melanjutkan pemulihan. Sambungkan perangkat lalu coba kembali.', 'waiting');
-        el.decryptButton.disabled = false;
+      if (browserIsOnline() || state.flowPhase !== 'offline_credentials') {
+        state.flowPhase = 'await_offline_credentials';
+        updateOfflineDecryptState();
         return;
       }
       el.decryptButton.disabled = true;
       setLockNotice(false);
       setProcessStep(3);
+      state.flowPhase = 'offline_kdf';
       try { document.body.classList.add('processing'); } catch (_) {}
       var envelope = null;
       try {
         var bundle = state.vaultBundle;
         var manifest = state.manifestPayload || {};
         if (!bundle || !manifest || bundle.version !== CONFIG.expectedLegacyVersion) throw new Error('RECOVERY_V2_REQUIRED');
+        assertOfflinePhase('OFFLINE_REQUIRED_BEFORE_KDF');
         var factors = await runLoadingStage('Memeriksa informasi pemulihan', function () {
           return prepareHybridFactors(bundle, el.passwordMaterial.value, el.emailSecret.value, el.websiteSecret.value);
         });
+        assertOfflinePhase('OFFLINE_REQUIRED_AFTER_KDF');
         envelope = await runLoadingStage('Menyiapkan proses verifikasi aman', function () {
           return buildHybridEnvelope(bundle, manifest, factors);
         });
+        assertOfflinePhase('OFFLINE_REQUIRED_AFTER_ENVELOPE');
+
+        try { el.passwordMaterial.value = ''; } catch (_) {}
+        try { el.emailSecret.value = ''; } catch (_) {}
+        try { el.websiteSecret.value = ''; } catch (_) {}
+        setCredentialFieldsLocked(true);
+        hideCredentialForm();
+
+        state.flowPhase = 'await_online_submit';
+        await waitForConnectivity(true, 'Envelope terenkripsi siap. Sambungkan internet untuk verifikasi melalui Central Guard.');
+        state.flowPhase = 'online_submit';
         var response = await runLoadingStage('Memverifikasi permintaan pemulihan', function () {
           return submitHybridEnvelope(envelope);
         });
+
+        state.flowPhase = 'await_offline_result';
+        await waitForConnectivity(false, 'Respons terenkripsi diterima. Matikan Wi-Fi dan data seluler untuk membuka hasil.');
+        state.flowPhase = 'offline_result';
+        assertOfflinePhase('OFFLINE_REQUIRED_FOR_RESULT_OPEN');
         var recoveryMaterialBytes = await runLoadingStage('Menyiapkan kode pemulihan', function () {
           return openSealedRecovery(response, envelope, bundle.request_id);
         });
+        assertOfflinePhase('OFFLINE_REQUIRED_FOR_RESULT_READY');
         await runLoadingStage('Menyiapkan tombol salin satu kali', function () {
           keepOnlyRecoveryBuffer(recoveryMaterialBytes);
           state.recoveryCopied = false;
+          state.flowPhase = 'complete_offline';
           el.copyRecoveryButton.disabled = false;
           el.copyRecoveryButton.textContent = 'Salin kode pemulihan — hanya 1×';
           el.copyState.textContent = 'Kode tidak ditampilkan. Saat disalin, kode masuk ke clipboard sistem. Tempelkan segera; halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik.';
           el.resultBox.classList.add('show');
         });
         setProcessStep(3);
-        setStatus('Verifikasi berhasil. Kode pemulihan siap disalin satu kali.', 'ok');
+        setStatus('Verifikasi berhasil. Tetap offline; kode pemulihan siap disalin satu kali.', 'ok');
       } catch (error) {
         var msg = String(error && error.message || '');
         if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') renderLockedState();
@@ -1987,9 +2071,10 @@
         try { document.body.classList.remove('processing'); } catch (_) {}
         try { if (envelope && envelope.responseKey) envelope.responseKey.fill(0); } catch (_) {}
         try { if (envelope && envelope.transcriptHash) envelope.transcriptHash.fill(0); } catch (_) {}
-        if (!el.form.hidden && !state.permanentLocked) el.decryptButton.disabled = navigator.onLine === false;
+        if (!el.form.hidden && !state.permanentLocked) el.decryptButton.disabled = browserIsOnline();
       }
     }
+
 
     async function bootstrap() {
       await runLoadingStage('Memeriksa keamanan halaman', function () {
@@ -2035,22 +2120,15 @@
       setDebugStage('manifest_and_vault_verify');
       await verifyManifestAndVault(raw, state.vaultBundle, signedManifest);
 
-      await runLoadingStage('Menyiapkan formulir pemulihan', function () {
-        setDebugStage('envelope_key_ready');
-        state.offlineDecryptRequired = false;
-        state.offlineUnlockSeen = false;
-        setCredentialFieldsLocked(false);
-        var formOpened = revealCredentialForm();
-        if (!formOpened || el.form.hidden || el.form.hasAttribute('hidden') || el.form.hasAttribute('inert')) {
-          throw new Error('RECOVERY_FORM_REVEAL_FAILED');
-        }
-        state.formRevealed = true;
+      await runLoadingStage('Menyiapkan mode pemulihan offline', function () {
+        setDebugStage('offline_credential_gate_ready');
+        armOfflineOnlyDecrypt();
       });
 
       state.bootstrapCompleted = true;
       if (startupWatchdogId) clearTimeout(startupWatchdogId);
       setDebugStage('hybrid_decrypt_ready');
-      setStatus('Verifikasi awal berhasil. Silakan isi tiga informasi pemulihan pada formulir di bawah ini.', 'ok');
+      if (browserIsOnline()) setStatus('Verifikasi awal berhasil. Matikan Wi-Fi dan data seluler, atau aktifkan mode pesawat untuk membuka tiga kolom.', 'waiting');
     }
 
     writeStatusText('Memeriksa keamanan halaman...');
@@ -2078,17 +2156,22 @@
       wipeMemory();
     }, { once: false });
     window.addEventListener('online', function () {
-      if (state.offlineDecryptRequired) return renderLockedState();
-      if (!state.permanentLocked && !el.form.hidden) {
-        el.decryptButton.disabled = false;
-        setStatus('Koneksi aman tersedia. Proses pemulihan dapat dilanjutkan.', 'ok');
+      if (state.permanentLocked) return;
+      if (state.flowPhase === 'offline_kdf' || state.flowPhase === 'offline_result' || state.flowPhase === 'complete_offline') return renderLockedState();
+      if (state.flowPhase === 'offline_credentials' || state.flowPhase === 'await_offline_credentials') {
+        state.flowPhase = 'await_offline_credentials';
+        wipeMemory();
+        return updateOfflineDecryptState();
+      }
+      if (state.flowPhase === 'await_online_submit' || state.flowPhase === 'online_submit') {
+        setStatus('Koneksi tersedia. Envelope terenkripsi sedang diverifikasi melalui Central Guard.', 'waiting');
       }
     }, { once: false });
     window.addEventListener('offline', function () {
-      if (state.offlineDecryptRequired && !state.permanentLocked) return updateOfflineDecryptState();
-      if (!state.permanentLocked && !el.form.hidden) {
-        el.decryptButton.disabled = true;
-        setStatus('Koneksi internet yang aman diperlukan untuk melanjutkan pemulihan.', 'waiting');
+      if (state.permanentLocked) return;
+      if (state.flowPhase === 'await_offline_credentials' || state.flowPhase === 'offline_credentials') return updateOfflineDecryptState();
+      if (state.flowPhase === 'await_offline_result') {
+        setStatus('Status offline terdeteksi. Membuka respons terenkripsi secara lokal.', 'waiting');
       }
     }, { once: false });
     document.addEventListener('visibilitychange', function () {
