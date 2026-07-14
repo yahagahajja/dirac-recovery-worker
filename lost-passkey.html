@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-g/0iRzjgJKy70KpwIP7OG+GI5hTqcWDQ88dlcq7bS3EBclpWdPdvOMDgcnB2hjPSnrdCQw1OZ3ywPeWz+GV2pg=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-iniQ8tMkVPdXcv7N/qRPBemh0tpLVbCxPg7reEcRDfpJdlHq1fQJl5rwUh67f87iBYRl/u0u4hY/eF3iigEdpQ=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -29,7 +29,7 @@
     X-DNS-Prefetch-Control: off
     X-Permitted-Cross-Domain-Policies: none
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-g/0iRzjgJKy70KpwIP7OG+GI5hTqcWDQ88dlcq7bS3EBclpWdPdvOMDgcnB2hjPSnrdCQw1OZ3ywPeWz+GV2pg=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-iniQ8tMkVPdXcv7N/qRPBemh0tpLVbCxPg7reEcRDfpJdlHq1fQJl5rwUh67f87iBYRl/u0u4hY/eF3iigEdpQ=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -196,9 +196,9 @@
       <form id="decryptForm" class="grid" autocomplete="off" spellcheck="false" aria-hidden="true" hidden inert>
         <div class="split">
           <label>
-            Informasi verifikasi akun
+            Kata sandi akun
             <input id="passwordMaterial" name="passwordMaterial" type="password" autocomplete="off" minlength="6" maxlength="1024" required disabled>
-            <span class="hint">Masukkan data sesuai instruksi resmi pemulihan akun.</span>
+            <span class="hint">Masukkan kata sandi akun Anda untuk melanjutkan verifikasi.</span>
           </label>
           <label>
             Kode verifikasi dari email
@@ -226,8 +226,8 @@
         <p id="copyState" class="small" role="status" aria-live="polite">Setelah penyalinan berhasil, halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik. Browser tidak menjamin penghapusan clipboard berhasil.</p>
       </section>
 
-      <h2>Proses aman</h2>
-      <p class="small">Tautan resmi → validasi Central Guard → isi tiga material pemulihan → verifikasi hybrid dan wrapped DEK → salin kode satu kali tanpa menampilkannya → seluruh data sementara dibersihkan.</p>
+      <h2>Tahapan pemulihan</h2>
+      <p class="small">Tautan resmi diperiksa → isi tiga informasi pemulihan → data diverifikasi dengan aman → salin kode pemulihan satu kali → data sementara otomatis dibersihkan.</p>
     </section>
   </main>
 
@@ -314,7 +314,8 @@
       clipboardClearTimer: null,
       debugStage: 'init',
       serverDiagnostics: null,
-      lastDiagnostic: null
+      lastDiagnostic: null,
+      bootstrapCompleted: false
     };
 
     var el = {
@@ -449,7 +450,7 @@
     }
 
     function revealCredentialForm() {
-      if (navigator.onLine !== false || !state.offlineDecryptRequired || state.permanentLocked) {
+      if (state.permanentLocked || (state.offlineDecryptRequired && navigator.onLine !== false)) {
         hideCredentialForm();
         return false;
       }
@@ -616,7 +617,7 @@
       wipeMemory();
       setProcessStep(2);
       setStatus(describeRecoveryError(error), 'err');
-      if (navigator.onLine === false && state.offlineDecryptRequired && !state.permanentLocked) {
+      if (!state.permanentLocked && (!state.offlineDecryptRequired || navigator.onLine === false)) {
         state.formRevealed = true;
         setCredentialFieldsLocked(false);
         revealCredentialForm();
@@ -1892,7 +1893,7 @@
       if (state.permanentLocked) return renderLockedState();
       assertNotExpired();
       if (navigator.onLine === false) {
-        setStatus('Koneksi aman diperlukan untuk verifikasi Central Guard. Sambungkan perangkat lalu coba kembali.', 'waiting');
+        setStatus('Koneksi internet yang aman diperlukan untuk melanjutkan pemulihan. Sambungkan perangkat lalu coba kembali.', 'waiting');
         el.decryptButton.disabled = false;
         return;
       }
@@ -1905,16 +1906,16 @@
         var bundle = state.vaultBundle;
         var manifest = state.manifestPayload || {};
         if (!bundle || !manifest || bundle.version !== CONFIG.expectedLegacyVersion) throw new Error('RECOVERY_V2_REQUIRED');
-        var factors = await runLoadingStage('Membuka DEK terbungkus', function () {
+        var factors = await runLoadingStage('Memeriksa informasi pemulihan', function () {
           return prepareHybridFactors(bundle, el.passwordMaterial.value, el.emailSecret.value, el.websiteSecret.value);
         });
-        envelope = await runLoadingStage('Membentuk transport hybrid', function () {
+        envelope = await runLoadingStage('Menyiapkan proses verifikasi aman', function () {
           return buildHybridEnvelope(bundle, manifest, factors);
         });
-        var response = await runLoadingStage('Memverifikasi envelope dan Central Guard', function () {
+        var response = await runLoadingStage('Memverifikasi permintaan pemulihan', function () {
           return submitHybridEnvelope(envelope);
         });
-        var recoveryMaterialBytes = await runLoadingStage('Membuka respons terenkripsi', function () {
+        var recoveryMaterialBytes = await runLoadingStage('Menyiapkan kode pemulihan', function () {
           return openSealedRecovery(response, envelope, bundle.request_id);
         });
         await runLoadingStage('Menyiapkan tombol salin satu kali', function () {
@@ -1926,7 +1927,7 @@
           el.resultBox.classList.add('show');
         });
         setProcessStep(3);
-        setStatus('Pemulihan berhasil setelah seluruh guard, dual-signature, ML-KEM, dan wrapped DEK terverifikasi.', 'ok');
+        setStatus('Verifikasi berhasil. Kode pemulihan siap disalin satu kali.', 'ok');
       } catch (error) {
         var msg = String(error && error.message || '');
         if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') renderLockedState();
@@ -1963,19 +1964,19 @@
 
       setLockNotice(false);
       setProcessStep(1);
-      var raw = await runLoadingStage('Menghubungi Central Guard', function () {
+      var raw = await runLoadingStage('Memeriksa tautan melalui sistem keamanan', function () {
         setDebugStage('vault_fetch');
         return fetchVaultOnce(state.fragment);
       });
       state.vaultResponse = raw;
 
-      state.vaultBundle = await runLoadingStage('Memeriksa struktur vault terenkripsi', function () {
+      state.vaultBundle = await runLoadingStage('Memeriksa data pemulihan', function () {
         setDebugStage('vault_bundle_normalize');
         return normalizeVaultBundle(raw);
       });
 
       setProcessStep(2);
-      var signedManifest = await runLoadingStage('Membaca manifest bertanda tangan', function () {
+      var signedManifest = await runLoadingStage('Memverifikasi keaslian data', function () {
         setDebugStage('signed_manifest_extract');
         return extractSignedManifest(raw);
       });
@@ -1984,18 +1985,31 @@
       setDebugStage('manifest_and_vault_verify');
       await verifyManifestAndVault(raw, state.vaultBundle, signedManifest);
 
-      await runLoadingStage('Menyiapkan verifikasi server-assisted', function () {
+      await runLoadingStage('Menyiapkan formulir pemulihan', function () {
         setDebugStage('envelope_key_ready');
         state.offlineDecryptRequired = false;
         state.offlineUnlockSeen = false;
         setCredentialFieldsLocked(false);
-        revealCredentialForm();
+        var formOpened = revealCredentialForm();
+        if (!formOpened || el.form.hidden || el.form.hasAttribute('hidden') || el.form.hasAttribute('inert')) {
+          throw new Error('RECOVERY_FORM_REVEAL_FAILED');
+        }
         state.formRevealed = true;
       });
 
+      state.bootstrapCompleted = true;
+      if (startupWatchdogId) clearTimeout(startupWatchdogId);
       setDebugStage('hybrid_decrypt_ready');
-      setStatus('Vault terverifikasi. Masukkan tiga material pemulihan untuk membuka DEK terbungkus melalui Central Guard.', 'ok');
+      setStatus('Verifikasi awal berhasil. Silakan isi tiga informasi pemulihan pada formulir di bawah ini.', 'ok');
     }
+
+    writeStatusText('Memeriksa keamanan halaman...');
+    el.status.className = 'status loading';
+    var startupWatchdogId = setTimeout(function () {
+      if (state.bootstrapCompleted || state.permanentLocked) return;
+      recoveryDebug('bootstrap_timeout', new Error('HTML_BOOTSTRAP_TIMEOUT'));
+      setStatus('Layanan pemulihan belum selesai dimuat. Muat ulang halaman melalui tautan resmi dari email.', 'err');
+    }, 30000);
 
     hideCredentialForm();
 
@@ -2017,14 +2031,14 @@
       if (state.offlineDecryptRequired) return renderLockedState();
       if (!state.permanentLocked && !el.form.hidden) {
         el.decryptButton.disabled = false;
-        setStatus('Koneksi aman tersedia. Verifikasi Central Guard dapat dilanjutkan.', 'ok');
+        setStatus('Koneksi aman tersedia. Proses pemulihan dapat dilanjutkan.', 'ok');
       }
     }, { once: false });
     window.addEventListener('offline', function () {
       if (state.offlineDecryptRequired && !state.permanentLocked) return updateOfflineDecryptState();
       if (!state.permanentLocked && !el.form.hidden) {
         el.decryptButton.disabled = true;
-        setStatus('Koneksi aman diperlukan untuk verifikasi Central Guard.', 'waiting');
+        setStatus('Koneksi internet yang aman diperlukan untuk melanjutkan pemulihan.', 'waiting');
       }
     }, { once: false });
     document.addEventListener('visibilitychange', function () {
@@ -2045,6 +2059,7 @@
     } catch (_) {}
 
     bootstrap().catch(function (error) {
+      if (startupWatchdogId) clearTimeout(startupWatchdogId);
       recoveryDebug('bootstrap_rejected', error);
       var msg = String(error && error.message || '');
       if (msg === 'ARGON2ID_WEBASSEMBLY_DISABLED') return deploymentFailClosed('Fitur keamanan perangkat tidak tersedia pada browser ini. Gunakan browser resmi tanpa mode pembatas tambahan.', error);
