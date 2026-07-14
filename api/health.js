@@ -988,9 +988,9 @@ function buildManifest(options) {
         email_secret_length: 100,
         website_secret_length: 100
       },
-      created_at: String(row.created_at || bundle.metadata.created_at || ''),
+      created_at: String(bundle.metadata.created_at || ''),
       not_before: String(bundle.metadata.not_before || ''),
-      expires_at: String(row.expires_at || bundle.metadata.expires_at || '')
+      expires_at: String(bundle.metadata.expires_at || '')
     };
   } finally {
     bundleCanonical.fill(0); metadataCanonical.fill(0); payloadCiphertext.fill(0); payloadNonce.fill(0); payloadTag.fill(0);
