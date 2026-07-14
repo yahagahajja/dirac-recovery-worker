@@ -1032,31 +1032,64 @@ function verifySignedManifestContainer(container) {
   return payload;
 }
 
-async function atomicClaim(supabaseFetch, body, bundle) {
+async function atomicClaim(supabaseFetch, body, bundle, row) {
   if (typeof supabaseFetch !== 'function') throw fail('ATOMIC_CLAIM_ADAPTER_MISSING');
+  const requestId = String(body && body.request_id || '');
+  const rowMetadata = row && row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+    ? row.metadata
+    : null;
+  if (!rowMetadata || String(row && row.request_id || '') !== requestId) throw fail('ATOMIC_REPLAY_STORAGE_UNAVAILABLE');
+
   const claimHash = sha512B64u(Buffer.from(jcs({
-    request_id: body.request_id,
+    request_id: requestId,
     enc: body.enc,
     aead_nonce: body.aead_nonce,
     ciphertext: body.ciphertext,
     mlkem_ciphertext_sha512: bundle.transport.mlkem_ciphertext_sha512
   }), 'utf8'));
-  const result = await supabaseFetch('/rest/v1/rpc/dirac_recovery_claim_once_v2', {
-    method: 'POST',
+  const claimedAt = new Date().toISOString();
+  const claimField = 'hybrid_v2_claim_hash';
+  const path = '/rest/v1/security_lost_passkey_recovery_requests'
+    + '?select=' + encodeURIComponent('request_id,status,metadata')
+    + '&request_id=eq.' + encodeURIComponent(requestId)
+    + '&status=eq.pending'
+    + '&used_at=is.null'
+    + '&revoked_at=is.null'
+    + '&locked_at=is.null'
+    + '&expires_at=gt.' + encodeURIComponent(claimedAt)
+    + '&' + encodeURIComponent('metadata->>' + claimField) + '=is.null';
+  const result = await supabaseFetch(path, {
+    method: 'PATCH',
     auth: 'service',
+    prefer: 'return=representation',
     body: {
-      p_scope: 'hybrid-envelope-v2',
-      p_claim_hash: claimHash,
-      p_request_id: String(body.request_id),
-      p_expires_at: new Date(Number(body.expires_at_ms)).toISOString()
+      metadata: {
+        ...rowMetadata,
+        [claimField]: claimHash,
+        hybrid_v2_claimed_at: claimedAt
+      }
     }
   });
-  const accepted = Boolean(result && result.ok && (
-    result.data === true ||
-    (Array.isArray(result.data) && result.data[0] === true) ||
-    (result.data && result.data.accepted === true)
-  ));
-  if (!accepted) throw fail(result && result.ok ? 'ATOMIC_REPLAY_REJECTED' : 'ATOMIC_REPLAY_STORAGE_UNAVAILABLE');
+
+  if (!result || result.ok !== true) throw fail('ATOMIC_REPLAY_STORAGE_UNAVAILABLE');
+  if (!Array.isArray(result.data)) throw fail('ATOMIC_REPLAY_STORAGE_UNAVAILABLE');
+  if (result.data.length === 0) throw fail('ATOMIC_REPLAY_REJECTED');
+  if (result.data.length !== 1) throw fail('ATOMIC_REPLAY_STORAGE_UNAVAILABLE');
+  const claimedRow = result.data[0];
+  const claimedMetadata = claimedRow && claimedRow.metadata && typeof claimedRow.metadata === 'object' && !Array.isArray(claimedRow.metadata)
+    ? claimedRow.metadata
+    : null;
+  if (!claimedRow
+      || String(claimedRow.request_id || '') !== requestId
+      || String(claimedRow.status || '') !== 'pending'
+      || !claimedMetadata
+      || String(claimedMetadata[claimField] || '') !== claimHash
+      || String(claimedMetadata.hybrid_v2_claimed_at || '') !== claimedAt) {
+    throw fail('ATOMIC_REPLAY_STORAGE_UNAVAILABLE');
+  }
+  // Preserve the durable claim marker in every later PATCH that spreads
+  // row.metadata (for example the existing failed-verification counter path).
+  row.metadata = claimedMetadata;
   return claimHash;
 }
 
@@ -18772,7 +18805,6 @@ function diracV101ValidateServiceRoleSupabasePath(path, options = {}) {
   let restNamespace = '';
   try { restNamespace = decodeURIComponent(restNamespaceRaw || '').trim().toLowerCase(); } catch (_) {}
   const isRpcNamespace = restNamespace === 'rpc' || restNamespace.startsWith('rpc/');
-  const isRecoveryClaimRpc = raw === '/rest/v1/rpc/dirac_recovery_claim_once_v2';
   if (!isRpcNamespace && isEnvTrue('DIRAC_SERVICE_ROLE_GUARD_DISABLED')) return { ok: true };
   if (!raw || /https?:\/\//i.test(raw) || /(?:\.\.|\\|\u0000)/.test(raw)) {
     return { ok: false, code: 'SERVICE_ROLE_PATH_INVALID' };
@@ -18789,85 +18821,6 @@ function diracV101ValidateServiceRoleSupabasePath(path, options = {}) {
   if (raw.startsWith('/auth/v1/admin/users')) return { ok: true, scope: 'auth_admin_users' };
   if (!raw.startsWith('/rest/v1/')) return { ok: false, code: 'SERVICE_ROLE_SCOPE_REJECTED' };
 
-  // Narrow exception: one atomic anti-replay RPC, only from the fully guarded
-  // Vercel 2 recovery-verify action. No other RPC path is allowed.
-  if (isRecoveryClaimRpc) {
-    const requiredAction = 'customer_security_recovery_hpke_verify';
-    if (method !== 'POST' || String(options.auth || '') !== 'service') {
-      return { ok: false, code: 'SERVICE_ROLE_RPC_METHOD_REJECTED' };
-    }
-
-    const ctx = typeof diracCentralCurrentContextV149 === 'function'
-      ? diracCentralCurrentContextV149()
-      : null;
-    if (!ctx
-        || !ctx.req
-        || ctx.action !== requiredAction
-        || ctx.classification !== 'browser'
-        || ctx.req.__diracCentralSecurityGuardPassedV146 !== true
-        || !ctx.guardPassport
-        || ctx.guardPassport.integrity_checked !== true
-        || typeof diracCentralCurrentContextPassedV146 !== 'function'
-        || diracCentralCurrentContextPassedV146() !== true) {
-      return { ok: false, code: 'SERVICE_ROLE_RPC_CENTRAL_GUARD_REQUIRED' };
-    }
-
-    const deploymentRole = String(
-      process.env.DIRAC_CENTRAL_DEPLOYMENT_ROLE
-      || process.env.DIRAC_DEPLOYMENT_ROLE
-      || ''
-    ).trim().toLowerCase();
-    const vercel2ActionsEnabled = isEnvTrue('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')
-      || isEnvTrue('DIRAC_VERCEL2_ACTIONS_ENABLED');
-    if (deploymentRole !== 'vercel2' || !vercel2ActionsEnabled) {
-      return { ok: false, code: 'SERVICE_ROLE_RPC_VERCEL2_REQUIRED' };
-    }
-    if (typeof DIRAC_CENTRAL_COMPILED_VERCEL2_ACTIONS_V188 === 'undefined'
-        || !DIRAC_CENTRAL_COMPILED_VERCEL2_ACTIONS_V188.has(requiredAction)
-        || typeof DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174 === 'undefined'
-        || !DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.has(requiredAction)) {
-      return { ok: false, code: 'SERVICE_ROLE_RPC_ACTION_NOT_ALLOWED' };
-    }
-
-    const secureHost = typeof diracCentralServer2SecureHostGuardV169 === 'function'
-      ? diracCentralServer2SecureHostGuardV169(ctx.req, ctx)
-      : { ok: false };
-    if (!secureHost || secureHost.ok !== true) {
-      return { ok: false, code: 'SERVICE_ROLE_RPC_SECURE_HOST_REQUIRED' };
-    }
-
-    const rpcBody = options.body;
-    const rpcKeys = rpcBody && typeof rpcBody === 'object' && !Array.isArray(rpcBody)
-      ? Object.keys(rpcBody).sort()
-      : [];
-    const expectedRpcKeys = ['p_claim_hash', 'p_expires_at', 'p_request_id', 'p_scope'];
-    if (rpcKeys.length !== expectedRpcKeys.length
-        || rpcKeys.some((key, index) => key !== expectedRpcKeys[index])) {
-      return { ok: false, code: 'SERVICE_ROLE_RPC_BODY_FIELDS_INVALID' };
-    }
-    if (rpcBody.p_scope !== 'hybrid-envelope-v2'
-        || !/^[A-Za-z0-9_-]{86}$/.test(String(rpcBody.p_claim_hash || ''))
-        || customerSecurityNormalizeLostPasskeyRequestId(rpcBody.p_request_id) !== String(rpcBody.p_request_id || '')
-        || String(rpcBody.p_request_id || '') !== String(ctx.body && ctx.body.request_id || '')) {
-      return { ok: false, code: 'SERVICE_ROLE_RPC_BODY_BINDING_INVALID' };
-    }
-
-    const rpcExpiresAtMs = Date.parse(String(rpcBody.p_expires_at || ''));
-    const requestExpiresAtMs = Number(ctx.body && ctx.body.expires_at_ms);
-    if (!Number.isSafeInteger(rpcExpiresAtMs)
-        || new Date(rpcExpiresAtMs).toISOString() !== String(rpcBody.p_expires_at || '')
-        || !Number.isSafeInteger(requestExpiresAtMs)
-        || rpcExpiresAtMs !== requestExpiresAtMs) {
-      return { ok: false, code: 'SERVICE_ROLE_RPC_EXPIRY_BINDING_INVALID' };
-    }
-
-    return {
-      ok: true,
-      scope: 'rest_rpc',
-      rpc: 'dirac_recovery_claim_once_v2',
-      action: requiredAction
-    };
-  }
   if (isRpcNamespace) {
     return { ok: false, code: 'SERVICE_ROLE_RPC_NOT_ALLOWED' };
   }
@@ -33353,7 +33306,7 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
     // and AES-GCM payload have all authenticated successfully. This keeps
     // malformed traffic from consuming durable replay rows while preserving
     // first-valid-request-wins atomicity before any server-1 proof is sent.
-    await DIRAC_RECOVERY_CRYPTO_V2.atomicClaim(supabaseFetch, body, bundle);
+    await DIRAC_RECOVERY_CRYPTO_V2.atomicClaim(supabaseFetch, body, bundle, row);
 
     const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
     if (!vaultSecrets.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail(String(vaultSecrets.code || 'RECOVERY_VAULT_SECRET_INVALID'));
