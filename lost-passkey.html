@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-xSsw6Ie93WwoajlofU207GW4vI/emdy3SipbMWqTjWt8rySW80aPk92F4bxHvKOA0eMgPyK/R9CWlX3xFVFqiA=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-g/0iRzjgJKy70KpwIP7OG+GI5hTqcWDQ88dlcq7bS3EBclpWdPdvOMDgcnB2hjPSnrdCQw1OZ3ywPeWz+GV2pg=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Dirac Account Recovery</title>
   <!--
-    DIRAC LOST PASSKEY SERVER-ASSISTED MAX-ASSURANCE HTML
+    DIRAC LOST PASSKEY ENVELOPE-ENCRYPTION MAX-ASSURANCE HTML
     Deploy statis 1x di Server 2.
 
     Header HTTP production yang WAJIB diset di hosting/static server:
@@ -29,7 +29,7 @@
     X-DNS-Prefetch-Control: off
     X-Permitted-Cross-Domain-Policies: none
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-xSsw6Ie93WwoajlofU207GW4vI/emdy3SipbMWqTjWt8rySW80aPk92F4bxHvKOA0eMgPyK/R9CWlX3xFVFqiA=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-g/0iRzjgJKy70KpwIP7OG+GI5hTqcWDQ88dlcq7bS3EBclpWdPdvOMDgcnB2hjPSnrdCQw1OZ3ywPeWz+GV2pg=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 public key belum diisi.
@@ -227,7 +227,7 @@
       </section>
 
       <h2>Proses aman</h2>
-      <p class="small">Tautan resmi → validasi Central Guard → isi tiga material pemulihan → verifikasi hybrid dan HSM → salin kode satu kali tanpa menampilkannya → seluruh data sementara dibersihkan.</p>
+      <p class="small">Tautan resmi → validasi Central Guard → isi tiga material pemulihan → verifikasi hybrid dan wrapped DEK → salin kode satu kali tanpa menampilkannya → seluruh data sementara dibersihkan.</p>
     </section>
   </main>
 
@@ -1293,11 +1293,12 @@
       if (!normalized.salt || !normalized.vault_id || !normalized.request_id || !normalized.metadata_signature || !normalized.hkdf_info) throw new Error('VAULT_BUNDLE_INCOMPLETE');
       if (normalized.request_id !== state.fragment.rid) throw new Error('VAULT_RID_MISMATCH');
       if (normalized.payload.cipher !== 'AES-256-GCM') throw new Error('VAULT_CIPHER_INVALID');
-      if (!protection.user_share || !protection.offline_share || !protection.hsm_share || protection.policy !== '3-of-3-XOR') throw new Error('VAULT_SHARE_POLICY_INVALID');
+      if (!protection.dek_wrap || protection.policy !== 'A256KW-enveloped-DEK') throw new Error('VAULT_DEK_POLICY_INVALID');
+      if (protection.dek_wrap.wrap !== 'A256KW' || protection.dek_wrap.kdf !== CONFIG.expectedKdf || protection.dek_wrap.hkdf_info !== normalized.hkdf_info) throw new Error('VAULT_DEK_WRAP_INVALID');
       if (transport.suite !== CONFIG.expectedHpkeSuite || transport.mlkem !== 'ML-KEM-1024') throw new Error('VAULT_TRANSPORT_INVALID');
       [normalized.salt, normalized.payload.nonce_b64url, normalized.payload.ciphertext_b64url, normalized.payload.tag_b64url,
-       protection.user_share.wrapped_share_b64url, protection.offline_share.salt_b64url, protection.offline_share.wrapped_share_b64url,
-       protection.hsm_share.wrapped_share_b64url, transport.mlkem_ciphertext_b64url, transport.wrapped_shared_secret_b64url,
+       protection.dek_wrap.salt_b64url, protection.dek_wrap.wrapped_dek_b64url,
+       transport.mlkem_ciphertext_b64url, transport.wrapped_shared_secret_b64url,
        transport.shared_secret_wrap_salt_b64url].forEach(function (value) { b64ToBytes(String(value || '')).fill(0); });
       return normalized;
     }
@@ -1385,7 +1386,8 @@
       if (payload.minimum_reader_version !== 2 || payload.legacy_fallback_allowed !== false) throw new Error('ANTI_DOWNGRADE_POLICY_INVALID');
       if (String(payload.purpose || '') !== CONFIG.expectedPurpose || String(payload.action || '') !== CONFIG.vaultApiAction) throw new Error('MANIFEST_BINDING_INVALID');
       if (String(payload.cipher || '') !== CONFIG.expectedCipher || String(payload.kdf || '') !== CONFIG.expectedKdf) throw new Error('CRYPTO_SUITE_INVALID');
-      if (String(payload.transport_suite || '') !== CONFIG.expectedHpkeSuite || String(payload.key_wrap || '') !== 'A256KW' || String(payload.dek_protection || '') !== '3-of-3-XOR') throw new Error('CRYPTO_POLICY_INVALID');
+      if (String(payload.transport_suite || '') !== CONFIG.expectedHpkeSuite || String(payload.key_wrap || '') !== 'A256KW' || String(payload.dek_protection || '') !== 'A256KW-enveloped-DEK') throw new Error('CRYPTO_POLICY_INVALID');
+      if (String(payload.input_factor_policy || '') !== 'password+email-secret-100+website-secret-100') throw new Error('INPUT_FACTOR_POLICY_INVALID');
       if (Number(payload.dek_bits) !== 256) throw new Error('DEK_SIZE_INVALID');
 
       var createdMs = Date.parse(String(payload.created_at || ''));
@@ -1399,7 +1401,7 @@
       var contract = payload.security_contract;
       if (!contract || String(contract.version || '') !== CONFIG.expectedSecurityContractVersion) throw new Error('SECURITY_CONTRACT_INVALID');
       if (contract.central_guard_required !== true || String(contract.central_guard || '') !== CONFIG.expectedCentralGuard || contract.vercel2_only !== true) throw new Error('CENTRAL_GUARD_SIGNATURE_INVALID');
-      if (contract.server_assisted_hsm_required !== true || contract.hybrid_transport_required !== true || contract.atomic_replay_claim_required !== true || contract.dual_signature_required !== true || contract.no_legacy_fallback !== true || contract.one_time_copy !== true) throw new Error('MAX_SECURITY_CONTRACT_INVALID');
+      if (contract.single_kek_envelope_required !== true || contract.existing_three_inputs_required !== true || contract.hybrid_transport_required !== true || contract.atomic_replay_claim_required !== true || contract.dual_signature_required !== true || contract.no_legacy_fallback !== true || contract.one_time_copy !== true) throw new Error('MAX_SECURITY_CONTRACT_INVALID');
       if (Number(contract.recovery_code_length) !== 1200 || Number(contract.email_secret_length) !== 100 || Number(contract.website_secret_length) !== 100) throw new Error('SECURITY_LENGTH_CONTRACT_INVALID');
 
       if (!/^[A-Za-z0-9._:-]{1,80}$/.test(String(payload.hpke_key_id || '')) || !/^[A-Za-z0-9._:-]{1,100}$/.test(String(payload.mlkem_key_id || ''))) throw new Error('HYBRID_KEY_ID_INVALID');
@@ -1408,7 +1410,7 @@
         if (hpkePublic.byteLength !== 32 || String(payload.hpke_public_key_sha512 || '') !== await sha512B64Url(hpkePublic)) throw new Error('HPKE_PUBLIC_KEY_INVALID');
       } finally { hpkePublic.fill(0); }
       if (String(payload.mlkem_ciphertext_sha512 || '') !== String(bundle.transport.mlkem_ciphertext_sha512 || '')) throw new Error('MLKEM_CIPHERTEXT_BINDING_INVALID');
-      if (String(payload.hsm_key_id || '') !== String(bundle.key_protection.hsm_share.key_id || '') || String(bundle.key_protection.hsm_share.provider || '') !== 'azure-managed-hsm') throw new Error('HSM_KEY_BINDING_INVALID');
+      if (String(payload.kek_key_id || '') !== String(bundle.key_protection.dek_wrap.key_id || '') || String(payload.kek_hkdf_info || '') !== String(bundle.key_protection.dek_wrap.hkdf_info || '')) throw new Error('KEK_BINDING_INVALID');
 
       var normalized = normalizedArgonParams(bundle.argon2id_params);
       var signedParams = normalizedArgonParams(payload.argon2id_params);
@@ -1421,21 +1423,19 @@
         var payloadCiphertext = b64ToBytes(bundle.payload.ciphertext_b64url);
         var payloadNonce = b64ToBytes(bundle.payload.nonce_b64url);
         var payloadTag = b64ToBytes(bundle.payload.tag_b64url);
-        var share1 = b64ToBytes(bundle.key_protection.user_share.wrapped_share_b64url);
-        var share2 = b64ToBytes(bundle.key_protection.offline_share.wrapped_share_b64url);
-        var share3 = b64ToBytes(bundle.key_protection.hsm_share.wrapped_share_b64url);
+        var wrappedDek = b64ToBytes(bundle.key_protection.dek_wrap.wrapped_dek_b64url);
+        var kekSalt = b64ToBytes(bundle.key_protection.dek_wrap.salt_b64url);
         try {
           if (String(payload.vault_bundle_sha512 || '') !== await sha512B64Url(bundleBytes)) throw new Error('VAULT_BUNDLE_HASH_INVALID');
           if (String(payload.metadata_sha512 || '') !== await sha512B64Url(metadataBytes)) throw new Error('METADATA_HASH_INVALID');
           if (String(payload.payload_ciphertext_sha512 || '') !== await sha512B64Url(payloadCiphertext)) throw new Error('PAYLOAD_HASH_INVALID');
           if (String(payload.payload_nonce_sha512 || '') !== await sha512B64Url(payloadNonce)) throw new Error('PAYLOAD_NONCE_HASH_INVALID');
           if (String(payload.payload_tag_sha512 || '') !== await sha512B64Url(payloadTag)) throw new Error('PAYLOAD_TAG_HASH_INVALID');
-          if (String(payload.wrapped_share1_sha512 || '') !== await sha512B64Url(share1)) throw new Error('SHARE1_HASH_INVALID');
-          if (String(payload.wrapped_share2_sha512 || '') !== await sha512B64Url(share2)) throw new Error('SHARE2_HASH_INVALID');
-          if (String(payload.wrapped_share3_sha512 || '') !== await sha512B64Url(share3)) throw new Error('SHARE3_HASH_INVALID');
-          if (share1.byteLength !== 40 || share2.byteLength !== 40 || share3.byteLength !== 40) throw new Error('WRAPPED_SHARE_LENGTH_INVALID');
+          if (String(payload.wrapped_dek_sha512 || '') !== await sha512B64Url(wrappedDek)) throw new Error('WRAPPED_DEK_HASH_INVALID');
+          if (String(payload.kek_salt_sha512 || '') !== await sha512B64Url(kekSalt)) throw new Error('KEK_SALT_HASH_INVALID');
+          if (wrappedDek.byteLength !== 40 || kekSalt.byteLength !== 32) throw new Error('DEK_WRAP_LENGTH_INVALID');
         } finally {
-          [bundleBytes, metadataBytes, payloadCiphertext, payloadNonce, payloadTag, share1, share2, share3].forEach(function (value) { try { value.fill(0); } catch (_) {} });
+          [bundleBytes, metadataBytes, payloadCiphertext, payloadNonce, payloadTag, wrappedDek, kekSalt].forEach(function (value) { try { value.fill(0); } catch (_) {} });
         }
       });
       return normalized;
@@ -1725,14 +1725,6 @@
       }
     }
 
-    function buildOfflineSecretInput(emailSecret, websiteSecret) {
-      var email = normalizeSecret(emailSecret);
-      var website = normalizeSecret(websiteSecret);
-      if (email.length !== 100) throw new Error('EMAIL_SECRET_LENGTH_INVALID:' + email.length);
-      if (website.length !== 100) throw new Error('WEBSITE_SECRET_LENGTH_INVALID:' + website.length);
-      return rememberBuffer(utf8(canonical({ email_secret: email, website_secret: website })));
-    }
-
     async function prepareHybridFactors(bundle, passwordMaterial, emailSecret, websiteSecret) {
       var params = normalizedArgonParams(bundle.argon2id_params);
       verifyMinimumArgon2idParams(params);
@@ -1741,22 +1733,17 @@
       var argonRaw = await runLoadingStage('Menjalankan Argon2id', function () {
         return runArgon2idRaw(vaultMaterial, vaultSalt, params);
       });
-      var offlineInput = buildOfflineSecretInput(emailSecret, websiteSecret);
-      var offlineSalt = rememberBuffer(b64ToBytes(bundle.key_protection.offline_share.salt_b64url));
+      var kekSalt = rememberBuffer(b64ToBytes(bundle.key_protection.dek_wrap.salt_b64url));
       var transportSalt = rememberBuffer(b64ToBytes(bundle.transport.shared_secret_wrap_salt_b64url));
-      var offlineSecret = await hkdfSha512(offlineInput, offlineSalt, 'dirac/recovery/v2/offline-secret-512', 64);
-      var userKek = await hkdfSha512(argonRaw, vaultSalt, 'dirac/recovery/v2/share1/' + bundle.request_id, 32);
-      var offlineKek = await hkdfSha512(offlineSecret, vaultSalt, 'dirac/recovery/v2/share2/' + bundle.request_id, 32);
-      var composite = concatManyBytes([argonRaw, offlineSecret]);
-      var transportKek = await hkdfSha512(composite, transportSalt, 'dirac/recovery/v2/mlkem-secret/' + bundle.request_id, 32);
-      var share1 = await aesKwUnwrapRaw(userKek, rememberBuffer(b64ToBytes(bundle.key_protection.user_share.wrapped_share_b64url)));
-      var share2 = await aesKwUnwrapRaw(offlineKek, rememberBuffer(b64ToBytes(bundle.key_protection.offline_share.wrapped_share_b64url)));
+      var vaultKek = await hkdfSha512(argonRaw, kekSalt, bundle.key_protection.dek_wrap.hkdf_info, 32);
+      var transportKek = await hkdfSha512(argonRaw, transportSalt, bundle.transport.shared_secret_wrap_info, 32);
+      var dek = await aesKwUnwrapRaw(vaultKek, rememberBuffer(b64ToBytes(bundle.key_protection.dek_wrap.wrapped_dek_b64url)));
       var mlkemShared = await aesKwUnwrapRaw(transportKek, rememberBuffer(b64ToBytes(bundle.transport.wrapped_shared_secret_b64url)));
       try {
-        vaultMaterial.fill(0); argonRaw.fill(0); offlineInput.fill(0); offlineSecret.fill(0);
-        userKek.fill(0); offlineKek.fill(0); composite.fill(0); transportKek.fill(0);
+        vaultSalt.fill(0); vaultMaterial.fill(0); argonRaw.fill(0); kekSalt.fill(0); transportSalt.fill(0);
+        vaultKek.fill(0); transportKek.fill(0);
       } catch (_) {}
-      return { share1: share1, share2: share2, mlkemShared: mlkemShared };
+      return { dek: dek, mlkemShared: mlkemShared };
     }
 
     async function buildHybridEnvelope(bundle, manifest, factors) {
@@ -1785,8 +1772,7 @@
       var bundleHash = await sha512B64Url(utf8(canonical(bundle)));
       var plaintext = rememberBuffer(utf8(canonical({
         request_id: bundle.request_id,
-        share1_b64url: bytesToB64Url(factors.share1),
-        share2_b64url: bytesToB64Url(factors.share2),
+        dek_b64url: bytesToB64Url(factors.dek),
         signed_manifest: state.vaultResponse.signed_manifest,
         vault_bundle_sha512: bundleHash,
         version: CONFIG.expectedPlaintextVersion
@@ -1796,7 +1782,7 @@
       var ciphertext = await encryptAesGcmCombined(hybridKey, nonce, plaintext, aadBytes);
       try {
         hpkePublic.fill(0); classic.shared.fill(0); hybridInput.fill(0); hybridKey.fill(0); plaintext.fill(0);
-        factors.share1.fill(0); factors.share2.fill(0); factors.mlkemShared.fill(0);
+        factors.dek.fill(0); factors.mlkemShared.fill(0);
       } catch (_) {}
       return {
         body: {
@@ -1881,7 +1867,17 @@
       var ciphertext = rememberBuffer(b64ToBytes(sealed.ciphertext));
       var plaintext = await decryptAesGcmCombined(envelope.responseKey, nonce, ciphertext, aad);
       var parsed;
-      try { parsed = JSON.parse(fromUtf8(plaintext)); } catch (_) { throw new Error('SEALED_RECOVERY_JSON_INVALID'); }
+      var plaintextText = '';
+      try {
+        plaintextText = fromUtf8(plaintext);
+        parsed = JSON.parse(plaintextText);
+        if (canonical(parsed) !== plaintextText) throw new Error('SEALED_RECOVERY_NON_CANONICAL');
+      } catch (error) {
+        if (error && error.message === 'SEALED_RECOVERY_NON_CANONICAL') throw error;
+        throw new Error('SEALED_RECOVERY_JSON_INVALID');
+      } finally {
+        plaintextText = '';
+      }
       var keys = Object.keys(parsed || {}).sort();
       var expected = ['recovery_code', 'request_id', 'version'];
       if (!parsed || keys.length !== expected.length || keys.some(function (key, index) { return key !== expected[index]; })) throw new Error('SEALED_RECOVERY_FIELDS_INVALID');
@@ -1896,7 +1892,7 @@
       if (state.permanentLocked) return renderLockedState();
       assertNotExpired();
       if (navigator.onLine === false) {
-        setStatus('Koneksi aman diperlukan untuk membuka share HSM. Sambungkan perangkat lalu coba kembali.', 'waiting');
+        setStatus('Koneksi aman diperlukan untuk verifikasi Central Guard. Sambungkan perangkat lalu coba kembali.', 'waiting');
         el.decryptButton.disabled = false;
         return;
       }
@@ -1909,13 +1905,13 @@
         var bundle = state.vaultBundle;
         var manifest = state.manifestPayload || {};
         if (!bundle || !manifest || bundle.version !== CONFIG.expectedLegacyVersion) throw new Error('RECOVERY_V2_REQUIRED');
-        var factors = await runLoadingStage('Membuka dua share lokal', function () {
+        var factors = await runLoadingStage('Membuka DEK terbungkus', function () {
           return prepareHybridFactors(bundle, el.passwordMaterial.value, el.emailSecret.value, el.websiteSecret.value);
         });
         envelope = await runLoadingStage('Membentuk transport hybrid', function () {
           return buildHybridEnvelope(bundle, manifest, factors);
         });
-        var response = await runLoadingStage('Memverifikasi HSM dan Central Guard', function () {
+        var response = await runLoadingStage('Memverifikasi envelope dan Central Guard', function () {
           return submitHybridEnvelope(envelope);
         });
         var recoveryMaterialBytes = await runLoadingStage('Membuka respons terenkripsi', function () {
@@ -1930,7 +1926,7 @@
           el.resultBox.classList.add('show');
         });
         setProcessStep(3);
-        setStatus('Pemulihan berhasil setelah seluruh guard, dual-signature, ML-KEM, dan HSM terverifikasi.', 'ok');
+        setStatus('Pemulihan berhasil setelah seluruh guard, dual-signature, ML-KEM, dan wrapped DEK terverifikasi.', 'ok');
       } catch (error) {
         var msg = String(error && error.message || '');
         if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') renderLockedState();
@@ -1989,7 +1985,7 @@
       await verifyManifestAndVault(raw, state.vaultBundle, signedManifest);
 
       await runLoadingStage('Menyiapkan verifikasi server-assisted', function () {
-        setDebugStage('server_assisted_hsm_ready');
+        setDebugStage('envelope_key_ready');
         state.offlineDecryptRequired = false;
         state.offlineUnlockSeen = false;
         setCredentialFieldsLocked(false);
@@ -1998,7 +1994,7 @@
       });
 
       setDebugStage('hybrid_decrypt_ready');
-      setStatus('Vault terverifikasi. Masukkan tiga material pemulihan; share HSM akan dibuka hanya melalui Central Guard.', 'ok');
+      setStatus('Vault terverifikasi. Masukkan tiga material pemulihan untuk membuka DEK terbungkus melalui Central Guard.', 'ok');
     }
 
     hideCredentialForm();
@@ -2021,14 +2017,14 @@
       if (state.offlineDecryptRequired) return renderLockedState();
       if (!state.permanentLocked && !el.form.hidden) {
         el.decryptButton.disabled = false;
-        setStatus('Koneksi aman tersedia. Verifikasi HSM dapat dilanjutkan.', 'ok');
+        setStatus('Koneksi aman tersedia. Verifikasi Central Guard dapat dilanjutkan.', 'ok');
       }
     }, { once: false });
     window.addEventListener('offline', function () {
       if (state.offlineDecryptRequired && !state.permanentLocked) return updateOfflineDecryptState();
       if (!state.permanentLocked && !el.form.hidden) {
         el.decryptButton.disabled = true;
-        setStatus('Koneksi aman diperlukan untuk membuka share HSM.', 'waiting');
+        setStatus('Koneksi aman diperlukan untuk verifikasi Central Guard.', 'waiting');
       }
     }, { once: false });
     document.addEventListener('visibilitychange', function () {
