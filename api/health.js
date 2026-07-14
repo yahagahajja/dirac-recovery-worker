@@ -7932,6 +7932,8 @@ function customerSecurityLostPasskeyGenerateSuccessPayloadV182(input = {}) {
     expires_at: expiresAt,
     delivery: 'official_recovery_html_link',
     website_recovery_code: websiteRecoveryCode,
+    websiteRecoveryCode: websiteRecoveryCode,
+    website_code: websiteRecoveryCode,
     email_code_delivery: 'included_in_email_100_char',
     message: String(input.message || 'Link recovery resmi sudah dikirim ke email resmi akun.'),
     time: String(input.time || diracNowIso())
@@ -18004,7 +18006,9 @@ function diracUltraIsSafeChallengeResponseKey(key) {
     || lower === 'csrf'
     || lower === 'csrftoken'
     || lower === 'csrf_token'
-    || lower === 'website_recovery_code';
+    || lower === 'website_recovery_code'
+    || lower === 'websiterecoverycode'
+    || lower === 'website_code';
 }
 
 function diracUltraRedactString(value) {
