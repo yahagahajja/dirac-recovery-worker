@@ -6029,6 +6029,10 @@ function customerSecurityLostPasskeyQueuePollMsV164() {
   return customerSecurityLostPasskeyQueueIntV164('DIRAC_LOST_PASSKEY_QUEUE_POLL_MS', 1200, 250, 5000);
 }
 
+function customerSecurityLostPasskeyQueueHeartbeatMsV188() {
+  return Math.max(5000, Math.min(60000, Math.floor(customerSecurityLostPasskeyQueueTtlMsV164() / 3)));
+}
+
 function customerSecurityLostPasskeyQueueEnabledV164() {
   const value = String(process.env.DIRAC_LOST_PASSKEY_QUEUE_DISABLED || '').trim().toLowerCase();
   return !(value === '1' || value === 'true' || value === 'yes' || value === 'on');
@@ -6043,15 +6047,18 @@ function customerSecurityLostPasskeyQueueOwnerV164() {
 }
 
 function customerSecurityLostPasskeyQueueRecordV164(ownerId, nowMs, lockUntilMs, context = {}) {
+  const currentMs = Number(nowMs || Date.now());
   return {
     type: 'lost_passkey_generate_argon2id_queue_lock_v164',
     patch: DIRAC_LOST_PASSKEY_GENERATE_QUEUE_PATCH_V164,
+    scope: 'all_lost_passkey_argon2id',
     owner_id: String(ownerId || ''),
-    locked_at_ms: Number(nowMs || Date.now()),
+    locked_at_ms: Number(context.lockedAtMs || currentMs),
+    heartbeat_at_ms: currentMs,
     locked_until_ms: Number(lockUntilMs || 0),
     request_nonce_hash: customerSecurityLostPasskeySha256B64(Buffer.from(String(context.nonce || ''), 'utf8')),
     caller_id_hash: customerSecurityLostPasskeySha256B64(Buffer.from(String(context.callerId || ''), 'utf8')),
-    worker_action: DIRAC_RECOVERY_WORKER_TASK_GENERATE
+    worker_action: String(context.workerAction || context.worker_action || DIRAC_RECOVERY_WORKER_TASK_GENERATE).slice(0, 80)
   };
 }
 
@@ -6075,6 +6082,66 @@ function customerSecurityLostPasskeyQueueRowOwnerV164(row) {
 function customerSecurityLostPasskeyQueueRowActiveV164(row, nowMs) {
   const lockUntilMs = Number(row && row.blocked_until_ms || 0);
   return Number.isFinite(lockUntilMs) && lockUntilMs > Number(nowMs || Date.now());
+}
+
+async function customerSecurityLostPasskeyQueueRenewV188(ownerId, context = {}) {
+  const cleanOwner = String(ownerId || '');
+  const table = customerSecurityLostPasskeyQueueTableV164();
+  if (!cleanOwner || !table) return false;
+  const nowMs = Date.now();
+  const lockUntilMs = nowMs + customerSecurityLostPasskeyQueueTtlMsV164();
+  const path = '/rest/v1/' + encodeURIComponent(table)
+    + '?security_key=eq.' + encodeURIComponent(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164)
+    + '&' + encodeURIComponent('record_json->>owner_id') + '=eq.' + encodeURIComponent(cleanOwner)
+    + '&blocked_until_ms=gt.' + encodeURIComponent(String(nowMs));
+  const result = await supabaseFetch(path, {
+    method: 'PATCH',
+    auth: 'service',
+    prefer: 'return=representation',
+    body: {
+      record_json: customerSecurityLostPasskeyQueueRecordV164(cleanOwner, nowMs, lockUntilMs, context),
+      blocked_until_ms: lockUntilMs,
+      updated_at: new Date(nowMs).toISOString(),
+      expires_at: new Date(lockUntilMs + 60_000).toISOString()
+    }
+  }).catch(() => null);
+  const renewed = Boolean(result && result.ok && Array.isArray(result.data) && result.data.some((row) => (
+    customerSecurityLostPasskeyQueueRowOwnerV164(row) === cleanOwner
+    && customerSecurityLostPasskeyQueueRowActiveV164(row, Date.now())
+  )));
+  if (renewed) {
+    DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
+      ownerId: cleanOwner,
+      lockUntilMs
+    });
+  }
+  return renewed;
+}
+
+function customerSecurityLostPasskeyQueueHeartbeatV188(ownerId, context = {}) {
+  let active = true;
+  let leaseLost = false;
+  let pending = Promise.resolve();
+  const tick = () => {
+    if (!active || leaseLost) return;
+    pending = customerSecurityLostPasskeyQueueRenewV188(ownerId, context)
+      .then((renewed) => { if (!renewed) leaseLost = true; })
+      .catch(() => { leaseLost = true; });
+  };
+  const timer = setInterval(tick, customerSecurityLostPasskeyQueueHeartbeatMsV188());
+  if (timer && typeof timer.unref === 'function') timer.unref();
+  return {
+    healthy: () => !leaseLost,
+    stop: async () => {
+      active = false;
+      clearInterval(timer);
+      await pending.catch(() => null);
+    }
+  };
+}
+
+function customerSecurityLostPasskeyQueueLeaseHealthyV188(ticket) {
+  return Boolean(ticket && ticket.ok && (typeof ticket.leaseHealthy !== 'function' || ticket.leaseHealthy()));
 }
 
 async function customerSecurityLostPasskeyQueueTryInsertV164(ownerId, context = {}) {
@@ -6186,10 +6253,17 @@ async function customerSecurityLostPasskeyQueueTryInsertAvailableV167(ownerId, c
 }
 
 async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
-  if (!customerSecurityLostPasskeyQueueEnabledV164()) return { ok: true, disabled: true, release: async () => {} };
+  if (!customerSecurityLostPasskeyQueueEnabledV164()) {
+    return { ok: true, disabled: true, leaseHealthy: () => true, release: async () => {} };
+  }
   const ownerId = customerSecurityLostPasskeyQueueOwnerV164();
   const startMs = Date.now();
-  const context = { nonce: body && body.nonce, callerId: body && body.caller_id };
+  const context = {
+    nonce: body && body.nonce,
+    callerId: body && body.caller_id,
+    workerAction: body && (body.worker_action || body.queue_task),
+    lockedAtMs: startMs
+  };
   const nowMs = Date.now();
   const memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
   if (memory && Number(memory.lockUntilMs || 0) > nowMs && String(memory.ownerId || '') !== ownerId) {
@@ -6212,13 +6286,18 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
       ownerId,
       lockUntilMs: Date.now() + customerSecurityLostPasskeyQueueTtlMsV164()
     });
+    const heartbeat = customerSecurityLostPasskeyQueueHeartbeatV188(ownerId, context);
     return {
       ok: true,
       ownerId,
       attempts: 1,
       waited_ms: Date.now() - startMs,
       claim_mode: claimed.claimed || 'fast_claim',
-      release: () => customerSecurityLostPasskeyQueueReleaseV164(ownerId)
+      leaseHealthy: heartbeat.healthy,
+      release: async () => {
+        await heartbeat.stop();
+        return customerSecurityLostPasskeyQueueReleaseV164(ownerId);
+      }
     };
   }
 
@@ -6581,7 +6660,15 @@ function customerSecurityRecoveryWorkerLocalEnabled() {
 }
 
 function diracCentralGuardPassedForHandlerV168(req) {
-  return Boolean(req && req.__diracCentralSecurityGuardPassedV146 === true);
+  const ctx = diracCentralCurrentContextV149();
+  return Boolean(
+    req
+    && req.__diracCentralSecurityGuardPassedV146 === true
+    && ctx
+    && ctx.req === req
+    && ctx.guardPassport
+    && ctx.guardPassport.integrity_checked === true
+  );
 }
 
 function customerSecurityLostPasskeyCanonical(value) {
@@ -7250,8 +7337,20 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
     status: 200,
     argon2id_params: customerSecurityLostPasskeyArgon2EncodedParamsV171(linkTokenHash)
   });
+  const argonQueueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, {
+    nonce: parsed.requestId,
+    caller_id: 'recovery_link',
+    queue_task: DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
+  });
+  if (!argonQueueTicket || !argonQueueTicket.ok) {
+    try { res.setHeader('Retry-After', String(Math.max(1, Math.ceil(customerSecurityLostPasskeyQueuePollMsV164() / 1000)))); } catch (_) {}
+    return customerSecurityLostPasskeyGenericLinkErrorV162(res, 429);
+  }
   try {
     tokenOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('link_token', parsed.linkToken, linkTokenHash, vaultSecrets.pepper, vaultSecrets.rootSecret);
+    if (!customerSecurityLostPasskeyQueueLeaseHealthyV188(argonQueueTicket)) {
+      return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
+    }
   } catch (error) {
     customerSecurityLostPasskeyLinkOpenArgon2DebugV174(
       'argon2_verify_error',
@@ -7273,6 +7372,8 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
       elapsed_ms: Math.max(0, Date.now() - argon2VerifyStartedAt)
     });
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 503);
+  } finally {
+    try { await argonQueueTicket.release(); } catch (_) {}
   }
 
   customerSecurityLostPasskeyLinkOpenArgon2DebugV174(
@@ -8581,6 +8682,9 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const websiteSecretHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('website_secret', websiteSecret100, websiteSecretSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const recoveryCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('recovery_code', recoveryCode, recoveryCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const bindingHashCommitment = await customerSecurityLostPasskeyArgon2EncodedHashV157('binding', bindingsCanonical, bindingSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
+  if (override && override.argonQueueTicket && !customerSecurityLostPasskeyQueueLeaseHealthyV188(override.argonQueueTicket)) {
+    return res.status(503).json({ ok: false, code: 'RECOVERY_ARGON2_LEASE_LOST', message: 'Antrean keamanan recovery perlu diulang.' });
+  }
 
   // Recovery email opens the static recovery page; the page then validates the token through Central Guard.
   const recoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157()
@@ -26578,6 +26682,10 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
     return customerSecurityLostPasskeyGenericWorkerErrorV157(res, lock ? 423 : 403, lock ? 'recovery_code_locked' : 'recovery_code_not_matched', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, metadata, bindingCommitmentOk: expectedBinding, recoveryCodeOk: codeOk, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
   }
 
+  if (override && override.argonQueueTicket && !customerSecurityLostPasskeyQueueLeaseHealthyV188(override.argonQueueTicket)) {
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 503, 'recovery_argon2_lease_lost', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
+  }
+
   const activePasskeys = await customerSecurityLostPasskeyActivePasskeys(owner);
   if (!activePasskeys.length) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 409, 'active_passkey_not_found', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, metadata, bindingCommitmentOk: expectedBinding, recoveryCodeOk: codeOk, activePasskeyCount: 0, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
 
@@ -26759,6 +26867,9 @@ async function customerSecurityFinalizeRecoveryLocalWorkerV162(req, res, action,
   const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
   const bindingOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('binding', customerSecurityLostPasskeyCanonical(bindings), metadata.binding_hash_commitment, vaultSecrets.pepper, vaultSecrets.rootSecret).catch(() => false);
   if (!bindingOk) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, 'recovery_finalize_binding_commitment_mismatch', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email });
+  if (override && override.argonQueueTicket && !customerSecurityLostPasskeyQueueLeaseHealthyV188(override.argonQueueTicket)) {
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 503, 'recovery_argon2_lease_lost', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_FINALIZE });
+  }
 
   const now = diracNowIso();
   const finalMetadata = {
@@ -26841,6 +26952,7 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
         owner,
         activePasskeys,
         bindings,
+        argonQueueTicket: queueTicket,
         passwordLatestMaterial: String(body.password_latest_material || body.password_latest_proof || body.account_password || '')
       });
     } finally {
@@ -26849,22 +26961,48 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
   }
 
   if (workerTask === DIRAC_RECOVERY_WORKER_TASK_VERIFY) {
-    return customerSecurityVerifyRecoveryCodeLocalWorker(req, res, 'customer_security_recovery_code_verify', {
-      access: { customerId: owner.customerId },
-      owner,
-      bindings,
-      requestId: String(body.request_id || ''),
-      recoveryCode: String(body.recovery_code || body.code || '')
-    });
+    const queueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, body);
+    if (!queueTicket || !queueTicket.ok) {
+      return res.status(queueTicket && queueTicket.status || 503).json({
+        ok: false,
+        code: 'RECOVERY_ARGON2_BUSY',
+        message: 'Verifikasi recovery sedang diproses. Silakan coba kembali.'
+      });
+    }
+    try {
+      return await customerSecurityVerifyRecoveryCodeLocalWorker(req, res, 'customer_security_recovery_code_verify', {
+        access: { customerId: owner.customerId },
+        owner,
+        bindings,
+        requestId: String(body.request_id || ''),
+        recoveryCode: String(body.recovery_code || body.code || ''),
+        argonQueueTicket: queueTicket
+      });
+    } finally {
+      try { await queueTicket.release(); } catch (_) {}
+    }
   }
 
   if (workerTask === DIRAC_RECOVERY_WORKER_TASK_FINALIZE) {
-    return customerSecurityFinalizeRecoveryLocalWorkerV162(req, res, 'customer_security_recovery_code_finalize', {
-      access: { customerId: owner.customerId },
-      owner,
-      bindings,
-      requestId: String(body.request_id || '')
-    });
+    const queueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, body);
+    if (!queueTicket || !queueTicket.ok) {
+      return res.status(queueTicket && queueTicket.status || 503).json({
+        ok: false,
+        code: 'RECOVERY_ARGON2_BUSY',
+        message: 'Finalisasi recovery sedang diproses. Silakan coba kembali.'
+      });
+    }
+    try {
+      return await customerSecurityFinalizeRecoveryLocalWorkerV162(req, res, 'customer_security_recovery_code_finalize', {
+        access: { customerId: owner.customerId },
+        owner,
+        bindings,
+        requestId: String(body.request_id || ''),
+        argonQueueTicket: queueTicket
+      });
+    } finally {
+      try { await queueTicket.release(); } catch (_) {}
+    }
   }
 
   return res.status(404).json({ ok: false, code: 'RECOVERY_WORKER_TASK_INVALID', message: 'Worker task recovery tidak valid.' });
@@ -27055,6 +27193,12 @@ const DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165 = new Set([
 const DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174 = new Set([
   ...diracCentralEnvCsvV150('DIRAC_CENTRAL_VERCEL2_ONLY_ACTIONS'),
   ...diracCentralEnvCsvV150('DIRAC_VERCEL2_ONLY_ACTIONS')
+]);
+
+const DIRAC_CENTRAL_COMPILED_VERCEL2_ACTIONS_V188 = new Set([
+  DIRAC_RECOVERY_WORKER_ACTION,
+  DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165,
+  'customer_security_recovery_hpke_verify'
 ]);
 
 const DIRAC_CENTRAL_ACTION_ALIASES_V146 = Object.freeze({});
@@ -27295,6 +27439,11 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
   const method = String(req && req.method || 'GET').toUpperCase();
   let ctx = null;
   try {
+    if (!req || typeof req !== 'object') return diracCentralBlockedResponseV146(res, 'CENTRAL_GUARD_REQUEST_INVALID');
+    req.__diracCentralSecurityGuardPassedV146 = false;
+    req.__diracRecoveryWorkerVerified = false;
+    req.__diracHtmlActionSignatureVerifiedV178 = false;
+    req.__diracSecurityReportVerifiedV186 = false;
     diracCentralApplyHeadersV146(res);
     diracCentralWrapJsonResponseV146(res);
 
@@ -27515,6 +27664,7 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
 
     const integrity = diracCentralIntegrityVerifierV146(ctx);
     if (!integrity.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, integrity.reason);
+    diracCentralStampV146(ctx, 'integrity_checked');
 
     if (action === DIRAC_SECURITY_REPORT_ACTION_V186) {
       if (req && req.__diracSecurityReportVerifiedV186 === true) {
@@ -27973,6 +28123,15 @@ function diracCentralVercel2OnlyActionGuardV150(action) {
 
   const vercel2OnlyActions = diracCentralVercel2OnlyActionsV150();
   if (!vercel2OnlyActions.has(clean)) return { ok: true };
+  if (!DIRAC_CENTRAL_COMPILED_VERCEL2_ACTIONS_V188.has(clean)) {
+    return { ok: false, reason: 'vercel2_action_not_compiled' };
+  }
+  if ([...DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174].some((item) => !DIRAC_CENTRAL_COMPILED_VERCEL2_ACTIONS_V188.has(item))) {
+    return { ok: false, reason: 'vercel2_env_allowlist_contains_unknown_action' };
+  }
+  if (!DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.has(clean)) {
+    return { ok: false, reason: 'vercel2_action_env_allowlist_required' };
+  }
 
   const deploymentRole = diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE')
     || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE');
@@ -28047,9 +28206,14 @@ function diracCentralVercel2RecoveryEnvPartitionGuardV183(action) {
   const server1OnlyEnv = [
     'DIRAC_RECOVERY_WORKER_URL',
     'DIRAC_RECOVERY_WORKER_CALLER',
+    'DIRAC_RECOVERY_WORKER_TIMEOUT_MS',
     'DIRAC_RECOVERY_HPKE_ALLOWED_CALLER'
   ];
   const server2OnlyEnv = [
+    'DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED',
+    'DIRAC_VERCEL2_ACTIONS_ENABLED',
+    'DIRAC_CENTRAL_VERCEL2_ONLY_ACTIONS',
+    'DIRAC_VERCEL2_ONLY_ACTIONS',
     'DIRAC_RECOVERY_WORKER_ALLOWED_CALLER',
     'DIRAC_RECOVERY_WORKER_MAX_BODY_BYTES',
     'DIRAC_RECOVERY_WORKER_CLOCK_SKEW_SECONDS',
@@ -28155,6 +28319,15 @@ function diracCentralIntegrityVerifierV146(ctx) {
   ];
   for (const stamp of required) {
     if (!pass[stamp]) return { ok: false, reason: 'central_guard_integrity_missing_' + stamp };
+  }
+  if (ctx && ctx.__diracCentralRecoveryLinkRouteV165 === true && !pass.recovery_link_route_checked) {
+    return { ok: false, reason: 'central_guard_integrity_missing_recovery_link_route_checked' };
+  }
+  if (ctx && ctx.action === DIRAC_SECURITY_REPORT_ACTION_V186 && !pass.security_report_checked) {
+    return { ok: false, reason: 'central_guard_integrity_missing_security_report_checked' };
+  }
+  if (ctx && ctx.action === DIRAC_RECOVERY_WORKER_ACTION && (!ctx.req || ctx.req.__diracRecoveryWorkerVerified !== true)) {
+    return { ok: false, reason: 'central_guard_integrity_missing_recovery_worker_signature' };
   }
   return { ok: true };
 }
@@ -30509,6 +30682,7 @@ function assertProductionSecurityConfigV146() {
     'DIRAC_BOLA_IDOR_OWNER_BINDING_DISABLED',
     'DIRAC_BOLA_IDOR_GLOBAL_BAN_DISABLED',
     'DIRAC_SECURITY_WRITE_COALESCER_DISABLED',
+    'DIRAC_LOST_PASSKEY_QUEUE_DISABLED',
     'DIRAC_A2F_REQUEST_SIGNATURE_DISABLED',
     'DIRAC_A2F_STRICT_CENTRAL_GUARD_DISABLED'
   ];
@@ -30655,7 +30829,13 @@ try {
 
 function diracCentralCurrentContextPassedV146() {
   const ctx = diracCentralCurrentContextV149();
-  return Boolean(ctx && ctx.req && ctx.req.__diracCentralSecurityGuardPassedV146);
+  return Boolean(
+    ctx
+    && ctx.req
+    && ctx.req.__diracCentralSecurityGuardPassedV146 === true
+    && ctx.guardPassport
+    && ctx.guardPassport.integrity_checked === true
+  );
 }
 
 /* ============================================================
@@ -31400,6 +31580,7 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
   let recoveryCode = '';
   let consumeClaim = false;
   let argon2GateClaimed = false;
+  let argonQueueTicket = null;
   try {
     const request = await diracRecoveryHpkeReadRequestV159(envelope.requestId);
     if (!request.ok) return res.status(503).json({ ok: false, code: 'RECOVERY_REQUEST_STORAGE_UNAVAILABLE', message: 'Recovery request belum dapat diperiksa.' });
@@ -31425,6 +31606,14 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
     if (!argon2Policy.ok) {
       consumeClaim = true;
       return res.status(503).json({ ok: false, code: 'RECOVERY_ARGON2_POLICY_INVALID', message: 'Kebijakan verifikasi recovery tidak valid.' });
+    }
+    argonQueueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, {
+      nonce: envelope.requestId,
+      caller_id: 'browser_hpke',
+      queue_task: DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159
+    });
+    if (!argonQueueTicket || !argonQueueTicket.ok) {
+      return res.status(429).json({ ok: false, code: 'RECOVERY_ARGON2_BUSY', message: 'Verifikasi recovery sedang diproses. Silakan coba kembali.' });
     }
     if (!diracRecoveryHpkeArgon2ClaimV187()) {
       return res.status(429).json({ ok: false, code: 'RECOVERY_ARGON2_BUSY', message: 'Verifikasi recovery sedang diproses. Silakan coba kembali.' });
@@ -31460,6 +31649,9 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
       vaultSecrets.pepper,
       vaultSecrets.rootSecret
     ).catch(() => false);
+    if (!customerSecurityLostPasskeyQueueLeaseHealthyV188(argonQueueTicket)) {
+      return res.status(503).json({ ok: false, code: 'RECOVERY_ARGON2_LEASE_LOST', message: 'Antrean keamanan recovery perlu diulang.' });
+    }
     if (!codeOk) {
       consumeClaim = true;
       const failed = await diracRecoveryHpkeRegisterCodeFailureV159(req, row, envelope.requestId);
@@ -31540,6 +31732,9 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
     recoveryCode = '';
     if (plaintext) plaintext.fill(0);
     if (argon2GateClaimed) diracRecoveryHpkeArgon2ReleaseV187();
+    if (argonQueueTicket && typeof argonQueueTicket.release === 'function') {
+      try { await argonQueueTicket.release(); } catch (_) {}
+    }
     if (consumeClaim) diracRecoveryHpkeConsumeEnvelopeV159(claim);
     else diracRecoveryHpkeReleaseEnvelopeV159(claim);
   }
@@ -31631,4 +31826,3 @@ customerSecurityLostPasskeyReturnVaultJsonV169 = function customerSecurityLostPa
   }
 };
 Object.defineProperty(customerSecurityLostPasskeyReturnVaultJsonV169, '__diracRecoveryHpkeManifestV160', { value: true, enumerable: false });
-
