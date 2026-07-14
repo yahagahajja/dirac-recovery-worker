@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-EEibXfWICnv0X9GzWXn/BHnXvZu6j2G/dTIbCh/jIvcYXQT1Z14KrVB9g989C2rsLxTDpg7XSLnSsiUSzDM8ow=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-yrrVhkUkhzj6+td1CmtIic8Rx8YwWTQMtaKUGSa+moyGpJyC011PuFCiEiUDDw8JsRKgEp/Xdq5fwb05LExFgA=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -29,7 +29,7 @@
     X-DNS-Prefetch-Control: off
     X-Permitted-Cross-Domain-Policies: none
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-EEibXfWICnv0X9GzWXn/BHnXvZu6j2G/dTIbCh/jIvcYXQT1Z14KrVB9g989C2rsLxTDpg7XSLnSsiUSzDM8ow=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-yrrVhkUkhzj6+td1CmtIic8Rx8YwWTQMtaKUGSa+moyGpJyC011PuFCiEiUDDw8JsRKgEp/Xdq5fwb05LExFgA=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 atau ML-DSA-87 public key belum diisi.
@@ -1977,8 +1977,14 @@
       if (!sealed || sealed.version !== CONFIG.expectedResponseVersion || sealed.request_id !== requestId) throw new Error('SEALED_RECOVERY_RESPONSE_INVALID');
       if (String(sealed.transcript_sha512 || '') !== bytesToB64Url(envelope.transcriptHash)) throw new Error('SEALED_RECOVERY_TRANSCRIPT_INVALID');
       var aad = rememberBuffer(utf8(canonical({ version: CONFIG.expectedResponseVersion, purpose: CONFIG.expectedPurpose, request_id: requestId })));
-      var nonce = rememberBuffer(b64ToBytes(sealed.aead_nonce));
-      var ciphertext = rememberBuffer(b64ToBytes(sealed.ciphertext));
+      var nonce;
+      var ciphertext;
+      try { nonce = rememberBuffer(b64ToBytes(sealed.aead_nonce)); }
+      catch (_) { throw new Error('SEALED_NONCE_BASE64_INVALID'); }
+      if (nonce.length !== 12) { nonce.fill(0); throw new Error('SEALED_NONCE_LENGTH_INVALID'); }
+      try { ciphertext = rememberBuffer(b64ToBytes(sealed.ciphertext)); }
+      catch (_) { throw new Error('SEALED_CIPHERTEXT_BASE64_INVALID'); }
+      if (ciphertext.length < 17 || ciphertext.length > 64 * 1024) { ciphertext.fill(0); throw new Error('SEALED_CIPHERTEXT_LENGTH_INVALID'); }
       var plaintext = await decryptAesGcmCombined(envelope.responseKey, nonce, ciphertext, aad);
       var parsed;
       var plaintextText = '';
