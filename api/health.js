@@ -1103,13 +1103,24 @@ function encryptResponse(responseKey, transcriptHash, requestId, recoveryCode) {
   }), 'utf8');
   try {
     const encrypted = aesGcmEncrypt(responseKey, plaintext, aad);
-    return {
+    const sealed = {
       version: RESPONSE_VERSION,
       request_id: String(requestId),
       aead_nonce: b64u(encrypted.nonce),
       ciphertext: b64u(Buffer.concat([encrypted.ciphertext, encrypted.tag])),
       transcript_sha512: b64u(transcriptHash)
     };
+    const checkedNonce = decodeB64u(sealed.aead_nonce, 12, 128);
+    const checkedCiphertext = decodeB64u(sealed.ciphertext, null, 64 * 1024);
+    const checkedTranscript = decodeB64u(sealed.transcript_sha512, 64, 128);
+    try {
+      if (checkedCiphertext.length < 17) throw fail('SEALED_RECOVERY_CIPHERTEXT_LENGTH_INVALID');
+      return sealed;
+    } finally {
+      checkedNonce.fill(0);
+      checkedCiphertext.fill(0);
+      checkedTranscript.fill(0);
+    }
   } finally {
     aad.fill(0); plaintext.fill(0);
   }
