@@ -180,27 +180,6 @@ function aesGcmDecrypt(key, nonce, ciphertext, tag, aad) {
   }
 }
 
-function xor3(first, second, third) {
-  const a = Buffer.from(first);
-  const b = Buffer.from(second);
-  const c = Buffer.from(third);
-  if (a.length !== 32 || b.length !== 32 || c.length !== 32) throw fail('XOR_SHARE_LENGTH_INVALID');
-  const output = Buffer.allocUnsafe(32);
-  for (let index = 0; index < 32; index += 1) output[index] = a[index] ^ b[index] ^ c[index];
-  return output;
-}
-
-function createShares(dek, randomBytes = crypto.randomBytes) {
-  const realDek = Buffer.from(dek);
-  if (realDek.length !== 32) throw fail('DEK_LENGTH_INVALID');
-  const share1 = Buffer.from(randomBytes(32));
-  const share2 = Buffer.from(randomBytes(32));
-  if (share1.length !== 32 || share2.length !== 32) throw fail('CSPRNG_LENGTH_INVALID');
-  const share3 = Buffer.allocUnsafe(32);
-  for (let index = 0; index < 32; index += 1) share3[index] = realDek[index] ^ share1[index] ^ share2[index];
-  return { share1, share2, share3 };
-}
-
 function parsePrivateKey(raw, expectedType) {
   const clean = String(raw || '').trim();
   if (!clean) throw fail('PRIVATE_KEY_MISSING');
@@ -327,135 +306,254 @@ function verifyDualManifest(payload, signatures) {
   }
 }
 
-const azureTokenCache = { token: '', expiresAtMs: 0 };
-
-function azureConfig() {
-  const provider = envText('DIRAC_RECOVERY_HSM_PROVIDER');
-  if (provider !== 'azure-managed-hsm') throw fail('HSM_PROVIDER_INVALID');
-  const vaultUrlRaw = envText('DIRAC_RECOVERY_HSM_VAULT_URL');
-  let vaultUrl;
-  try { vaultUrl = new URL(vaultUrlRaw); } catch (_) { throw fail('HSM_VAULT_URL_INVALID'); }
-  if (vaultUrl.protocol !== 'https:' || vaultUrl.username || vaultUrl.password || vaultUrl.search || vaultUrl.hash || vaultUrl.pathname.replace(/\/+$/, '')) {
-    throw fail('HSM_VAULT_URL_INVALID');
-  }
-  const host = vaultUrl.hostname.toLowerCase();
-  if (!/^[a-z0-9-]+\.managedhsm\.azure\.net$/.test(host)) throw fail('HSM_VAULT_HOST_INVALID');
-  const keyName = envText('DIRAC_RECOVERY_HSM_KEY_NAME');
-  const keyVersion = envText('DIRAC_RECOVERY_HSM_KEY_VERSION');
-  const tenantId = envText('DIRAC_RECOVERY_HSM_TENANT_ID');
-  const clientId = envText('DIRAC_RECOVERY_HSM_CLIENT_ID');
-  const clientSecret = envText('DIRAC_RECOVERY_HSM_CLIENT_SECRET');
-  if (!/^[A-Za-z0-9-]{1,127}$/.test(keyName) || !/^[A-Fa-f0-9]{32}$/.test(keyVersion)) throw fail('HSM_KEY_ID_INVALID');
-  if (!/^[0-9a-fA-F-]{36}$/.test(tenantId) || !/^[0-9a-fA-F-]{36}$/.test(clientId) || Buffer.byteLength(clientSecret, 'utf8') < 32) {
-    throw fail('HSM_OAUTH_CONFIGURATION_INVALID');
-  }
-  return { vaultUrl: vaultUrl.origin, host, keyName, keyVersion, tenantId, clientId, clientSecret };
-}
-
-async function fetchJsonStrict(url, options, allowedHost, maximumBytes = 64 * 1024) {
-  const parsed = new URL(url);
-  if (parsed.protocol !== 'https:' || parsed.hostname.toLowerCase() !== String(allowedHost).toLowerCase()) throw fail('EGRESS_HOST_INVALID');
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12_000);
-  try {
-    const response = await fetch(parsed, { ...options, redirect: 'error', signal: controller.signal });
-    const declared = Number(response.headers.get('content-length') || 0);
-    if (Number.isFinite(declared) && declared > maximumBytes) throw fail('EGRESS_RESPONSE_TOO_LARGE');
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > maximumBytes) throw fail('EGRESS_RESPONSE_TOO_LARGE');
-    let data;
-    try { data = JSON.parse(bytes.toString('utf8')); } catch (_) { throw fail('EGRESS_RESPONSE_JSON_INVALID'); }
-    bytes.fill(0);
-    if (!response.ok) throw fail('HSM_OPERATION_FAILED');
-    return data;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function azureAccessToken(config) {
-  const now = Date.now();
-  if (azureTokenCache.token && azureTokenCache.expiresAtMs > now + 60_000) return azureTokenCache.token;
-  const host = 'login.microsoftonline.com';
-  const url = `https://${host}/${encodeURIComponent(config.tenantId)}/oauth2/v2.0/token`;
-  const form = new URLSearchParams({
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
-    scope: 'https://managedhsm.azure.net/.default',
-    grant_type: 'client_credentials'
-  });
-  const data = await fetchJsonStrict(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
-    body: form.toString()
-  }, host, 32 * 1024);
-  const token = String(data && data.access_token || '');
-  const expiresIn = Number(data && data.expires_in || 0);
-  if (!token || token.length > 8192 || !Number.isFinite(expiresIn) || expiresIn < 60) throw fail('HSM_OAUTH_TOKEN_INVALID');
-  azureTokenCache.token = token;
-  azureTokenCache.expiresAtMs = now + Math.min(expiresIn, 3600) * 1000;
-  return token;
-}
-
-async function azureHsmOperation(operation, value) {
-  const config = azureConfig();
-  const input = Buffer.from(value);
-  if (operation === 'wrapkey' && input.length !== 32) throw fail('HSM_WRAP_INPUT_INVALID');
-  if (operation === 'unwrapkey' && input.length !== 40) throw fail('HSM_UNWRAP_INPUT_INVALID');
-  const token = await azureAccessToken(config);
-  const url = `${config.vaultUrl}/keys/${encodeURIComponent(config.keyName)}/${encodeURIComponent(config.keyVersion)}/${operation}?api-version=2025-07-01`;
-  const data = await fetchJsonStrict(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify({ alg: 'A256KW', value: b64u(input) })
-  }, config.host);
-  const output = decodeB64u(String(data && data.value || ''), operation === 'wrapkey' ? 40 : 32, 4096);
-  const kid = String(data && data.kid || '');
-  if (!kid.startsWith(`${config.vaultUrl}/keys/${config.keyName}/${config.keyVersion}`)) {
-    output.fill(0);
-    throw fail('HSM_KEY_ID_RESPONSE_INVALID');
-  }
-  return { value: output, keyId: kid };
-}
-
-async function hsmWrap(share) {
-  return azureHsmOperation('wrapkey', share);
-}
-
-async function hsmUnwrap(wrapped) {
-  return azureHsmOperation('unwrapkey', wrapped);
-}
-
 function assertRuntimePolicy() {
   const versionParts = String(process.versions.node || '').split('.').map((item) => Number(item || 0));
   const major = versionParts[0] || 0;
   const minor = versionParts[1] || 0;
   if (major < 24 || (major === 24 && minor < 8)) throw fail('NODE_VERSION_TOO_OLD');
   assertPostQuantumRuntime();
-  if (envTrue('DIRAC_RECOVERY_FIPS_RUNTIME_REQUIRED') && typeof crypto.getFips === 'function' && crypto.getFips() !== 1) {
+  if (envTrue('DIRAC_RECOVERY_FIPS_RUNTIME_REQUIRED')
+      && (typeof crypto.getFips !== 'function' || crypto.getFips() !== 1)) {
     throw fail('FIPS_RUNTIME_REQUIRED');
   }
-  azureConfig();
+}
+
+function assertExactObjectKeys(value, expectedKeys, code) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail(code || 'OBJECT_SHAPE_INVALID');
+  const actual = Object.keys(value).sort();
+  const expected = Array.from(expectedKeys || []).sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+    throw fail(code || 'OBJECT_FIELDS_INVALID');
+  }
+  return value;
+}
+
+function assertArgon2Profile(params) {
+  assertExactObjectKeys(params, ['memoryCost', 'timeCost', 'parallelism', 'hashLength'], 'ARGON2_FIELDS_INVALID');
+  if (Number(params.memoryCost) !== 1024000
+      || Number(params.timeCost) !== 4
+      || Number(params.parallelism) !== 4
+      || Number(params.hashLength) !== 64) {
+    throw fail('ARGON2_PROFILE_INVALID');
+  }
+  return true;
+}
+
+function parseIsoMsStrict(value, code) {
+  const clean = String(value || '');
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(clean)) throw fail(code || 'TIME_FORMAT_INVALID');
+  const parsed = Date.parse(clean);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== clean) throw fail(code || 'TIME_FORMAT_INVALID');
+  return parsed;
+}
+
+function assertVaultBundlePolicy(bundle) {
+  assertExactObjectKeys(bundle, [
+    'aes_nonce', 'argon2id_params', 'auth_tag', 'ciphertext', 'hkdf_info', 'key_protection',
+    'metadata', 'metadata_signature', 'payload', 'request_id', 'salt', 'transport', 'vault_id', 'version'
+  ], 'VAULT_BUNDLE_FIELDS_INVALID');
+  if (bundle.version !== VERSION || !/^[A-Za-z0-9_-]{16,120}$/.test(String(bundle.request_id || ''))) throw fail('VAULT_BUNDLE_ID_INVALID');
+  const vaultId = decodeB64u(bundle.vault_id, 32, 128);
+  const vaultSalt = decodeB64u(bundle.salt, 32, 128);
+  try {
+    assertArgon2Profile(bundle.argon2id_params);
+    if (bundle.hkdf_info !== `dirac/recovery/v2/dek-wrap/${bundle.request_id}`) throw fail('VAULT_HKDF_INFO_INVALID');
+    if (!/^(?:[a-f0-9]{64}|[A-Za-z0-9_-]{86})$/.test(String(bundle.metadata_signature || ''))) throw fail('VAULT_METADATA_SIGNATURE_INVALID');
+
+    const metadata = assertExactObjectKeys(bundle.metadata, [
+      'argon2id_params', 'created_at', 'dek_bits', 'dek_protection', 'domain', 'expires_at',
+      'extra_nonce_entropy_hash', 'generation', 'input_policy', 'kdf', 'key_wrap', 'not_before',
+      'one_time_use', 'payload_cipher', 'purpose', 'request_id', 'schema', 'signature_policy',
+      'transport_suite', 'vault_id', 'version'
+    ], 'VAULT_METADATA_FIELDS_INVALID');
+    if (metadata.schema !== 'dirac-recovery-vault-metadata-v2'
+        || metadata.version !== VERSION
+        || metadata.purpose !== PURPOSE
+        || metadata.domain !== 'https://secure.diracgroup.store'
+        || metadata.request_id !== bundle.request_id
+        || metadata.vault_id !== bundle.vault_id
+        || metadata.generation !== 2
+        || metadata.one_time_use !== true
+        || metadata.payload_cipher !== PAYLOAD_CIPHER
+        || metadata.key_wrap !== KEY_WRAP
+        || metadata.kdf !== KDF
+        || metadata.dek_bits !== 256
+        || metadata.dek_protection !== 'A256KW-enveloped-DEK'
+        || metadata.input_policy !== 'password+email-secret-100+website-secret-100'
+        || metadata.transport_suite !== HYBRID_SUITE
+        || metadata.signature_policy !== SIGNATURE_POLICY) {
+      throw fail('VAULT_METADATA_POLICY_INVALID');
+    }
+    assertArgon2Profile(metadata.argon2id_params);
+    if (jcs(metadata.argon2id_params) !== jcs(bundle.argon2id_params)) throw fail('VAULT_ARGON2_BINDING_INVALID');
+    if (!/^(?:[a-f0-9]{64}|[A-Za-z0-9_-]{86})$/.test(String(metadata.extra_nonce_entropy_hash || ''))) throw fail('VAULT_ENTROPY_HASH_INVALID');
+    const createdMs = parseIsoMsStrict(metadata.created_at, 'VAULT_CREATED_AT_INVALID');
+    const notBeforeMs = parseIsoMsStrict(metadata.not_before, 'VAULT_NOT_BEFORE_INVALID');
+    const expiresMs = parseIsoMsStrict(metadata.expires_at, 'VAULT_EXPIRES_AT_INVALID');
+    if (notBeforeMs !== createdMs || expiresMs <= createdMs || expiresMs - createdMs > 15 * 60 * 1000) throw fail('VAULT_TIME_POLICY_INVALID');
+
+    const payload = assertExactObjectKeys(bundle.payload, ['ciphertext_b64url', 'cipher', 'nonce_b64url', 'tag_b64url'], 'VAULT_PAYLOAD_FIELDS_INVALID');
+    if (payload.cipher !== PAYLOAD_CIPHER) throw fail('VAULT_PAYLOAD_CIPHER_INVALID');
+    const payloadNonce = decodeB64u(payload.nonce_b64url, 12, 128);
+    const payloadCiphertext = decodeB64u(payload.ciphertext_b64url, null, 64 * 1024);
+    const payloadTag = decodeB64u(payload.tag_b64url, 16, 128);
+    try {
+      if (!payloadCiphertext.length
+          || bundle.aes_nonce !== payload.nonce_b64url
+          || bundle.ciphertext !== payload.ciphertext_b64url
+          || bundle.auth_tag !== payload.tag_b64url) {
+        throw fail('VAULT_PAYLOAD_ALIAS_INVALID');
+      }
+    } finally {
+      payloadNonce.fill(0); payloadCiphertext.fill(0); payloadTag.fill(0);
+    }
+
+    const protection = assertExactObjectKeys(bundle.key_protection, ['dek_wrap', 'policy'], 'VAULT_PROTECTION_FIELDS_INVALID');
+    if (protection.policy !== 'A256KW-enveloped-DEK') throw fail('VAULT_PROTECTION_POLICY_INVALID');
+    const dekWrap = assertExactObjectKeys(protection.dek_wrap, [
+      'hkdf_info', 'kdf', 'key_id', 'salt_b64url', 'wrap', 'wrapped_dek_b64url'
+    ], 'VAULT_DEK_WRAP_FIELDS_INVALID');
+    if (dekWrap.wrap !== KEY_WRAP
+        || dekWrap.kdf !== KDF
+        || dekWrap.key_id !== 'dirac-vault-kek-v2'
+        || dekWrap.hkdf_info !== bundle.hkdf_info) throw fail('VAULT_DEK_WRAP_POLICY_INVALID');
+    const kekSalt = decodeB64u(dekWrap.salt_b64url, 32, 128);
+    const wrappedDek = decodeB64u(dekWrap.wrapped_dek_b64url, 40, 256);
+    kekSalt.fill(0); wrappedDek.fill(0);
+
+    const transport = assertExactObjectKeys(bundle.transport, [
+      'mlkem', 'mlkem_ciphertext_b64url', 'mlkem_ciphertext_sha512', 'mlkem_key_id',
+      'shared_secret_wrap_info', 'shared_secret_wrap_salt_b64url', 'suite', 'wrapped_shared_secret_b64url'
+    ], 'VAULT_TRANSPORT_FIELDS_INVALID');
+    if (transport.suite !== HYBRID_SUITE
+        || transport.mlkem !== 'ML-KEM-1024'
+        || !/^[A-Za-z0-9._:-]{1,100}$/.test(String(transport.mlkem_key_id || ''))
+        || transport.shared_secret_wrap_info !== `dirac/recovery/v2/mlkem-secret/${bundle.request_id}`) {
+      throw fail('VAULT_TRANSPORT_POLICY_INVALID');
+    }
+    const mlkemCiphertext = decodeB64u(transport.mlkem_ciphertext_b64url, 1568, 4096);
+    const wrappedShared = decodeB64u(transport.wrapped_shared_secret_b64url, 40, 256);
+    const sharedSalt = decodeB64u(transport.shared_secret_wrap_salt_b64url, 32, 128);
+    try {
+      if (transport.mlkem_ciphertext_sha512 !== sha512B64u(mlkemCiphertext)) throw fail('VAULT_MLKEM_HASH_INVALID');
+    } finally {
+      mlkemCiphertext.fill(0); wrappedShared.fill(0); sharedSalt.fill(0);
+    }
+    return true;
+  } finally {
+    vaultId.fill(0); vaultSalt.fill(0);
+  }
+}
+
+function assertManifestPolicy(payload) {
+  assertExactObjectKeys(payload, [
+    'action', 'argon2id_params', 'canonicalization', 'cipher', 'created_at', 'dek_bits',
+    'dek_protection', 'expires_at', 'hpke_key_id', 'hpke_public_key_b64url',
+    'hpke_public_key_sha512', 'input_factor_policy', 'kdf', 'kek_hkdf_info', 'kek_key_id',
+    'kek_salt_sha512', 'key_id', 'key_wrap', 'legacy_fallback_allowed', 'manifest_schema',
+    'metadata_sha512', 'minimum_reader_version', 'mlkem_ciphertext_sha512', 'mlkem_key_id',
+    'not_before', 'payload_ciphertext_sha512', 'payload_nonce_sha512', 'payload_tag_sha512',
+    'purpose', 'request_id', 'security_contract', 'signature_alg', 'signature_algorithms',
+    'signature_policy', 'transport_suite', 'vault_bundle_sha512', 'vault_id', 'version',
+    'wrapped_dek_sha512'
+  ], 'MANIFEST_FIELDS_INVALID');
+  if (payload.manifest_schema !== MANIFEST_SCHEMA
+      || payload.version !== VERSION
+      || payload.minimum_reader_version !== 2
+      || payload.legacy_fallback_allowed !== false
+      || payload.purpose !== PURPOSE
+      || payload.action !== 'lost_passkey_recovery_link_open'
+      || payload.signature_policy !== SIGNATURE_POLICY
+      || payload.signature_alg !== 'Ed25519+ML-DSA-87'
+      || jcs(payload.signature_algorithms) !== jcs(['Ed25519', 'ML-DSA-87'])
+      || payload.canonicalization !== 'RFC8785-JCS'
+      || payload.cipher !== PAYLOAD_CIPHER
+      || payload.dek_bits !== 256
+      || payload.dek_protection !== 'A256KW-enveloped-DEK'
+      || payload.key_wrap !== KEY_WRAP
+      || payload.kdf !== KDF
+      || payload.input_factor_policy !== 'password+email-secret-100+website-secret-100'
+      || payload.transport_suite !== HYBRID_SUITE) {
+    throw fail('MANIFEST_SECURITY_POLICY_INVALID');
+  }
+  if (!/^[A-Za-z0-9_-]{16,120}$/.test(String(payload.request_id || ''))) throw fail('MANIFEST_REQUEST_ID_INVALID');
+  decodeB64u(payload.vault_id, 32, 128).fill(0);
+  assertArgon2Profile(payload.argon2id_params);
+  const expectedEdKeyId = envText('DIRAC_LOST_PASSKEY_ED25519_KEY_ID') || 'dirac-recovery-ed25519-2026-01';
+  if (payload.key_id !== expectedEdKeyId
+      || !/^[A-Za-z0-9._:-]{1,80}$/.test(String(payload.hpke_key_id || ''))
+      || !/^[A-Za-z0-9._:-]{1,100}$/.test(String(payload.mlkem_key_id || ''))
+      || payload.kek_key_id !== 'dirac-vault-kek-v2'
+      || payload.kek_hkdf_info !== `dirac/recovery/v2/dek-wrap/${payload.request_id}`) {
+    throw fail('MANIFEST_KEY_BINDING_INVALID');
+  }
+  const hpkePublic = decodeB64u(payload.hpke_public_key_b64url, 32, 128);
+  try {
+    if (payload.hpke_public_key_sha512 !== sha512B64u(hpkePublic)) throw fail('MANIFEST_HPKE_PUBLIC_HASH_INVALID');
+  } finally { hpkePublic.fill(0); }
+  for (const key of [
+    'mlkem_ciphertext_sha512', 'payload_ciphertext_sha512', 'payload_nonce_sha512',
+    'payload_tag_sha512', 'metadata_sha512', 'wrapped_dek_sha512', 'kek_salt_sha512',
+    'vault_bundle_sha512'
+  ]) {
+    if (!/^[A-Za-z0-9_-]{86}$/.test(String(payload[key] || ''))) throw fail('MANIFEST_HASH_INVALID');
+  }
+  const createdMs = parseIsoMsStrict(payload.created_at, 'MANIFEST_CREATED_AT_INVALID');
+  const notBeforeMs = parseIsoMsStrict(payload.not_before, 'MANIFEST_NOT_BEFORE_INVALID');
+  const expiresMs = parseIsoMsStrict(payload.expires_at, 'MANIFEST_EXPIRES_AT_INVALID');
+  if (notBeforeMs !== createdMs || expiresMs <= createdMs || expiresMs - createdMs > 15 * 60 * 1000) throw fail('MANIFEST_TIME_POLICY_INVALID');
+  const contract = assertExactObjectKeys(payload.security_contract, [
+    'action', 'atomic_replay_claim_required', 'central_guard', 'central_guard_required',
+    'dual_signature_required', 'email_secret_length', 'existing_three_inputs_required',
+    'hybrid_transport_required', 'no_legacy_fallback', 'one_time_copy', 'recovery_code_length',
+    'response_format', 'single_kek_envelope_required', 'vercel2_only', 'version',
+    'website_secret_length'
+  ], 'MANIFEST_CONTRACT_FIELDS_INVALID');
+  if (contract.version !== SECURITY_CONTRACT
+      || contract.central_guard_required !== true
+      || contract.central_guard !== 'dirac-central-security-guard-v146'
+      || contract.action !== payload.action
+      || contract.vercel2_only !== true
+      || contract.response_format !== 'json'
+      || contract.single_kek_envelope_required !== true
+      || contract.existing_three_inputs_required !== true
+      || contract.hybrid_transport_required !== true
+      || contract.atomic_replay_claim_required !== true
+      || contract.dual_signature_required !== true
+      || contract.no_legacy_fallback !== true
+      || contract.one_time_copy !== true
+      || contract.recovery_code_length !== 1200
+      || contract.email_secret_length !== 100
+      || contract.website_secret_length !== 100) {
+    throw fail('MANIFEST_CONTRACT_POLICY_INVALID');
+  }
+  return true;
 }
 
 async function createVault(options) {
   assertRuntimePolicy();
   const required = ['requestId', 'expiresAt', 'nowIso', 'officialOrigin', 'passwordMaterial', 'emailSecret', 'websiteSecret', 'recoveryCode'];
   for (const key of required) if (!String(options && options[key] || '')) throw fail('VAULT_INPUT_MISSING_' + key.toUpperCase());
+  if (!/^[A-Za-z0-9_-]{16,120}$/.test(String(options.requestId))) throw fail('VAULT_REQUEST_ID_INVALID');
+  if (String(options.officialOrigin) !== 'https://secure.diracgroup.store') throw fail('VAULT_ORIGIN_INVALID');
+  const createdAtMs = parseIsoMsStrict(options.nowIso, 'VAULT_CREATED_AT_INVALID');
+  const expiresAtMs = parseIsoMsStrict(options.expiresAt, 'VAULT_EXPIRES_AT_INVALID');
+  if (expiresAtMs <= createdAtMs || expiresAtMs - createdAtMs > 15 * 60 * 1000) throw fail('VAULT_TIME_POLICY_INVALID');
   if (String(options.recoveryCode).length !== 1200 || !/^[A-Za-z0-9_-]{1200}$/.test(String(options.recoveryCode))) throw fail('RECOVERY_CODE_INVALID');
-  if (String(options.emailSecret).length !== 100 || String(options.websiteSecret).length !== 100) throw fail('OFFLINE_SECRET_INPUT_INVALID');
+  if (!/^[A-Za-z0-9_-]{100}$/.test(String(options.emailSecret))
+      || !/^[A-Za-z0-9_-]{100}$/.test(String(options.websiteSecret))) throw fail('RECOVERY_INPUT_FORMAT_INVALID');
   if (typeof options.argon2RawFn !== 'function' || typeof options.vaultMaterialFn !== 'function') throw fail('ARGON2_ADAPTER_MISSING');
 
   const randomBytes = options.randomBytes || crypto.randomBytes;
   const vaultSalt = Buffer.from(randomBytes(32));
   const vaultId = Buffer.from(randomBytes(32));
   const extraNonceEntropy = Buffer.from(randomBytes(32));
+  const kekSalt = Buffer.from(randomBytes(32));
+  const transportWrapSalt = Buffer.from(randomBytes(32));
   const dek = Buffer.from(randomBytes(32));
-  if ([vaultSalt, vaultId, extraNonceEntropy, dek].some((value) => value.length !== 32)) throw fail('CSPRNG_OUTPUT_INVALID');
+  if ([vaultSalt, vaultId, extraNonceEntropy, kekSalt, transportWrapSalt, dek].some((value) => value.length !== 32)) {
+    throw fail('CSPRNG_OUTPUT_INVALID');
+  }
 
   const argon2Params = Object.freeze({
     memoryCost: Number(options.argon2Params && options.argon2Params.memoryCost || 0),
@@ -463,11 +561,12 @@ async function createVault(options) {
     parallelism: Number(options.argon2Params && options.argon2Params.parallelism || 0),
     hashLength: 64
   });
-  if (argon2Params.memoryCost < 1024000 || argon2Params.timeCost < 4 || argon2Params.parallelism < 4) {
-    throw fail('ARGON2_DOWNGRADE_REJECTED');
-  }
+  assertArgon2Profile(argon2Params);
 
+  const requestId = String(options.requestId);
   const vaultIdB64u = b64u(vaultId);
+  const dekWrapInfo = `dirac/recovery/v2/dek-wrap/${requestId}`;
+  const transportWrapInfo = `dirac/recovery/v2/mlkem-secret/${requestId}`;
   const vaultMaterial = Buffer.from(options.vaultMaterialFn(
     options.passwordMaterial,
     options.emailSecret,
@@ -477,40 +576,28 @@ async function createVault(options) {
   ));
 
   let argonRaw;
-  let offlineInput;
-  let offlineSecret;
-  let userKek;
-  let offlineKek;
+  let vaultKek;
   let transportKek;
-  let shares;
   let mlkem;
-  let hsmWrapped;
+  let wrappedDek;
+  let wrappedMlkemSecret;
   let payloadPlaintext;
   try {
     argonRaw = Buffer.from(await options.argon2RawFn(vaultMaterial, vaultSalt, 64));
     if (argonRaw.length !== 64) throw fail('ARGON2_OUTPUT_INVALID');
 
-    const offlineSalt = Buffer.from(randomBytes(32));
-    const transportWrapSalt = Buffer.from(randomBytes(32));
-    offlineInput = Buffer.from(jcs({
-      email_secret: String(options.emailSecret),
-      website_secret: String(options.websiteSecret)
-    }), 'utf8');
-    offlineSecret = hkdfSha512(offlineInput, offlineSalt, 'dirac/recovery/v2/offline-secret-512', 64);
-    userKek = hkdfSha512(argonRaw, vaultSalt, `dirac/recovery/v2/share1/${options.requestId}`, 32);
-    offlineKek = hkdfSha512(offlineSecret, vaultSalt, `dirac/recovery/v2/share2/${options.requestId}`, 32);
-    transportKek = hkdfSha512(Buffer.concat([argonRaw, offlineSecret]), transportWrapSalt, `dirac/recovery/v2/mlkem-secret/${options.requestId}`, 32);
-
-    shares = createShares(dek, randomBytes);
+    // Domain-separated HKDF outputs. The same existing three inputs remain
+    // mandatory; no new user factor is added.
+    vaultKek = hkdfSha512(argonRaw, kekSalt, dekWrapInfo, 32);
+    transportKek = hkdfSha512(argonRaw, transportWrapSalt, transportWrapInfo, 32);
     mlkem = (options.mlkemEncapsulateFn || mlkemEncapsulate)();
-    hsmWrapped = await (options.hsmWrapFn || hsmWrap)(shares.share3);
 
     const metadata = {
       schema: 'dirac-recovery-vault-metadata-v2',
       version: VERSION,
       purpose: PURPOSE,
       domain: String(options.officialOrigin),
-      request_id: String(options.requestId),
+      request_id: requestId,
       vault_id: vaultIdB64u,
       created_at: String(options.nowIso),
       not_before: String(options.nowIso),
@@ -521,7 +608,8 @@ async function createVault(options) {
       key_wrap: KEY_WRAP,
       kdf: KDF,
       dek_bits: 256,
-      share_policy: '3-of-3-XOR',
+      dek_protection: 'A256KW-enveloped-DEK',
+      input_policy: 'password+email-secret-100+website-secret-100',
       transport_suite: HYBRID_SUITE,
       signature_policy: SIGNATURE_POLICY,
       argon2id_params: argon2Params,
@@ -534,7 +622,7 @@ async function createVault(options) {
       magic: 'DIRAC-RECOVERY-PAYLOAD-V2',
       purpose: PURPOSE,
       vault_id: vaultIdB64u,
-      request_id: String(options.requestId),
+      request_id: requestId,
       issued_at: String(options.nowIso),
       expires_at: String(options.expiresAt),
       generation: 2,
@@ -542,17 +630,16 @@ async function createVault(options) {
     }), 'utf8');
     const payload = aesGcmEncrypt(dek, payloadPlaintext, aad);
 
-    const wrappedShare1 = aesKwWrap(userKek, shares.share1);
-    const wrappedShare2 = aesKwWrap(offlineKek, shares.share2);
-    const wrappedMlkemSecret = aesKwWrap(transportKek, mlkem.sharedKey);
+    wrappedDek = aesKwWrap(vaultKek, dek);
+    wrappedMlkemSecret = aesKwWrap(transportKek, mlkem.sharedKey);
 
     const bundle = {
       version: VERSION,
-      request_id: String(options.requestId),
+      request_id: requestId,
       vault_id: vaultIdB64u,
       salt: b64u(vaultSalt),
       argon2id_params: argon2Params,
-      hkdf_info: `dirac/recovery/v2/share1/${options.requestId}`,
+      hkdf_info: dekWrapInfo,
       metadata,
       metadata_signature: typeof options.metadataSignatureFn === 'function'
         ? String(options.metadataSignatureFn(metadata))
@@ -564,25 +651,14 @@ async function createVault(options) {
         tag_b64url: b64u(payload.tag)
       },
       key_protection: {
-        policy: '3-of-3-XOR',
-        user_share: {
+        policy: 'A256KW-enveloped-DEK',
+        dek_wrap: {
           wrap: KEY_WRAP,
           kdf: KDF,
-          key_id: 'dirac-user-kek-v2',
-          wrapped_share_b64url: b64u(wrappedShare1)
-        },
-        offline_share: {
-          wrap: KEY_WRAP,
-          secret_bits: 512,
-          key_id: 'dirac-offline-kek-v2',
-          salt_b64url: b64u(offlineSalt),
-          wrapped_share_b64url: b64u(wrappedShare2)
-        },
-        hsm_share: {
-          wrap: KEY_WRAP,
-          provider: 'azure-managed-hsm',
-          key_id: String(hsmWrapped.keyId),
-          wrapped_share_b64url: b64u(hsmWrapped.value)
+          key_id: 'dirac-vault-kek-v2',
+          salt_b64url: b64u(kekSalt),
+          hkdf_info: dekWrapInfo,
+          wrapped_dek_b64url: b64u(wrappedDek)
         }
       },
       transport: {
@@ -592,13 +668,15 @@ async function createVault(options) {
         mlkem_ciphertext_b64url: b64u(mlkem.ciphertext),
         mlkem_ciphertext_sha512: sha512B64u(mlkem.ciphertext),
         wrapped_shared_secret_b64url: b64u(wrappedMlkemSecret),
-        shared_secret_wrap_salt_b64url: b64u(transportWrapSalt)
+        shared_secret_wrap_salt_b64url: b64u(transportWrapSalt),
+        shared_secret_wrap_info: transportWrapInfo
       },
       // Compatibility aliases retained only for existing DB columns/readers.
       aes_nonce: b64u(payload.nonce),
       ciphertext: b64u(payload.ciphertext),
       auth_tag: b64u(payload.tag)
     };
+    assertVaultBundlePolicy(bundle);
     return {
       vaultBundle: bundle,
       metadataForAad: metadata,
@@ -610,13 +688,11 @@ async function createVault(options) {
     vaultMaterial.fill(0);
     dek.fill(0);
     if (argonRaw) argonRaw.fill(0);
-    if (offlineInput) offlineInput.fill(0);
-    if (offlineSecret) offlineSecret.fill(0);
-    if (userKek) userKek.fill(0);
-    if (offlineKek) offlineKek.fill(0);
+    if (vaultKek) vaultKek.fill(0);
     if (transportKek) transportKek.fill(0);
-    if (shares) Object.values(shares).forEach((value) => value.fill(0));
     if (mlkem && mlkem.sharedKey) mlkem.sharedKey.fill(0);
+    if (wrappedDek) wrappedDek.fill(0);
+    if (wrappedMlkemSecret) wrappedMlkemSecret.fill(0);
     if (payloadPlaintext) payloadPlaintext.fill(0);
   }
 }
@@ -714,7 +790,7 @@ function validateEnvelope(body, expectedHpkeKeyId, expectedMlkemKeyId) {
   const source = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
   const now = Date.now();
   if (source.version !== ENVELOPE_VERSION || source.hpke_suite !== HYBRID_SUITE) throw fail('HYBRID_ENVELOPE_VERSION_INVALID');
-  if (!/^[0-9a-f-]{36}$/i.test(String(source.request_id || ''))) throw fail('HYBRID_REQUEST_ID_INVALID');
+  if (!/^[A-Za-z0-9_-]{16,120}$/.test(String(source.request_id || ''))) throw fail('HYBRID_REQUEST_ID_INVALID');
   if (String(source.hpke_key_id || '') !== String(expectedHpkeKeyId || '') || String(source.mlkem_key_id || '') !== String(expectedMlkemKeyId || '')) throw fail('HYBRID_KEY_ID_INVALID');
   const sentAt = Number(source.sent_at_ms);
   const expiresAt = Number(source.expires_at_ms);
@@ -774,29 +850,24 @@ function parseHybridPlaintext(plaintext, requestId) {
     throw fail('HYBRID_PLAINTEXT_INVALID');
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw fail('HYBRID_PLAINTEXT_INVALID');
-  const expected = ['request_id', 'share1_b64url', 'share2_b64url', 'signed_manifest', 'vault_bundle_sha512', 'version'];
+  const expected = ['dek_b64url', 'request_id', 'signed_manifest', 'vault_bundle_sha512', 'version'];
   const keys = Object.keys(parsed).sort();
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) throw fail('HYBRID_PLAINTEXT_FIELDS_INVALID');
   if (parsed.version !== PLAINTEXT_VERSION || parsed.request_id !== requestId) throw fail('HYBRID_PLAINTEXT_BINDING_INVALID');
-  const share1 = decodeB64u(parsed.share1_b64url, 32, 128);
-  const share2 = decodeB64u(parsed.share2_b64url, 32, 128);
-  return { parsed, share1, share2 };
+  const dek = decodeB64u(parsed.dek_b64url, 32, 128);
+  return { parsed, dek };
 }
 
 async function openVaultPayload(options) {
   const bundle = options.bundle;
-  if (!bundle || bundle.version !== VERSION) throw fail('VAULT_VERSION_INVALID');
-  const share1 = Buffer.from(options.share1);
-  const share2 = Buffer.from(options.share2);
-  const wrappedHsmShare = decodeB64u(bundle.key_protection.hsm_share.wrapped_share_b64url, 40, 256);
-  let share3;
-  let dek;
+  assertVaultBundlePolicy(bundle);
+  const dek = Buffer.from(options.dek || Buffer.alloc(0));
+  if (dek.length !== 32) {
+    if (dek.length) dek.fill(0);
+    throw fail('DEK_LENGTH_INVALID');
+  }
   let plaintext;
   try {
-    const unwrapped = await (options.hsmUnwrapFn || hsmUnwrap)(wrappedHsmShare);
-    share3 = Buffer.from(unwrapped.value || unwrapped);
-    if (share3.length !== 32) throw fail('HSM_SHARE_LENGTH_INVALID');
-    dek = xor3(share1, share2, share3);
     const aad = Buffer.from(jcs(bundle.metadata), 'utf8');
     plaintext = aesGcmDecrypt(
       dek,
@@ -805,12 +876,9 @@ async function openVaultPayload(options) {
       decodeB64u(bundle.payload.tag_b64url, 16, 128),
       aad
     );
-    const parsed = parseInnerPayload(plaintext, bundle);
-    return parsed;
+    return parseInnerPayload(plaintext, bundle);
   } finally {
-    wrappedHsmShare.fill(0);
-    if (share3) share3.fill(0);
-    if (dek) dek.fill(0);
+    dek.fill(0);
     if (plaintext) plaintext.fill(0);
   }
 }
@@ -832,9 +900,15 @@ function parseInnerPayload(plaintext, bundle) {
   if (parsed.magic !== 'DIRAC-RECOVERY-PAYLOAD-V2' || parsed.purpose !== PURPOSE || parsed.generation !== 2 || parsed.request_id !== bundle.request_id || parsed.vault_id !== bundle.vault_id) {
     throw fail('INNER_PAYLOAD_BINDING_INVALID');
   }
-  const expiresAt = Date.parse(parsed.expires_at);
-  const issuedAt = Date.parse(parsed.issued_at);
-  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() || !Number.isFinite(issuedAt) || issuedAt >= expiresAt) throw fail('INNER_PAYLOAD_EXPIRED');
+  const expiresAt = parseIsoMsStrict(parsed.expires_at, 'INNER_EXPIRES_AT_INVALID');
+  const issuedAt = parseIsoMsStrict(parsed.issued_at, 'INNER_ISSUED_AT_INVALID');
+  const metadataIssuedAt = parseIsoMsStrict(bundle.metadata.created_at, 'INNER_METADATA_CREATED_AT_INVALID');
+  const metadataExpiresAt = parseIsoMsStrict(bundle.metadata.expires_at, 'INNER_METADATA_EXPIRES_AT_INVALID');
+  if (expiresAt <= Date.now()
+      || issuedAt > Date.now() + MAX_CLOCK_SKEW_MS
+      || issuedAt >= expiresAt
+      || issuedAt !== metadataIssuedAt
+      || expiresAt !== metadataExpiresAt) throw fail('INNER_PAYLOAD_EXPIRED');
   if (typeof parsed.recovery_code !== 'string' || !/^[A-Za-z0-9_-]{1200}$/.test(parsed.recovery_code)) throw fail('INNER_RECOVERY_CODE_INVALID');
   return parsed;
 }
@@ -845,14 +919,20 @@ function buildManifest(options) {
   if (!bundle || bundle.version !== VERSION) throw fail('MANIFEST_VAULT_VERSION_INVALID');
   const hpkePublicRaw = Buffer.from(options.hpkePublicRaw);
   if (hpkePublicRaw.length !== 32) throw fail('MANIFEST_HPKE_KEY_INVALID');
+  if (!bundle.key_protection || bundle.key_protection.policy !== 'A256KW-enveloped-DEK' || !bundle.key_protection.dek_wrap) {
+    throw fail('MANIFEST_DEK_PROTECTION_INVALID');
+  }
+  const dekWrap = bundle.key_protection.dek_wrap;
+  if (dekWrap.wrap !== KEY_WRAP || dekWrap.kdf !== KDF || dekWrap.hkdf_info !== bundle.hkdf_info) {
+    throw fail('MANIFEST_DEK_WRAP_POLICY_INVALID');
+  }
   const bundleCanonical = Buffer.from(jcs(bundle), 'utf8');
   const metadataCanonical = Buffer.from(jcs(bundle.metadata), 'utf8');
   const payloadCiphertext = decodeB64u(bundle.payload.ciphertext_b64url, null, 64 * 1024);
   const payloadNonce = decodeB64u(bundle.payload.nonce_b64url, 12, 128);
   const payloadTag = decodeB64u(bundle.payload.tag_b64url, 16, 128);
-  const wrappedShare1 = decodeB64u(bundle.key_protection.user_share.wrapped_share_b64url, 40, 256);
-  const wrappedShare2 = decodeB64u(bundle.key_protection.offline_share.wrapped_share_b64url, 40, 256);
-  const wrappedShare3 = decodeB64u(bundle.key_protection.hsm_share.wrapped_share_b64url, 40, 256);
+  const wrappedDek = decodeB64u(dekWrap.wrapped_dek_b64url, 40, 256);
+  const kekSalt = decodeB64u(dekWrap.salt_b64url, 32, 128);
   try {
     return {
       manifest_schema: MANIFEST_SCHEMA,
@@ -870,10 +950,11 @@ function buildManifest(options) {
       canonicalization: 'RFC8785-JCS',
       cipher: PAYLOAD_CIPHER,
       dek_bits: 256,
-      dek_protection: '3-of-3-XOR',
+      dek_protection: 'A256KW-enveloped-DEK',
       key_wrap: KEY_WRAP,
       kdf: KDF,
       argon2id_params: bundle.argon2id_params,
+      input_factor_policy: 'password+email-secret-100+website-secret-100',
       transport_suite: HYBRID_SUITE,
       hpke_key_id: String(options.hpkeKeyId),
       hpke_public_key_b64url: b64u(hpkePublicRaw),
@@ -884,11 +965,11 @@ function buildManifest(options) {
       payload_nonce_sha512: sha512B64u(payloadNonce),
       payload_tag_sha512: sha512B64u(payloadTag),
       metadata_sha512: sha512B64u(metadataCanonical),
-      wrapped_share1_sha512: sha512B64u(wrappedShare1),
-      wrapped_share2_sha512: sha512B64u(wrappedShare2),
-      wrapped_share3_sha512: sha512B64u(wrappedShare3),
+      wrapped_dek_sha512: sha512B64u(wrappedDek),
+      kek_salt_sha512: sha512B64u(kekSalt),
+      kek_key_id: String(dekWrap.key_id),
+      kek_hkdf_info: String(dekWrap.hkdf_info),
       vault_bundle_sha512: sha512B64u(bundleCanonical),
-      hsm_key_id: String(bundle.key_protection.hsm_share.key_id),
       security_contract: {
         version: SECURITY_CONTRACT,
         central_guard_required: true,
@@ -896,7 +977,8 @@ function buildManifest(options) {
         action: String(options.action || ''),
         vercel2_only: true,
         response_format: 'json',
-        server_assisted_hsm_required: true,
+        single_kek_envelope_required: true,
+        existing_three_inputs_required: true,
         hybrid_transport_required: true,
         atomic_replay_claim_required: true,
         dual_signature_required: true,
@@ -912,7 +994,7 @@ function buildManifest(options) {
     };
   } finally {
     bundleCanonical.fill(0); metadataCanonical.fill(0); payloadCiphertext.fill(0); payloadNonce.fill(0); payloadTag.fill(0);
-    wrappedShare1.fill(0); wrappedShare2.fill(0); wrappedShare3.fill(0);
+    wrappedDek.fill(0); kekSalt.fill(0);
   }
 }
 
@@ -944,8 +1026,8 @@ function verifySignedManifestContainer(container) {
   if (containerKeys.length !== expectedContainerKeys.length || containerKeys.some((key, index) => key !== expectedContainerKeys[index])) throw fail('SIGNED_MANIFEST_FIELDS_INVALID');
   const payload = container.payload;
   const signatures = container.signatures;
-  if (!payload || payload.manifest_schema !== MANIFEST_SCHEMA || payload.version !== VERSION || payload.legacy_fallback_allowed !== false) throw fail('SIGNED_MANIFEST_POLICY_INVALID');
   verifyDualManifest(payload, signatures);
+  assertManifestPolicy(payload);
   if (container.signature_b64 !== signatures.ed25519.signature_b64url) throw fail('SIGNED_MANIFEST_ALIAS_INVALID');
   return payload;
 }
@@ -1022,15 +1104,15 @@ return Object.freeze({
   aesKwUnwrap,
   aesGcmEncrypt,
   aesGcmDecrypt,
-  xor3,
-  createShares,
   assertRuntimePolicy,
+  assertExactObjectKeys,
+  assertArgon2Profile,
+  assertVaultBundlePolicy,
+  assertManifestPolicy,
   mlkemEncapsulate,
   mlkemDecapsulate,
   dualSignManifest,
   verifyDualManifest,
-  hsmWrap,
-  hsmUnwrap,
   createVault,
   rawX25519Public,
   x25519HpkeShared,
@@ -9796,9 +9878,9 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
       source: 'lost_passkey_recovery',
       patch: DIRAC_RECOVERY_CRYPTO_V2.VERSION,
       delivery: 'official_recovery_html_link',
-      file_format: 'server_assisted_hsm_aes256gcm_3of3_hybrid_pq_v2',
+      file_format: 'aes256gcm_dek_a256kw_hybrid_pq_v2',
       html_template: 'deploy_once_on_server2_later',
-      password_formula: 'argon2id_user_material_plus_independent_offline_secret_512bit_plus_hsm_share',
+      password_formula: 'password_plus_email100_plus_website100_to_argon2id_hkdf_sha512_kek',
       official_recovery_link_hash: customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'official_recovery_link', recoveryLink),
       link_token_hash: linkTokenHash,
       link_token_argon2id_params: linkTokenArgon2Params,
@@ -29310,13 +29392,6 @@ function diracCentralVercel2RecoveryEnvPartitionGuardV183(action) {
     'DIRAC_RECOVERY_MLDSA87_PUBLIC_KEY_PEM',
     'DIRAC_RECOVERY_MLDSA87_PUBLIC_KEY_DER_B64',
     'DIRAC_RECOVERY_MLDSA87_KEY_ID',
-    'DIRAC_RECOVERY_HSM_PROVIDER',
-    'DIRAC_RECOVERY_HSM_VAULT_URL',
-    'DIRAC_RECOVERY_HSM_KEY_NAME',
-    'DIRAC_RECOVERY_HSM_KEY_VERSION',
-    'DIRAC_RECOVERY_HSM_TENANT_ID',
-    'DIRAC_RECOVERY_HSM_CLIENT_ID',
-    'DIRAC_RECOVERY_HSM_CLIENT_SECRET',
     'DIRAC_RECOVERY_FIPS_RUNTIME_REQUIRED',
     'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_KIB',
     'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_TIME_COST',
@@ -33115,7 +33190,6 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
     if (bundle.request_id !== row.request_id || bundle.request_id !== body.request_id) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_REQUEST_BINDING_INVALID');
 
     DIRAC_RECOVERY_CRYPTO_V2.validateEnvelope(body, env.keyId, bundle.transport.mlkem_key_id);
-    await DIRAC_RECOVERY_CRYPTO_V2.atomicClaim(supabaseFetch, body, bundle);
 
     hybrid = DIRAC_RECOVERY_CRYPTO_V2.openHybridEnvelope({
       body,
@@ -33137,10 +33211,15 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
 
     recovered = await DIRAC_RECOVERY_CRYPTO_V2.openVaultPayload({
       bundle,
-      share1: parsedHybrid.share1,
-      share2: parsedHybrid.share2
+      dek: parsedHybrid.dek
     });
     recoveryCode = String(recovered.recovery_code || '');
+
+    // Claim only after the envelope, signatures, bundle binding, wrapped DEK,
+    // and AES-GCM payload have all authenticated successfully. This keeps
+    // malformed traffic from consuming durable replay rows while preserving
+    // first-valid-request-wins atomicity before any server-1 proof is sent.
+    await DIRAC_RECOVERY_CRYPTO_V2.atomicClaim(supabaseFetch, body, bundle);
 
     const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
     if (!vaultSecrets.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail(String(vaultSecrets.code || 'RECOVERY_VAULT_SECRET_INVALID'));
@@ -33216,7 +33295,7 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
       event_type: 'lost_passkey_recovery_hybrid_v2_verified',
       status: 'success',
       risk_level: 'high',
-      description: 'Central Guard memverifikasi hybrid X25519 + ML-KEM-1024, dual signature, 3-of-3 shares, HSM unwrap, dan Argon2id.',
+      description: 'Central Guard memverifikasi hybrid X25519 + ML-KEM-1024, dual signature, wrapped DEK A256KW, dan Argon2id.',
       req,
       metadata: {
         action: DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159,
@@ -33230,7 +33309,7 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
     return res.status(200).json({
       ok: true,
       active: true,
-      method: 'x25519_mlkem1024_hsm_3of3_dual_signature',
+      method: 'x25519_mlkem1024_a256kw_dek_dual_signature',
       code: 'RECOVERY_HYBRID_V2_VERIFIED',
       central_guard: DIRAC_CENTRAL_SECURITY_GUARD_V146,
       request_id: row.request_id,
@@ -33259,8 +33338,7 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
     try { if (hybrid && hybrid.plaintext) hybrid.plaintext.fill(0); } catch (_) {}
     try { if (hybrid && hybrid.responseKey) hybrid.responseKey.fill(0); } catch (_) {}
     try { if (hybrid && hybrid.transcriptHash) hybrid.transcriptHash.fill(0); } catch (_) {}
-    try { if (parsedHybrid && parsedHybrid.share1) parsedHybrid.share1.fill(0); } catch (_) {}
-    try { if (parsedHybrid && parsedHybrid.share2) parsedHybrid.share2.fill(0); } catch (_) {}
+    try { if (parsedHybrid && parsedHybrid.dek) parsedHybrid.dek.fill(0); } catch (_) {}
     recoveryCode = '';
     recovered = null;
   }
