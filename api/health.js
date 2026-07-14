@@ -7387,47 +7387,60 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
   }
   const ownerId = customerSecurityLostPasskeyQueueOwnerV164();
   const startMs = Date.now();
+  const queueTask = String(body && (body.worker_action || body.queue_task) || '').trim();
+  const mayWaitForExistingArgon2 = queueTask === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165;
+  const deadlineMs = mayWaitForExistingArgon2
+    ? startMs + customerSecurityLostPasskeyQueueMaxWaitMsV164()
+    : startMs;
   const context = {
     nonce: body && body.nonce,
     callerId: body && body.caller_id,
-    workerAction: body && (body.worker_action || body.queue_task),
+    workerAction: queueTask,
     lockedAtMs: startMs
   };
-  const nowMs = Date.now();
-  const memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
-  if (memory && Number(memory.lockUntilMs || 0) > nowMs && String(memory.ownerId || '') !== ownerId) {
-    return {
-      ok: false,
-      status: 429,
-      code: 'RECOVERY_GENERATE_QUEUE_BUSY',
-      reason: 'memory_lock_busy',
-      attempts: 1,
-      waited_ms: Date.now() - startMs
-    };
-  }
+  let attempts = 0;
+  let lastReason = 'queue_lock_busy';
 
-  // V167: no polling and no repeated DB reads. One fast claim pass only:
-  // PATCH released/expired lock row, then INSERT only when no reusable row exists.
-  const patched = await customerSecurityLostPasskeyQueueTryPatchAvailableV167(ownerId, context);
-  const claimed = patched.ok ? patched : await customerSecurityLostPasskeyQueueTryInsertAvailableV167(ownerId, context);
-  if (claimed && claimed.ok) {
-    DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
-      ownerId,
-      lockUntilMs: Date.now() + customerSecurityLostPasskeyQueueTtlMsV164()
-    });
-    const heartbeat = customerSecurityLostPasskeyQueueHeartbeatV188(ownerId, context);
-    return {
-      ok: true,
-      ownerId,
-      attempts: 1,
-      waited_ms: Date.now() - startMs,
-      claim_mode: claimed.claimed || 'fast_claim',
-      leaseHealthy: heartbeat.healthy,
-      release: async () => {
-        await heartbeat.stop();
-        return customerSecurityLostPasskeyQueueReleaseV164(ownerId);
+  while (true) {
+    attempts += 1;
+    const nowMs = Date.now();
+    const memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
+    let claimed = null;
+    let patched = null;
+
+    if (memory && Number(memory.lockUntilMs || 0) > nowMs && String(memory.ownerId || '') !== ownerId) {
+      lastReason = 'memory_lock_busy';
+    } else {
+      if (memory && Number(memory.lockUntilMs || 0) <= nowMs) {
+        DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
       }
-    };
+      patched = await customerSecurityLostPasskeyQueueTryPatchAvailableV167(ownerId, context);
+      claimed = patched.ok ? patched : await customerSecurityLostPasskeyQueueTryInsertAvailableV167(ownerId, context);
+      if (claimed && claimed.ok) {
+        DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
+          ownerId,
+          lockUntilMs: Date.now() + customerSecurityLostPasskeyQueueTtlMsV164()
+        });
+        const heartbeat = customerSecurityLostPasskeyQueueHeartbeatV188(ownerId, context);
+        return {
+          ok: true,
+          ownerId,
+          attempts,
+          waited_ms: Date.now() - startMs,
+          claim_mode: claimed.claimed || 'fast_claim',
+          leaseHealthy: heartbeat.healthy,
+          release: async () => {
+            await heartbeat.stop();
+            return customerSecurityLostPasskeyQueueReleaseV164(ownerId);
+          }
+        };
+      }
+      lastReason = (claimed && claimed.reason) || (patched && patched.reason) || 'queue_lock_busy';
+    }
+
+    const remainingMs = deadlineMs - Date.now();
+    if (!mayWaitForExistingArgon2 || remainingMs <= 0) break;
+    await customerSecurityLostPasskeyQueueSleepV164(Math.min(customerSecurityLostPasskeyQueuePollMsV164(), remainingMs));
   }
 
   try {
@@ -7435,14 +7448,15 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
       event_type: 'lost_passkey_generate_queue_busy',
       status: 'blocked',
       risk_level: 'medium',
-      description: 'SERVER 2 menolak generate lost-passkey karena lock Argon2id sedang aktif.',
+      description: 'SERVER 2 menolak proses lost-passkey karena lock Argon2id sedang aktif.',
       req,
       metadata: {
         patch: DIRAC_LOST_PASSKEY_GENERATE_QUEUE_PATCH_V164,
-        no_polling_patch: 'v167',
-        attempts: 1,
+        queue_task: queueTask,
+        bounded_wait_enabled: mayWaitForExistingArgon2,
+        attempts,
         waited_ms: Date.now() - startMs,
-        reason: (claimed && claimed.reason) || (patched && patched.reason) || 'queue_lock_busy'
+        reason: lastReason
       }
     }).catch(() => null);
   } catch (_) {}
@@ -7450,8 +7464,8 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
     ok: false,
     status: 429,
     code: 'RECOVERY_GENERATE_QUEUE_BUSY',
-    reason: (claimed && claimed.reason) || (patched && patched.reason) || 'queue_lock_busy',
-    attempts: 1,
+    reason: lastReason,
+    attempts,
     waited_ms: Date.now() - startMs
   };
 }
@@ -8460,23 +8474,31 @@ async function customerSecurityHandleLostPasskeyRecoveryLinkV162(req, res) {
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 404);
   }
 
-  const argon2VerifyStartedAt = Date.now();
-  customerSecurityLostPasskeyLinkOpenArgon2DebugV174('argon2_verify_start', req, parsed.requestId, linkTokenHash, argon2VerifyStartedAt);
-
   let tokenOk = false;
-  customerSecurityLostPasskeyLinkFlowDebugV175('argon2_verify_start', req, res, {
-    status: 200,
-    argon2id_params: customerSecurityLostPasskeyArgon2EncodedParamsV171(linkTokenHash)
-  });
   const argonQueueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, {
     nonce: parsed.requestId,
     caller_id: 'recovery_link',
     queue_task: DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
   });
   if (!argonQueueTicket || !argonQueueTicket.ok) {
+    customerSecurityLostPasskeyLinkFlowDebugV175('argon2_queue_rejected', req, res, {
+      reason: String(argonQueueTicket && argonQueueTicket.reason || 'queue_lock_busy'),
+      status: 429,
+      attempts: Number(argonQueueTicket && argonQueueTicket.attempts || 0),
+      waited_ms: Number(argonQueueTicket && argonQueueTicket.waited_ms || 0)
+    });
     try { res.setHeader('Retry-After', String(Math.max(1, Math.ceil(customerSecurityLostPasskeyQueuePollMsV164() / 1000)))); } catch (_) {}
     return customerSecurityLostPasskeyGenericLinkErrorV162(res, 429);
   }
+
+  const argon2VerifyStartedAt = Date.now();
+  customerSecurityLostPasskeyLinkOpenArgon2DebugV174('argon2_verify_start', req, parsed.requestId, linkTokenHash, argon2VerifyStartedAt);
+  customerSecurityLostPasskeyLinkFlowDebugV175('argon2_verify_start', req, res, {
+    status: 200,
+    argon2id_params: customerSecurityLostPasskeyArgon2EncodedParamsV171(linkTokenHash),
+    queue_attempts: Number(argonQueueTicket.attempts || 1),
+    queue_waited_ms: Number(argonQueueTicket.waited_ms || 0)
+  });
   try {
     tokenOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('link_token', parsed.linkToken, linkTokenHash, vaultSecrets.pepper, vaultSecrets.rootSecret);
     if (!customerSecurityLostPasskeyQueueLeaseHealthyV188(argonQueueTicket)) {
