@@ -1,6 +1,1053 @@
 'use strict';
 
 const crypto = require('crypto');
+const DIRAC_RECOVERY_CRYPTO_V2 = (() => {
+'use strict';
+
+/*
+ * Dirac Recovery Crypto V2 — narrow high-assurance recovery-only module.
+ * No login, payment, email-template, MFA/A2F, or endpoint logic lives here.
+ */
+
+const crypto = require('crypto');
+
+const VERSION = 'dirac-lost-passkey-vault-v2-max-2026';
+const MANIFEST_SCHEMA = 'dirac-lost-passkey-signed-security-manifest-v2';
+const SECURITY_CONTRACT = 'dirac-lost-passkey-security-contract-v2';
+const ENVELOPE_VERSION = 'dirac-recovery-hybrid-envelope-v2';
+const PLAINTEXT_VERSION = 'dirac-recovery-hybrid-plaintext-v2';
+const RESPONSE_VERSION = 'dirac-recovery-hybrid-response-v2';
+const PURPOSE = 'lost_passkey_recovery';
+const HYBRID_SUITE = 'DHKEM-X25519-HKDF-SHA256+ML-KEM-1024+HKDF-SHA512+AES-256-GCM';
+const PAYLOAD_CIPHER = 'AES-256-GCM';
+const KEY_WRAP = 'A256KW';
+const KDF = 'Argon2id+HKDF-SHA512';
+const SIGNATURE_POLICY = 'Ed25519-AND-ML-DSA-87';
+const RFC3394_IV = Buffer.from('a6a6a6a6a6a6a6a6', 'hex');
+const MLDSA_CONTEXT = Buffer.from('dirac/recovery/v2/manifest', 'utf8');
+const MAX_CLOCK_SKEW_MS = 30_000;
+const MAX_ENVELOPE_LIFETIME_MS = 120_000;
+
+function fail(code, message) {
+  const error = new Error(message || code);
+  error.code = code;
+  return error;
+}
+
+function envText(name) {
+  return String(process.env[String(name || '')] || '').trim();
+}
+
+function envTrue(name) {
+  return /^(1|true|yes|on|enabled)$/i.test(envText(name));
+}
+
+function assertNoLoneSurrogates(text) {
+  const value = String(text);
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) throw fail('JCS_UNPAIRED_SURROGATE');
+      index += 1;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      throw fail('JCS_UNPAIRED_SURROGATE');
+    }
+  }
+}
+
+/** RFC 8785-compatible canonicalization for JSON-compatible values. */
+function jcs(value, seen = new Set()) {
+  if (value === null) return 'null';
+  const type = typeof value;
+  if (type === 'string') {
+    assertNoLoneSurrogates(value);
+    return JSON.stringify(value);
+  }
+  if (type === 'boolean') return value ? 'true' : 'false';
+  if (type === 'number') {
+    if (!Number.isFinite(value)) throw fail('JCS_NUMBER_INVALID');
+    return Object.is(value, -0) ? '0' : JSON.stringify(value);
+  }
+  if (type !== 'object') throw fail('JCS_TYPE_INVALID');
+  if (seen.has(value)) throw fail('JCS_CYCLE_INVALID');
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) return '[' + value.map((item) => jcs(item, seen)).join(',') + ']';
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) throw fail('JCS_OBJECT_INVALID');
+    const keys = Object.keys(value).sort();
+    return '{' + keys.map((key) => {
+      assertNoLoneSurrogates(key);
+      if (value[key] === undefined || typeof value[key] === 'function' || typeof value[key] === 'symbol') {
+        throw fail('JCS_MEMBER_INVALID');
+      }
+      return JSON.stringify(key) + ':' + jcs(value[key], seen);
+    }).join(',') + '}';
+  } finally {
+    seen.delete(value);
+  }
+}
+
+function b64u(buffer) {
+  return Buffer.from(buffer).toString('base64url');
+}
+
+function decodeB64u(value, exactLength = null, maximumTextLength = 64 * 1024) {
+  const clean = String(value || '').trim();
+  if (!clean || clean.length > maximumTextLength || !/^[A-Za-z0-9_-]+$/.test(clean) || clean.length % 4 === 1) {
+    throw fail('BASE64URL_INVALID');
+  }
+  const decoded = Buffer.from(clean, 'base64url');
+  if (decoded.toString('base64url') !== clean) throw fail('BASE64URL_NON_CANONICAL');
+  if (exactLength !== null && decoded.length !== exactLength) throw fail('BASE64URL_LENGTH_INVALID');
+  return decoded;
+}
+
+function sha512B64u(value) {
+  return crypto.createHash('sha512').update(Buffer.isBuffer(value) ? value : Buffer.from(value)).digest('base64url');
+}
+
+function sha512(value) {
+  return crypto.createHash('sha512').update(Buffer.isBuffer(value) ? value : Buffer.from(value)).digest();
+}
+
+function hkdfSha512(ikm, salt, info, length) {
+  if (!Number.isSafeInteger(length) || length < 1 || length > 255 * 64) throw fail('HKDF_LENGTH_INVALID');
+  return Buffer.from(crypto.hkdfSync(
+    'sha512',
+    Buffer.from(ikm),
+    Buffer.from(salt || Buffer.alloc(0)),
+    Buffer.from(String(info || ''), 'utf8'),
+    length
+  ));
+}
+
+function aesKwWrap(kek, plaintext) {
+  const key = Buffer.from(kek);
+  const input = Buffer.from(plaintext);
+  if (key.length !== 32 || input.length < 16 || input.length % 8 !== 0) throw fail('AES_KW_INPUT_INVALID');
+  const cipher = crypto.createCipheriv('id-aes256-wrap', key, RFC3394_IV);
+  const wrapped = Buffer.concat([cipher.update(input), cipher.final()]);
+  if (wrapped.length !== input.length + 8) throw fail('AES_KW_OUTPUT_INVALID');
+  return wrapped;
+}
+
+function aesKwUnwrap(kek, wrapped, expectedLength = null) {
+  const key = Buffer.from(kek);
+  const input = Buffer.from(wrapped);
+  if (key.length !== 32 || input.length < 24 || input.length % 8 !== 0) throw fail('AES_KW_INPUT_INVALID');
+  let output;
+  try {
+    const decipher = crypto.createDecipheriv('id-aes256-wrap', key, RFC3394_IV);
+    output = Buffer.concat([decipher.update(input), decipher.final()]);
+  } catch (_) {
+    throw fail('AES_KW_INTEGRITY_FAILED');
+  }
+  if (expectedLength !== null && output.length !== expectedLength) {
+    output.fill(0);
+    throw fail('AES_KW_LENGTH_INVALID');
+  }
+  return output;
+}
+
+function aesGcmEncrypt(key, plaintext, aad, nonce = crypto.randomBytes(12)) {
+  const realKey = Buffer.from(key);
+  const realNonce = Buffer.from(nonce);
+  if (realKey.length !== 32 || realNonce.length !== 12) throw fail('AES_GCM_INPUT_INVALID');
+  const cipher = crypto.createCipheriv('aes-256-gcm', realKey, realNonce, { authTagLength: 16 });
+  const realAad = Buffer.from(aad || Buffer.alloc(0));
+  cipher.setAAD(realAad, { plaintextLength: Buffer.byteLength(plaintext) });
+  const ciphertext = Buffer.concat([cipher.update(Buffer.from(plaintext)), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return { nonce: realNonce, ciphertext, tag };
+}
+
+function aesGcmDecrypt(key, nonce, ciphertext, tag, aad) {
+  const realKey = Buffer.from(key);
+  const realNonce = Buffer.from(nonce);
+  const realCiphertext = Buffer.from(ciphertext);
+  const realTag = Buffer.from(tag);
+  const realAad = Buffer.from(aad || Buffer.alloc(0));
+  if (realKey.length !== 32 || realNonce.length !== 12 || realTag.length !== 16) throw fail('AES_GCM_INPUT_INVALID');
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', realKey, realNonce, { authTagLength: 16 });
+    decipher.setAAD(realAad, { plaintextLength: realCiphertext.length });
+    decipher.setAuthTag(realTag);
+    return Buffer.concat([decipher.update(realCiphertext), decipher.final()]);
+  } catch (_) {
+    throw fail('AES_GCM_AUTHENTICATION_FAILED');
+  }
+}
+
+function xor3(first, second, third) {
+  const a = Buffer.from(first);
+  const b = Buffer.from(second);
+  const c = Buffer.from(third);
+  if (a.length !== 32 || b.length !== 32 || c.length !== 32) throw fail('XOR_SHARE_LENGTH_INVALID');
+  const output = Buffer.allocUnsafe(32);
+  for (let index = 0; index < 32; index += 1) output[index] = a[index] ^ b[index] ^ c[index];
+  return output;
+}
+
+function createShares(dek, randomBytes = crypto.randomBytes) {
+  const realDek = Buffer.from(dek);
+  if (realDek.length !== 32) throw fail('DEK_LENGTH_INVALID');
+  const share1 = Buffer.from(randomBytes(32));
+  const share2 = Buffer.from(randomBytes(32));
+  if (share1.length !== 32 || share2.length !== 32) throw fail('CSPRNG_LENGTH_INVALID');
+  const share3 = Buffer.allocUnsafe(32);
+  for (let index = 0; index < 32; index += 1) share3[index] = realDek[index] ^ share1[index] ^ share2[index];
+  return { share1, share2, share3 };
+}
+
+function parsePrivateKey(raw, expectedType) {
+  const clean = String(raw || '').trim();
+  if (!clean) throw fail('PRIVATE_KEY_MISSING');
+  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : Buffer.from(clean, 'base64');
+  const key = crypto.createPrivateKey(material);
+  if (expectedType && key.asymmetricKeyType !== expectedType) throw fail('PRIVATE_KEY_TYPE_INVALID');
+  return key;
+}
+
+function parsePublicKey(raw, expectedType) {
+  const clean = String(raw || '').trim();
+  if (!clean) throw fail('PUBLIC_KEY_MISSING');
+  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : Buffer.from(clean, 'base64');
+  const key = crypto.createPublicKey(material);
+  if (expectedType && key.asymmetricKeyType !== expectedType) throw fail('PUBLIC_KEY_TYPE_INVALID');
+  return key;
+}
+
+function assertPostQuantumRuntime() {
+  if (typeof crypto.encapsulate !== 'function' || typeof crypto.decapsulate !== 'function') {
+    throw fail('NODE_MLKEM_RUNTIME_UNAVAILABLE');
+  }
+}
+
+function mlkemEncapsulate(publicKey = null) {
+  assertPostQuantumRuntime();
+  const key = publicKey || parsePublicKey(
+    envText('DIRAC_RECOVERY_MLKEM1024_PUBLIC_KEY_PEM') || envText('DIRAC_RECOVERY_MLKEM1024_PUBLIC_KEY_DER_B64'),
+    'ml-kem-1024'
+  );
+  const result = crypto.encapsulate(key);
+  if (!result || !Buffer.isBuffer(result.sharedKey) || !Buffer.isBuffer(result.ciphertext) || result.sharedKey.length !== 32) {
+    throw fail('MLKEM_ENCAPSULATION_INVALID');
+  }
+  return { sharedKey: Buffer.from(result.sharedKey), ciphertext: Buffer.from(result.ciphertext) };
+}
+
+function mlkemDecapsulate(ciphertext, privateKey = null) {
+  assertPostQuantumRuntime();
+  const key = privateKey || parsePrivateKey(
+    envText('DIRAC_RECOVERY_MLKEM1024_PRIVATE_KEY_PEM') || envText('DIRAC_RECOVERY_MLKEM1024_PRIVATE_KEY_DER_B64'),
+    'ml-kem-1024'
+  );
+  const sharedKey = crypto.decapsulate(key, Buffer.from(ciphertext));
+  if (!Buffer.isBuffer(sharedKey) || sharedKey.length !== 32) throw fail('MLKEM_DECAPSULATION_INVALID');
+  return Buffer.from(sharedKey);
+}
+
+function dualSignManifest(payload) {
+  const message = Buffer.from(jcs(payload), 'utf8');
+  const edPrivate = parsePrivateKey(
+    envText('DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY_PEM') || envText('DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY'),
+    'ed25519'
+  );
+  const mlPrivate = parsePrivateKey(
+    envText('DIRAC_RECOVERY_MLDSA87_PRIVATE_KEY_PEM') || envText('DIRAC_RECOVERY_MLDSA87_PRIVATE_KEY_DER_B64'),
+    'ml-dsa-87'
+  );
+  let edSignature;
+  let mlSignature;
+  try {
+    edSignature = crypto.sign(null, message, edPrivate);
+    mlSignature = crypto.sign(null, message, { key: mlPrivate, context: MLDSA_CONTEXT });
+    if (edSignature.length !== 64 || mlSignature.length < 4000) throw fail('DUAL_SIGNATURE_OUTPUT_INVALID');
+    return {
+      policy: SIGNATURE_POLICY,
+      ed25519: {
+        key_id: envText('DIRAC_LOST_PASSKEY_ED25519_KEY_ID') || 'dirac-recovery-ed25519-2026-01',
+        algorithm: 'Ed25519',
+        signature_b64url: b64u(edSignature)
+      },
+      ml_dsa_87: {
+        key_id: envText('DIRAC_RECOVERY_MLDSA87_KEY_ID') || 'dirac-recovery-ml-dsa-87-2026-01',
+        algorithm: 'ML-DSA-87',
+        context_b64url: b64u(MLDSA_CONTEXT),
+        signature_b64url: b64u(mlSignature)
+      }
+    };
+  } finally {
+    message.fill(0);
+    if (edSignature) edSignature.fill(0);
+    if (mlSignature) mlSignature.fill(0);
+  }
+}
+
+function verifyDualManifest(payload, signatures) {
+  if (!signatures || typeof signatures !== 'object' || Array.isArray(signatures) || signatures.policy !== SIGNATURE_POLICY) throw fail('DUAL_SIGNATURE_POLICY_INVALID');
+  const signatureKeys = Object.keys(signatures).sort();
+  const expectedSignatureKeys = ['ed25519', 'ml_dsa_87', 'policy'];
+  if (signatureKeys.length !== expectedSignatureKeys.length || signatureKeys.some((key, index) => key !== expectedSignatureKeys[index])) throw fail('DUAL_SIGNATURE_FIELDS_INVALID');
+  const ed = signatures.ed25519 || {};
+  const ml = signatures.ml_dsa_87 || {};
+  const edKeys = Object.keys(ed).sort();
+  const mlKeys = Object.keys(ml).sort();
+  const expectedEdKeys = ['algorithm', 'key_id', 'signature_b64url'];
+  const expectedMlKeys = ['algorithm', 'context_b64url', 'key_id', 'signature_b64url'];
+  if (edKeys.length !== expectedEdKeys.length || edKeys.some((key, index) => key !== expectedEdKeys[index])) throw fail('ED25519_SIGNATURE_FIELDS_INVALID');
+  if (mlKeys.length !== expectedMlKeys.length || mlKeys.some((key, index) => key !== expectedMlKeys[index])) throw fail('MLDSA_SIGNATURE_FIELDS_INVALID');
+  if (ed.algorithm !== 'Ed25519' || ml.algorithm !== 'ML-DSA-87') throw fail('DUAL_SIGNATURE_ALGORITHM_INVALID');
+  const expectedEdKeyId = envText('DIRAC_LOST_PASSKEY_ED25519_KEY_ID') || 'dirac-recovery-ed25519-2026-01';
+  const expectedMlKeyId = envText('DIRAC_RECOVERY_MLDSA87_KEY_ID') || 'dirac-recovery-ml-dsa-87-2026-01';
+  if (ed.key_id !== expectedEdKeyId || ml.key_id !== expectedMlKeyId) throw fail('DUAL_SIGNATURE_KEY_ID_INVALID');
+  if (ml.context_b64url !== b64u(MLDSA_CONTEXT)) throw fail('MLDSA_CONTEXT_INVALID');
+  const message = Buffer.from(jcs(payload), 'utf8');
+  const edSignature = decodeB64u(ed.signature_b64url, 64, 256);
+  const mlSignature = decodeB64u(ml.signature_b64url, null, 16 * 1024);
+  const edPublicRaw = envText('DIRAC_LOST_PASSKEY_ED25519_PUBLIC_KEY_PEM') || envText('DIRAC_LOST_PASSKEY_ED25519_PUBLIC_KEY_DER_B64');
+  const mlPublicRaw = envText('DIRAC_RECOVERY_MLDSA87_PUBLIC_KEY_PEM') || envText('DIRAC_RECOVERY_MLDSA87_PUBLIC_KEY_DER_B64');
+  const edPublic = edPublicRaw
+    ? parsePublicKey(edPublicRaw, 'ed25519')
+    : crypto.createPublicKey(parsePrivateKey(envText('DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY_PEM') || envText('DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY'), 'ed25519'));
+  const mlPublic = mlPublicRaw
+    ? parsePublicKey(mlPublicRaw, 'ml-dsa-87')
+    : crypto.createPublicKey(parsePrivateKey(envText('DIRAC_RECOVERY_MLDSA87_PRIVATE_KEY_PEM') || envText('DIRAC_RECOVERY_MLDSA87_PRIVATE_KEY_DER_B64'), 'ml-dsa-87'));
+  try {
+    const edOk = crypto.verify(null, message, edPublic, edSignature);
+    const mlOk = crypto.verify(null, message, { key: mlPublic, context: MLDSA_CONTEXT }, mlSignature);
+    if (!edOk || !mlOk) throw fail('DUAL_SIGNATURE_VERIFICATION_FAILED');
+    return true;
+  } finally {
+    message.fill(0);
+    edSignature.fill(0);
+    mlSignature.fill(0);
+  }
+}
+
+const azureTokenCache = { token: '', expiresAtMs: 0 };
+
+function azureConfig() {
+  const provider = envText('DIRAC_RECOVERY_HSM_PROVIDER');
+  if (provider !== 'azure-managed-hsm') throw fail('HSM_PROVIDER_INVALID');
+  const vaultUrlRaw = envText('DIRAC_RECOVERY_HSM_VAULT_URL');
+  let vaultUrl;
+  try { vaultUrl = new URL(vaultUrlRaw); } catch (_) { throw fail('HSM_VAULT_URL_INVALID'); }
+  if (vaultUrl.protocol !== 'https:' || vaultUrl.username || vaultUrl.password || vaultUrl.search || vaultUrl.hash || vaultUrl.pathname.replace(/\/+$/, '')) {
+    throw fail('HSM_VAULT_URL_INVALID');
+  }
+  const host = vaultUrl.hostname.toLowerCase();
+  if (!/^[a-z0-9-]+\.managedhsm\.azure\.net$/.test(host)) throw fail('HSM_VAULT_HOST_INVALID');
+  const keyName = envText('DIRAC_RECOVERY_HSM_KEY_NAME');
+  const keyVersion = envText('DIRAC_RECOVERY_HSM_KEY_VERSION');
+  const tenantId = envText('DIRAC_RECOVERY_HSM_TENANT_ID');
+  const clientId = envText('DIRAC_RECOVERY_HSM_CLIENT_ID');
+  const clientSecret = envText('DIRAC_RECOVERY_HSM_CLIENT_SECRET');
+  if (!/^[A-Za-z0-9-]{1,127}$/.test(keyName) || !/^[A-Fa-f0-9]{32}$/.test(keyVersion)) throw fail('HSM_KEY_ID_INVALID');
+  if (!/^[0-9a-fA-F-]{36}$/.test(tenantId) || !/^[0-9a-fA-F-]{36}$/.test(clientId) || Buffer.byteLength(clientSecret, 'utf8') < 32) {
+    throw fail('HSM_OAUTH_CONFIGURATION_INVALID');
+  }
+  return { vaultUrl: vaultUrl.origin, host, keyName, keyVersion, tenantId, clientId, clientSecret };
+}
+
+async function fetchJsonStrict(url, options, allowedHost, maximumBytes = 64 * 1024) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== 'https:' || parsed.hostname.toLowerCase() !== String(allowedHost).toLowerCase()) throw fail('EGRESS_HOST_INVALID');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch(parsed, { ...options, redirect: 'error', signal: controller.signal });
+    const declared = Number(response.headers.get('content-length') || 0);
+    if (Number.isFinite(declared) && declared > maximumBytes) throw fail('EGRESS_RESPONSE_TOO_LARGE');
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > maximumBytes) throw fail('EGRESS_RESPONSE_TOO_LARGE');
+    let data;
+    try { data = JSON.parse(bytes.toString('utf8')); } catch (_) { throw fail('EGRESS_RESPONSE_JSON_INVALID'); }
+    bytes.fill(0);
+    if (!response.ok) throw fail('HSM_OPERATION_FAILED');
+    return data;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function azureAccessToken(config) {
+  const now = Date.now();
+  if (azureTokenCache.token && azureTokenCache.expiresAtMs > now + 60_000) return azureTokenCache.token;
+  const host = 'login.microsoftonline.com';
+  const url = `https://${host}/${encodeURIComponent(config.tenantId)}/oauth2/v2.0/token`;
+  const form = new URLSearchParams({
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    scope: 'https://managedhsm.azure.net/.default',
+    grant_type: 'client_credentials'
+  });
+  const data = await fetchJsonStrict(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+    body: form.toString()
+  }, host, 32 * 1024);
+  const token = String(data && data.access_token || '');
+  const expiresIn = Number(data && data.expires_in || 0);
+  if (!token || token.length > 8192 || !Number.isFinite(expiresIn) || expiresIn < 60) throw fail('HSM_OAUTH_TOKEN_INVALID');
+  azureTokenCache.token = token;
+  azureTokenCache.expiresAtMs = now + Math.min(expiresIn, 3600) * 1000;
+  return token;
+}
+
+async function azureHsmOperation(operation, value) {
+  const config = azureConfig();
+  const input = Buffer.from(value);
+  if (operation === 'wrapkey' && input.length !== 32) throw fail('HSM_WRAP_INPUT_INVALID');
+  if (operation === 'unwrapkey' && input.length !== 40) throw fail('HSM_UNWRAP_INPUT_INVALID');
+  const token = await azureAccessToken(config);
+  const url = `${config.vaultUrl}/keys/${encodeURIComponent(config.keyName)}/${encodeURIComponent(config.keyVersion)}/${operation}?api-version=2025-07-01`;
+  const data = await fetchJsonStrict(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({ alg: 'A256KW', value: b64u(input) })
+  }, config.host);
+  const output = decodeB64u(String(data && data.value || ''), operation === 'wrapkey' ? 40 : 32, 4096);
+  const kid = String(data && data.kid || '');
+  if (!kid.startsWith(`${config.vaultUrl}/keys/${config.keyName}/${config.keyVersion}`)) {
+    output.fill(0);
+    throw fail('HSM_KEY_ID_RESPONSE_INVALID');
+  }
+  return { value: output, keyId: kid };
+}
+
+async function hsmWrap(share) {
+  return azureHsmOperation('wrapkey', share);
+}
+
+async function hsmUnwrap(wrapped) {
+  return azureHsmOperation('unwrapkey', wrapped);
+}
+
+function assertRuntimePolicy() {
+  const versionParts = String(process.versions.node || '').split('.').map((item) => Number(item || 0));
+  const major = versionParts[0] || 0;
+  const minor = versionParts[1] || 0;
+  if (major < 24 || (major === 24 && minor < 8)) throw fail('NODE_VERSION_TOO_OLD');
+  assertPostQuantumRuntime();
+  if (envTrue('DIRAC_RECOVERY_FIPS_RUNTIME_REQUIRED') && typeof crypto.getFips === 'function' && crypto.getFips() !== 1) {
+    throw fail('FIPS_RUNTIME_REQUIRED');
+  }
+  azureConfig();
+}
+
+async function createVault(options) {
+  assertRuntimePolicy();
+  const required = ['requestId', 'expiresAt', 'nowIso', 'officialOrigin', 'passwordMaterial', 'emailSecret', 'websiteSecret', 'recoveryCode'];
+  for (const key of required) if (!String(options && options[key] || '')) throw fail('VAULT_INPUT_MISSING_' + key.toUpperCase());
+  if (String(options.recoveryCode).length !== 1200 || !/^[A-Za-z0-9_-]{1200}$/.test(String(options.recoveryCode))) throw fail('RECOVERY_CODE_INVALID');
+  if (String(options.emailSecret).length !== 100 || String(options.websiteSecret).length !== 100) throw fail('OFFLINE_SECRET_INPUT_INVALID');
+  if (typeof options.argon2RawFn !== 'function' || typeof options.vaultMaterialFn !== 'function') throw fail('ARGON2_ADAPTER_MISSING');
+
+  const randomBytes = options.randomBytes || crypto.randomBytes;
+  const vaultSalt = Buffer.from(randomBytes(32));
+  const vaultId = Buffer.from(randomBytes(32));
+  const extraNonceEntropy = Buffer.from(randomBytes(32));
+  const dek = Buffer.from(randomBytes(32));
+  if ([vaultSalt, vaultId, extraNonceEntropy, dek].some((value) => value.length !== 32)) throw fail('CSPRNG_OUTPUT_INVALID');
+
+  const argon2Params = Object.freeze({
+    memoryCost: Number(options.argon2Params && options.argon2Params.memoryCost || 0),
+    timeCost: Number(options.argon2Params && options.argon2Params.timeCost || 0),
+    parallelism: Number(options.argon2Params && options.argon2Params.parallelism || 0),
+    hashLength: 64
+  });
+  if (argon2Params.memoryCost < 1024000 || argon2Params.timeCost < 4 || argon2Params.parallelism < 4) {
+    throw fail('ARGON2_DOWNGRADE_REJECTED');
+  }
+
+  const vaultIdB64u = b64u(vaultId);
+  const vaultMaterial = Buffer.from(options.vaultMaterialFn(
+    options.passwordMaterial,
+    options.emailSecret,
+    options.websiteSecret,
+    vaultSalt,
+    vaultId
+  ));
+
+  let argonRaw;
+  let offlineInput;
+  let offlineSecret;
+  let userKek;
+  let offlineKek;
+  let transportKek;
+  let shares;
+  let mlkem;
+  let hsmWrapped;
+  let payloadPlaintext;
+  try {
+    argonRaw = Buffer.from(await options.argon2RawFn(vaultMaterial, vaultSalt, 64));
+    if (argonRaw.length !== 64) throw fail('ARGON2_OUTPUT_INVALID');
+
+    const offlineSalt = Buffer.from(randomBytes(32));
+    const transportWrapSalt = Buffer.from(randomBytes(32));
+    offlineInput = Buffer.from(jcs({
+      email_secret: String(options.emailSecret),
+      website_secret: String(options.websiteSecret)
+    }), 'utf8');
+    offlineSecret = hkdfSha512(offlineInput, offlineSalt, 'dirac/recovery/v2/offline-secret-512', 64);
+    userKek = hkdfSha512(argonRaw, vaultSalt, `dirac/recovery/v2/share1/${options.requestId}`, 32);
+    offlineKek = hkdfSha512(offlineSecret, vaultSalt, `dirac/recovery/v2/share2/${options.requestId}`, 32);
+    transportKek = hkdfSha512(Buffer.concat([argonRaw, offlineSecret]), transportWrapSalt, `dirac/recovery/v2/mlkem-secret/${options.requestId}`, 32);
+
+    shares = createShares(dek, randomBytes);
+    mlkem = (options.mlkemEncapsulateFn || mlkemEncapsulate)();
+    hsmWrapped = await (options.hsmWrapFn || hsmWrap)(shares.share3);
+
+    const metadata = {
+      schema: 'dirac-recovery-vault-metadata-v2',
+      version: VERSION,
+      purpose: PURPOSE,
+      domain: String(options.officialOrigin),
+      request_id: String(options.requestId),
+      vault_id: vaultIdB64u,
+      created_at: String(options.nowIso),
+      not_before: String(options.nowIso),
+      expires_at: String(options.expiresAt),
+      generation: 2,
+      one_time_use: true,
+      payload_cipher: PAYLOAD_CIPHER,
+      key_wrap: KEY_WRAP,
+      kdf: KDF,
+      dek_bits: 256,
+      share_policy: '3-of-3-XOR',
+      transport_suite: HYBRID_SUITE,
+      signature_policy: SIGNATURE_POLICY,
+      argon2id_params: argon2Params,
+      extra_nonce_entropy_hash: typeof options.extraEntropyHashFn === 'function'
+        ? String(options.extraEntropyHashFn(extraNonceEntropy))
+        : sha512B64u(extraNonceEntropy)
+    };
+    const aad = Buffer.from(jcs(metadata), 'utf8');
+    payloadPlaintext = Buffer.from(jcs({
+      magic: 'DIRAC-RECOVERY-PAYLOAD-V2',
+      purpose: PURPOSE,
+      vault_id: vaultIdB64u,
+      request_id: String(options.requestId),
+      issued_at: String(options.nowIso),
+      expires_at: String(options.expiresAt),
+      generation: 2,
+      recovery_code: String(options.recoveryCode)
+    }), 'utf8');
+    const payload = aesGcmEncrypt(dek, payloadPlaintext, aad);
+
+    const wrappedShare1 = aesKwWrap(userKek, shares.share1);
+    const wrappedShare2 = aesKwWrap(offlineKek, shares.share2);
+    const wrappedMlkemSecret = aesKwWrap(transportKek, mlkem.sharedKey);
+
+    const bundle = {
+      version: VERSION,
+      request_id: String(options.requestId),
+      vault_id: vaultIdB64u,
+      salt: b64u(vaultSalt),
+      argon2id_params: argon2Params,
+      hkdf_info: `dirac/recovery/v2/share1/${options.requestId}`,
+      metadata,
+      metadata_signature: typeof options.metadataSignatureFn === 'function'
+        ? String(options.metadataSignatureFn(metadata))
+        : sha512B64u(Buffer.from(jcs(metadata), 'utf8')),
+      payload: {
+        cipher: PAYLOAD_CIPHER,
+        nonce_b64url: b64u(payload.nonce),
+        ciphertext_b64url: b64u(payload.ciphertext),
+        tag_b64url: b64u(payload.tag)
+      },
+      key_protection: {
+        policy: '3-of-3-XOR',
+        user_share: {
+          wrap: KEY_WRAP,
+          kdf: KDF,
+          key_id: 'dirac-user-kek-v2',
+          wrapped_share_b64url: b64u(wrappedShare1)
+        },
+        offline_share: {
+          wrap: KEY_WRAP,
+          secret_bits: 512,
+          key_id: 'dirac-offline-kek-v2',
+          salt_b64url: b64u(offlineSalt),
+          wrapped_share_b64url: b64u(wrappedShare2)
+        },
+        hsm_share: {
+          wrap: KEY_WRAP,
+          provider: 'azure-managed-hsm',
+          key_id: String(hsmWrapped.keyId),
+          wrapped_share_b64url: b64u(hsmWrapped.value)
+        }
+      },
+      transport: {
+        suite: HYBRID_SUITE,
+        mlkem: 'ML-KEM-1024',
+        mlkem_key_id: envText('DIRAC_RECOVERY_MLKEM1024_KEY_ID') || 'dirac-recovery-ml-kem-1024-2026-01',
+        mlkem_ciphertext_b64url: b64u(mlkem.ciphertext),
+        mlkem_ciphertext_sha512: sha512B64u(mlkem.ciphertext),
+        wrapped_shared_secret_b64url: b64u(wrappedMlkemSecret),
+        shared_secret_wrap_salt_b64url: b64u(transportWrapSalt)
+      },
+      // Compatibility aliases retained only for existing DB columns/readers.
+      aes_nonce: b64u(payload.nonce),
+      ciphertext: b64u(payload.ciphertext),
+      auth_tag: b64u(payload.tag)
+    };
+    return {
+      vaultBundle: bundle,
+      metadataForAad: metadata,
+      aad,
+      argon2Params,
+      compatibility: { vaultSalt, vaultId, extraNonceEntropy, encrypted: payload }
+    };
+  } finally {
+    vaultMaterial.fill(0);
+    dek.fill(0);
+    if (argonRaw) argonRaw.fill(0);
+    if (offlineInput) offlineInput.fill(0);
+    if (offlineSecret) offlineSecret.fill(0);
+    if (userKek) userKek.fill(0);
+    if (offlineKek) offlineKek.fill(0);
+    if (transportKek) transportKek.fill(0);
+    if (shares) Object.values(shares).forEach((value) => value.fill(0));
+    if (mlkem && mlkem.sharedKey) mlkem.sharedKey.fill(0);
+    if (payloadPlaintext) payloadPlaintext.fill(0);
+  }
+}
+
+function rawX25519Public(keyObject) {
+  const der = crypto.createPublicKey(keyObject).export({ format: 'der', type: 'spki' });
+  const prefix = Buffer.from('302a300506032b656e032100', 'hex');
+  if (der.length !== prefix.length + 32 || !der.subarray(0, prefix.length).equals(prefix)) throw fail('X25519_PUBLIC_ENCODING_INVALID');
+  return Buffer.from(der.subarray(prefix.length));
+}
+
+function x25519PublicFromRaw(raw) {
+  const prefix = Buffer.from('302a300506032b656e032100', 'hex');
+  return crypto.createPublicKey({ key: Buffer.concat([prefix, Buffer.from(raw)]), format: 'der', type: 'spki' });
+}
+
+function hpkeExtract(hash, salt, ikm) {
+  const digestLength = hash === 'sha512' ? 64 : 32;
+  const realSalt = Buffer.from(salt || Buffer.alloc(0));
+  return crypto.createHmac(hash, realSalt.length ? realSalt : Buffer.alloc(digestLength, 0)).update(Buffer.from(ikm || Buffer.alloc(0))).digest();
+}
+
+function hpkeExpand(hash, prk, info, length) {
+  const digestLength = hash === 'sha512' ? 64 : 32;
+  if (!Number.isSafeInteger(length) || length < 0 || length > 255 * digestLength) throw fail('HPKE_EXPAND_INVALID');
+  const blocks = [];
+  let previous = Buffer.alloc(0);
+  let total = 0;
+  for (let index = 1; total < length; index += 1) {
+    const next = crypto.createHmac(hash, Buffer.from(prk)).update(previous).update(Buffer.from(info || Buffer.alloc(0))).update(Buffer.from([index])).digest();
+    if (previous.length) previous.fill(0);
+    previous = next;
+    blocks.push(next);
+    total += next.length;
+  }
+  const output = Buffer.from(Buffer.concat(blocks).subarray(0, length));
+  for (const block of blocks) block.fill(0);
+  return output;
+}
+
+function i2osp(value, length) {
+  const output = Buffer.alloc(length);
+  let remaining = Number(value);
+  for (let index = length - 1; index >= 0; index -= 1) {
+    output[index] = remaining & 255;
+    remaining = Math.floor(remaining / 256);
+  }
+  if (remaining !== 0) throw fail('I2OSP_INVALID');
+  return output;
+}
+
+function hpkeLabeledExtract(hash, suiteId, salt, label, ikm) {
+  const labeled = Buffer.concat([Buffer.from('HPKE-v1', 'ascii'), suiteId, Buffer.from(label, 'ascii'), Buffer.from(ikm || Buffer.alloc(0))]);
+  try { return hpkeExtract(hash, salt, labeled); } finally { labeled.fill(0); }
+}
+
+function hpkeLabeledExpand(hash, suiteId, prk, label, info, length) {
+  const labeled = Buffer.concat([i2osp(length, 2), Buffer.from('HPKE-v1', 'ascii'), suiteId, Buffer.from(label, 'ascii'), Buffer.from(info || Buffer.alloc(0))]);
+  try { return hpkeExpand(hash, prk, labeled, length); } finally { labeled.fill(0); }
+}
+
+function x25519HpkeShared(privateKey, encRaw) {
+  const receiverPublicRaw = rawX25519Public(privateKey);
+  const ephemeralPublicKey = x25519PublicFromRaw(encRaw);
+  const dh = crypto.diffieHellman({ privateKey, publicKey: ephemeralPublicKey });
+  if (dh.length !== 32 || crypto.timingSafeEqual(dh, Buffer.alloc(32))) {
+    dh.fill(0);
+    throw fail('X25519_DH_INVALID');
+  }
+  const kemSuiteId = Buffer.concat([Buffer.from('KEM', 'ascii'), i2osp(0x0020, 2)]);
+  const kemContext = Buffer.concat([Buffer.from(encRaw), receiverPublicRaw]);
+  const eaePrk = hpkeLabeledExtract('sha256', kemSuiteId, Buffer.alloc(0), 'eae_prk', dh);
+  const shared = hpkeLabeledExpand('sha256', kemSuiteId, eaePrk, 'shared_secret', kemContext, 32);
+  dh.fill(0); receiverPublicRaw.fill(0); kemSuiteId.fill(0); kemContext.fill(0); eaePrk.fill(0);
+  return shared;
+}
+
+function envelopeAad(body, mlkemCiphertextHash) {
+  return {
+    action: String(body.action || ''),
+    version: ENVELOPE_VERSION,
+    purpose: PURPOSE,
+    origin: 'https://secure.diracgroup.store',
+    request_id: String(body.request_id || ''),
+    hpke_suite: HYBRID_SUITE,
+    hpke_key_id: String(body.hpke_key_id || ''),
+    mlkem_key_id: String(body.mlkem_key_id || ''),
+    mlkem_ciphertext_sha512: String(mlkemCiphertextHash || ''),
+    sent_at_ms: Number(body.sent_at_ms),
+    expires_at_ms: Number(body.expires_at_ms)
+  };
+}
+
+function validateEnvelope(body, expectedHpkeKeyId, expectedMlkemKeyId) {
+  const source = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+  const now = Date.now();
+  if (source.version !== ENVELOPE_VERSION || source.hpke_suite !== HYBRID_SUITE) throw fail('HYBRID_ENVELOPE_VERSION_INVALID');
+  if (!/^[0-9a-f-]{36}$/i.test(String(source.request_id || ''))) throw fail('HYBRID_REQUEST_ID_INVALID');
+  if (String(source.hpke_key_id || '') !== String(expectedHpkeKeyId || '') || String(source.mlkem_key_id || '') !== String(expectedMlkemKeyId || '')) throw fail('HYBRID_KEY_ID_INVALID');
+  const sentAt = Number(source.sent_at_ms);
+  const expiresAt = Number(source.expires_at_ms);
+  if (!Number.isSafeInteger(sentAt) || !Number.isSafeInteger(expiresAt) || sentAt > now + MAX_CLOCK_SKEW_MS || now - sentAt > MAX_ENVELOPE_LIFETIME_MS || expiresAt <= now || expiresAt <= sentAt || expiresAt - sentAt > MAX_ENVELOPE_LIFETIME_MS) {
+    throw fail('HYBRID_ENVELOPE_TIME_INVALID');
+  }
+  decodeB64u(source.enc, 32, 128).fill(0);
+  decodeB64u(source.aead_nonce, 12, 128).fill(0);
+  decodeB64u(source.ciphertext, null, 64 * 1024).fill(0);
+  return true;
+}
+
+function openHybridEnvelope(options) {
+  const body = options.body;
+  const bundle = options.bundle;
+  const xPrivate = options.x25519PrivateKey || parsePrivateKey(envText('DIRAC_RECOVERY_HPKE_PRIVATE_KEY'), 'x25519');
+  validateEnvelope(body, options.expectedHpkeKeyId, bundle.transport.mlkem_key_id);
+  const enc = decodeB64u(body.enc, 32, 128);
+  const nonce = decodeB64u(body.aead_nonce, 12, 128);
+  const sealed = decodeB64u(body.ciphertext, null, 64 * 1024);
+  if (sealed.length < 17) throw fail('HYBRID_CIPHERTEXT_INVALID');
+  const mlkemCiphertext = decodeB64u(bundle.transport.mlkem_ciphertext_b64url, null, 8192);
+  if (sha512B64u(mlkemCiphertext) !== bundle.transport.mlkem_ciphertext_sha512) throw fail('MLKEM_CIPHERTEXT_HASH_INVALID');
+  let classicShared;
+  let pqShared;
+  let hybridKey;
+  let transcriptHash;
+  let plaintext;
+  try {
+    classicShared = x25519HpkeShared(xPrivate, enc);
+    pqShared = (options.mlkemDecapsulateFn || mlkemDecapsulate)(mlkemCiphertext);
+    const aadObject = envelopeAad(body, bundle.transport.mlkem_ciphertext_sha512);
+    const aad = Buffer.from(jcs(aadObject), 'utf8');
+    transcriptHash = sha512(aad);
+    hybridKey = hkdfSha512(Buffer.concat([classicShared, pqShared]), transcriptHash, `dirac/recovery/v2/hybrid-transport/${body.request_id}`, 32);
+    plaintext = aesGcmDecrypt(hybridKey, nonce, sealed.subarray(0, sealed.length - 16), sealed.subarray(sealed.length - 16), aad);
+    const responseKey = hkdfSha512(hybridKey, transcriptHash, `dirac/recovery/v2/hybrid-response/${body.request_id}`, 32);
+    return { plaintext, responseKey, transcriptHash, aadObject };
+  } finally {
+    enc.fill(0); nonce.fill(0); sealed.fill(0); mlkemCiphertext.fill(0);
+    if (classicShared) classicShared.fill(0);
+    if (pqShared) pqShared.fill(0);
+    if (hybridKey) hybridKey.fill(0);
+  }
+}
+
+function parseHybridPlaintext(plaintext, requestId) {
+  const bytes = Buffer.from(plaintext);
+  let parsed;
+  let text;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    parsed = JSON.parse(text);
+    if (jcs(parsed) !== text) throw fail('HYBRID_PLAINTEXT_NON_CANONICAL');
+  } catch (error) {
+    if (error && error.code === 'HYBRID_PLAINTEXT_NON_CANONICAL') throw error;
+    throw fail('HYBRID_PLAINTEXT_INVALID');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw fail('HYBRID_PLAINTEXT_INVALID');
+  const expected = ['request_id', 'share1_b64url', 'share2_b64url', 'signed_manifest', 'vault_bundle_sha512', 'version'];
+  const keys = Object.keys(parsed).sort();
+  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) throw fail('HYBRID_PLAINTEXT_FIELDS_INVALID');
+  if (parsed.version !== PLAINTEXT_VERSION || parsed.request_id !== requestId) throw fail('HYBRID_PLAINTEXT_BINDING_INVALID');
+  const share1 = decodeB64u(parsed.share1_b64url, 32, 128);
+  const share2 = decodeB64u(parsed.share2_b64url, 32, 128);
+  return { parsed, share1, share2 };
+}
+
+async function openVaultPayload(options) {
+  const bundle = options.bundle;
+  if (!bundle || bundle.version !== VERSION) throw fail('VAULT_VERSION_INVALID');
+  const share1 = Buffer.from(options.share1);
+  const share2 = Buffer.from(options.share2);
+  const wrappedHsmShare = decodeB64u(bundle.key_protection.hsm_share.wrapped_share_b64url, 40, 256);
+  let share3;
+  let dek;
+  let plaintext;
+  try {
+    const unwrapped = await (options.hsmUnwrapFn || hsmUnwrap)(wrappedHsmShare);
+    share3 = Buffer.from(unwrapped.value || unwrapped);
+    if (share3.length !== 32) throw fail('HSM_SHARE_LENGTH_INVALID');
+    dek = xor3(share1, share2, share3);
+    const aad = Buffer.from(jcs(bundle.metadata), 'utf8');
+    plaintext = aesGcmDecrypt(
+      dek,
+      decodeB64u(bundle.payload.nonce_b64url, 12, 128),
+      decodeB64u(bundle.payload.ciphertext_b64url, null, 64 * 1024),
+      decodeB64u(bundle.payload.tag_b64url, 16, 128),
+      aad
+    );
+    const parsed = parseInnerPayload(plaintext, bundle);
+    return parsed;
+  } finally {
+    wrappedHsmShare.fill(0);
+    if (share3) share3.fill(0);
+    if (dek) dek.fill(0);
+    if (plaintext) plaintext.fill(0);
+  }
+}
+
+function parseInnerPayload(plaintext, bundle) {
+  let parsed;
+  let text;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(plaintext));
+    parsed = JSON.parse(text);
+    if (jcs(parsed) !== text) throw fail('INNER_PAYLOAD_NON_CANONICAL');
+  } catch (error) {
+    if (error && error.code === 'INNER_PAYLOAD_NON_CANONICAL') throw error;
+    throw fail('INNER_PAYLOAD_JSON_INVALID');
+  }
+  const expected = ['expires_at', 'generation', 'issued_at', 'magic', 'purpose', 'recovery_code', 'request_id', 'vault_id'];
+  const keys = Object.keys(parsed || {}).sort();
+  if (!parsed || keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) throw fail('INNER_PAYLOAD_FIELDS_INVALID');
+  if (parsed.magic !== 'DIRAC-RECOVERY-PAYLOAD-V2' || parsed.purpose !== PURPOSE || parsed.generation !== 2 || parsed.request_id !== bundle.request_id || parsed.vault_id !== bundle.vault_id) {
+    throw fail('INNER_PAYLOAD_BINDING_INVALID');
+  }
+  const expiresAt = Date.parse(parsed.expires_at);
+  const issuedAt = Date.parse(parsed.issued_at);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() || !Number.isFinite(issuedAt) || issuedAt >= expiresAt) throw fail('INNER_PAYLOAD_EXPIRED');
+  if (typeof parsed.recovery_code !== 'string' || !/^[A-Za-z0-9_-]{1200}$/.test(parsed.recovery_code)) throw fail('INNER_RECOVERY_CODE_INVALID');
+  return parsed;
+}
+
+function buildManifest(options) {
+  const row = options.row || {};
+  const bundle = options.bundle;
+  if (!bundle || bundle.version !== VERSION) throw fail('MANIFEST_VAULT_VERSION_INVALID');
+  const hpkePublicRaw = Buffer.from(options.hpkePublicRaw);
+  if (hpkePublicRaw.length !== 32) throw fail('MANIFEST_HPKE_KEY_INVALID');
+  const bundleCanonical = Buffer.from(jcs(bundle), 'utf8');
+  const metadataCanonical = Buffer.from(jcs(bundle.metadata), 'utf8');
+  const payloadCiphertext = decodeB64u(bundle.payload.ciphertext_b64url, null, 64 * 1024);
+  const payloadNonce = decodeB64u(bundle.payload.nonce_b64url, 12, 128);
+  const payloadTag = decodeB64u(bundle.payload.tag_b64url, 16, 128);
+  const wrappedShare1 = decodeB64u(bundle.key_protection.user_share.wrapped_share_b64url, 40, 256);
+  const wrappedShare2 = decodeB64u(bundle.key_protection.offline_share.wrapped_share_b64url, 40, 256);
+  const wrappedShare3 = decodeB64u(bundle.key_protection.hsm_share.wrapped_share_b64url, 40, 256);
+  try {
+    return {
+      manifest_schema: MANIFEST_SCHEMA,
+      version: VERSION,
+      minimum_reader_version: 2,
+      legacy_fallback_allowed: false,
+      purpose: PURPOSE,
+      action: String(options.action || ''),
+      request_id: String(bundle.request_id),
+      vault_id: String(bundle.vault_id),
+      signature_policy: SIGNATURE_POLICY,
+      key_id: envText('DIRAC_LOST_PASSKEY_ED25519_KEY_ID') || 'dirac-recovery-ed25519-2026-01',
+      signature_alg: 'Ed25519+ML-DSA-87',
+      signature_algorithms: ['Ed25519', 'ML-DSA-87'],
+      canonicalization: 'RFC8785-JCS',
+      cipher: PAYLOAD_CIPHER,
+      dek_bits: 256,
+      dek_protection: '3-of-3-XOR',
+      key_wrap: KEY_WRAP,
+      kdf: KDF,
+      argon2id_params: bundle.argon2id_params,
+      transport_suite: HYBRID_SUITE,
+      hpke_key_id: String(options.hpkeKeyId),
+      hpke_public_key_b64url: b64u(hpkePublicRaw),
+      hpke_public_key_sha512: sha512B64u(hpkePublicRaw),
+      mlkem_key_id: String(bundle.transport.mlkem_key_id),
+      mlkem_ciphertext_sha512: String(bundle.transport.mlkem_ciphertext_sha512),
+      payload_ciphertext_sha512: sha512B64u(payloadCiphertext),
+      payload_nonce_sha512: sha512B64u(payloadNonce),
+      payload_tag_sha512: sha512B64u(payloadTag),
+      metadata_sha512: sha512B64u(metadataCanonical),
+      wrapped_share1_sha512: sha512B64u(wrappedShare1),
+      wrapped_share2_sha512: sha512B64u(wrappedShare2),
+      wrapped_share3_sha512: sha512B64u(wrappedShare3),
+      vault_bundle_sha512: sha512B64u(bundleCanonical),
+      hsm_key_id: String(bundle.key_protection.hsm_share.key_id),
+      security_contract: {
+        version: SECURITY_CONTRACT,
+        central_guard_required: true,
+        central_guard: String(options.centralGuard || ''),
+        action: String(options.action || ''),
+        vercel2_only: true,
+        response_format: 'json',
+        server_assisted_hsm_required: true,
+        hybrid_transport_required: true,
+        atomic_replay_claim_required: true,
+        dual_signature_required: true,
+        no_legacy_fallback: true,
+        one_time_copy: true,
+        recovery_code_length: 1200,
+        email_secret_length: 100,
+        website_secret_length: 100
+      },
+      created_at: String(row.created_at || bundle.metadata.created_at || ''),
+      not_before: String(bundle.metadata.not_before || ''),
+      expires_at: String(row.expires_at || bundle.metadata.expires_at || '')
+    };
+  } finally {
+    bundleCanonical.fill(0); metadataCanonical.fill(0); payloadCiphertext.fill(0); payloadNonce.fill(0); payloadTag.fill(0);
+    wrappedShare1.fill(0); wrappedShare2.fill(0); wrappedShare3.fill(0);
+  }
+}
+
+function makeSignedVaultResponse(options) {
+  const payload = buildManifest(options);
+  const signatures = dualSignManifest(payload);
+  return {
+    ok: true,
+    version: VERSION,
+    purpose: PURPOSE,
+    request_id: payload.request_id,
+    expires_at: payload.expires_at,
+    vault_bundle: options.bundle,
+    signed_manifest: {
+      payload,
+      signatures,
+      // Retained for the existing local Ed25519 verifier.
+      signature_b64: signatures.ed25519.signature_b64url
+    },
+    manifest: payload,
+    signatures
+  };
+}
+
+function verifySignedManifestContainer(container) {
+  if (!container || typeof container !== 'object' || Array.isArray(container)) throw fail('SIGNED_MANIFEST_MISSING');
+  const containerKeys = Object.keys(container).sort();
+  const expectedContainerKeys = ['payload', 'signature_b64', 'signatures'];
+  if (containerKeys.length !== expectedContainerKeys.length || containerKeys.some((key, index) => key !== expectedContainerKeys[index])) throw fail('SIGNED_MANIFEST_FIELDS_INVALID');
+  const payload = container.payload;
+  const signatures = container.signatures;
+  if (!payload || payload.manifest_schema !== MANIFEST_SCHEMA || payload.version !== VERSION || payload.legacy_fallback_allowed !== false) throw fail('SIGNED_MANIFEST_POLICY_INVALID');
+  verifyDualManifest(payload, signatures);
+  if (container.signature_b64 !== signatures.ed25519.signature_b64url) throw fail('SIGNED_MANIFEST_ALIAS_INVALID');
+  return payload;
+}
+
+async function atomicClaim(supabaseFetch, body, bundle) {
+  if (typeof supabaseFetch !== 'function') throw fail('ATOMIC_CLAIM_ADAPTER_MISSING');
+  const claimHash = sha512B64u(Buffer.from(jcs({
+    request_id: body.request_id,
+    enc: body.enc,
+    aead_nonce: body.aead_nonce,
+    ciphertext: body.ciphertext,
+    mlkem_ciphertext_sha512: bundle.transport.mlkem_ciphertext_sha512
+  }), 'utf8'));
+  const result = await supabaseFetch('/rest/v1/rpc/dirac_recovery_claim_once_v2', {
+    method: 'POST',
+    auth: 'service',
+    body: {
+      p_scope: 'hybrid-envelope-v2',
+      p_claim_hash: claimHash,
+      p_request_id: String(body.request_id),
+      p_expires_at: new Date(Number(body.expires_at_ms)).toISOString()
+    }
+  });
+  const accepted = Boolean(result && result.ok && (
+    result.data === true ||
+    (Array.isArray(result.data) && result.data[0] === true) ||
+    (result.data && result.data.accepted === true)
+  ));
+  if (!accepted) throw fail(result && result.ok ? 'ATOMIC_REPLAY_REJECTED' : 'ATOMIC_REPLAY_STORAGE_UNAVAILABLE');
+  return claimHash;
+}
+
+function encryptResponse(responseKey, transcriptHash, requestId, recoveryCode) {
+  const aadObject = { version: RESPONSE_VERSION, purpose: PURPOSE, request_id: String(requestId) };
+  const aad = Buffer.from(jcs(aadObject), 'utf8');
+  const plaintext = Buffer.from(jcs({
+    version: RESPONSE_VERSION,
+    request_id: String(requestId),
+    recovery_code: String(recoveryCode)
+  }), 'utf8');
+  try {
+    const encrypted = aesGcmEncrypt(responseKey, plaintext, aad);
+    return {
+      version: RESPONSE_VERSION,
+      request_id: String(requestId),
+      aead_nonce: b64u(encrypted.nonce),
+      ciphertext: b64u(Buffer.concat([encrypted.ciphertext, encrypted.tag])),
+      transcript_sha512: b64u(transcriptHash)
+    };
+  } finally {
+    aad.fill(0); plaintext.fill(0);
+  }
+}
+
+return Object.freeze({
+  VERSION,
+  MANIFEST_SCHEMA,
+  SECURITY_CONTRACT,
+  ENVELOPE_VERSION,
+  PLAINTEXT_VERSION,
+  RESPONSE_VERSION,
+  PURPOSE,
+  HYBRID_SUITE,
+  PAYLOAD_CIPHER,
+  KEY_WRAP,
+  KDF,
+  SIGNATURE_POLICY,
+  jcs,
+  b64u,
+  decodeB64u,
+  sha512B64u,
+  hkdfSha512,
+  aesKwWrap,
+  aesKwUnwrap,
+  aesGcmEncrypt,
+  aesGcmDecrypt,
+  xor3,
+  createShares,
+  assertRuntimePolicy,
+  mlkemEncapsulate,
+  mlkemDecapsulate,
+  dualSignManifest,
+  verifyDualManifest,
+  hsmWrap,
+  hsmUnwrap,
+  createVault,
+  rawX25519Public,
+  x25519HpkeShared,
+  envelopeAad,
+  validateEnvelope,
+  openHybridEnvelope,
+  parseHybridPlaintext,
+  openVaultPayload,
+  parseInnerPayload,
+  buildManifest,
+  makeSignedVaultResponse,
+  verifySignedManifestContainer,
+  atomicClaim,
+  encryptResponse,
+  fail
+});
+})();
 const DIRAC_MIDTRANS_DEBUG_PATCH = 'midtrans-dashboard-key-accept-v11';
 const DIRAC_IPAYMU_PATCH = 'ipaymu-redirect-v12';
 const DIRAC_COOKIE_SESSION_PATCH = 'cookie-signed-session-v16';
@@ -8648,26 +9695,51 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     });
   }
   const recoveryCode = customerSecurityGenerateLostPasskeyRecoveryCode();
-  const vaultSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
-  const vaultId = crypto.randomBytes(LOST_PASSKEY_RECOVERY_VAULT_ID_BYTES_V157);
-  const extraNonceEntropy = crypto.randomBytes(LOST_PASSKEY_RECOVERY_EXTRA_NONCE_BYTES_V157);
-  const aesNonce = crypto.randomBytes(12);
-
-  const argon2Params = customerSecurityLostPasskeyArgon2ParamsV157(64);
-  const metadataForAad = {
-    version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
-    domain: customerSecurityLostPasskeyOfficialBaseUrlV157(),
-    request_id: requestId,
-    vault_id: customerSecurityLostPasskeyB64(vaultId),
-    expires_at: expiresAt,
-    argon2id_params: argon2Params,
-    extra_nonce_entropy_hash: customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'extra_nonce_entropy', extraNonceEntropy)
-  };
-  const vaultMaterial = customerSecurityLostPasskeyVaultMaterialV157(passwordMaterial, emailSecret100, websiteSecret100, vaultSalt, vaultId);
-  const argon2Raw = await customerSecurityLostPasskeyArgon2Raw(vaultMaterial, vaultSalt, 64);
-  const aesKey = customerSecurityLostPasskeyHkdf(argon2Raw, vaultSalt, 'dirac-lost-passkey-v157:aes-256-gcm:' + requestId, 32);
-  const aad = customerSecurityLostPasskeyBuildAadV157(metadataForAad);
-  const encrypted = customerSecurityLostPasskeyAesGcmEncryptWithNonceV157(aesKey, aesNonce, Buffer.from(recoveryCode, 'utf8'), aad);
+  let recoveryCryptoV2;
+  try {
+    const requiredArgon2Params = customerSecurityLostPasskeyArgon2ParamsV157(64);
+    recoveryCryptoV2 = await DIRAC_RECOVERY_CRYPTO_V2.createVault({
+      requestId,
+      expiresAt,
+      nowIso,
+      officialOrigin: customerSecurityLostPasskeyOfficialBaseUrlV157(),
+      passwordMaterial,
+      emailSecret: emailSecret100,
+      websiteSecret: websiteSecret100,
+      recoveryCode,
+      argon2Params: requiredArgon2Params,
+      argon2RawFn: customerSecurityLostPasskeyArgon2Raw,
+      vaultMaterialFn: (passwordValue, emailValue, websiteValue, saltValue, vaultIdValue) => Buffer.from(DIRAC_RECOVERY_CRYPTO_V2.jcs({
+        version: DIRAC_RECOVERY_CRYPTO_V2.VERSION,
+        password: customerSecurityLostPasskeyNormalizePasswordV157(passwordValue),
+        email_secret: customerSecurityLostPasskeyNormalizeSecretV157(emailValue),
+        website_secret: customerSecurityLostPasskeyNormalizeSecretV157(websiteValue),
+        salt: DIRAC_RECOVERY_CRYPTO_V2.b64u(saltValue),
+        vault_id: DIRAC_RECOVERY_CRYPTO_V2.b64u(vaultIdValue)
+      }), 'utf8'),
+      extraEntropyHashFn: (value) => customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'extra_nonce_entropy_v2', value),
+      metadataSignatureFn: (value) => customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'metadata_signature_v2', DIRAC_RECOVERY_CRYPTO_V2.jcs(value))
+    });
+  } catch (error) {
+    try {
+      console.error('[dirac-recovery-crypto-v2-create-failed]', JSON.stringify({
+        code: String(error && error.code || 'RECOVERY_CRYPTO_V2_CREATE_FAILED').slice(0, 100),
+        request_id: requestId
+      }));
+    } catch (_) {}
+    return res.status(503).json({
+      ok: false,
+      code: String(error && error.code || 'RECOVERY_CRYPTO_V2_CREATE_FAILED'),
+      message: 'Layanan recovery maksimum belum siap.'
+    });
+  }
+  const vaultSalt = recoveryCryptoV2.compatibility.vaultSalt;
+  const vaultId = recoveryCryptoV2.compatibility.vaultId;
+  const extraNonceEntropy = recoveryCryptoV2.compatibility.extraNonceEntropy;
+  const argon2Params = recoveryCryptoV2.argon2Params;
+  const metadataForAad = recoveryCryptoV2.metadataForAad;
+  const aad = recoveryCryptoV2.aad;
+  const encrypted = recoveryCryptoV2.compatibility.encrypted;
 
   const linkTokenSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
   const emailSecretSalt = crypto.randomBytes(LOST_PASSKEY_RECOVERY_SALT_BYTES_V157);
@@ -8690,19 +9762,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const recoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157()
     + '/lost-passkey.html#rid=' + encodeURIComponent(requestId)
     + '&token=' + encodeURIComponent(linkToken);
-  const vaultBundle = {
-    version: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
-    salt: customerSecurityLostPasskeyB64(vaultSalt),
-    aes_nonce: customerSecurityLostPasskeyB64(encrypted.nonce),
-    ciphertext: customerSecurityLostPasskeyB64(encrypted.ciphertext),
-    auth_tag: customerSecurityLostPasskeyB64(encrypted.tag),
-    vault_id: metadataForAad.vault_id,
-    request_id: requestId,
-    metadata: metadataForAad,
-    metadata_signature: customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'metadata_signature', customerSecurityLostPasskeyCanonical(metadataForAad)),
-    argon2id_params: argon2Params,
-    hkdf_info: 'dirac-lost-passkey-v157:aes-256-gcm:' + requestId
-  };
+  const vaultBundle = recoveryCryptoV2.vaultBundle;
   const vaultBundleSha256 = customerSecurityLostPasskeySha256B64(Buffer.from(customerSecurityLostPasskeyCanonical(vaultBundle), 'utf8'));
   const aadHash = customerSecurityLostPasskeySha256B64(aad);
   const insertBody = [{
@@ -8734,11 +9794,11 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     revoked_at: null,
     metadata: {
       source: 'lost_passkey_recovery',
-      patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157,
+      patch: DIRAC_RECOVERY_CRYPTO_V2.VERSION,
       delivery: 'official_recovery_html_link',
-      file_format: 'offline_html_aes256gcm_argon2id_wasm_bundle_pending_template',
+      file_format: 'server_assisted_hsm_aes256gcm_3of3_hybrid_pq_v2',
       html_template: 'deploy_once_on_server2_later',
-      password_formula: 'password_latest_material_plus_secret_email_100_char_plus_secret_website_100_char_plus_salt_plus_vault_id',
+      password_formula: 'argon2id_user_material_plus_independent_offline_secret_512bit_plus_hsm_share',
       official_recovery_link_hash: customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'official_recovery_link', recoveryLink),
       link_token_hash: linkTokenHash,
       link_token_argon2id_params: linkTokenArgon2Params,
@@ -8756,6 +9816,8 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
         binding: customerSecurityLostPasskeyB64(bindingSalt)
       },
       vault_bundle: vaultBundle,
+      crypto_profile: 'dirac-recovery-v2-max-2026',
+      legacy_fallback_allowed: false,
       argon2id_params: argon2Params,
       root_secret_version: vaultSecrets.rootSecretVersion,
       passkey_count: activePasskeys.length,
@@ -16751,7 +17813,8 @@ function diracUltraPreflightSecurityCheck(req, res, action, method) {
     }
   }
 
-  if (method !== 'POST' && method !== 'GET' && method !== 'OPTIONS') {
+  if (method !== 'POST' && method !== 'GET' && method !== 'OPTIONS'
+    && !(method === 'HEAD' && String(action || '') === 'customer_security_recovery_hpke_verify')) {
     return {
       ok: false,
       status: 405,
@@ -28235,6 +29298,26 @@ function diracCentralVercel2RecoveryEnvPartitionGuardV183(action) {
     'DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST',
     'DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY',
     'DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY_PEM',
+    'DIRAC_LOST_PASSKEY_ED25519_PUBLIC_KEY_PEM',
+    'DIRAC_LOST_PASSKEY_ED25519_PUBLIC_KEY_DER_B64',
+    'DIRAC_RECOVERY_MLKEM1024_PRIVATE_KEY_PEM',
+    'DIRAC_RECOVERY_MLKEM1024_PRIVATE_KEY_DER_B64',
+    'DIRAC_RECOVERY_MLKEM1024_PUBLIC_KEY_PEM',
+    'DIRAC_RECOVERY_MLKEM1024_PUBLIC_KEY_DER_B64',
+    'DIRAC_RECOVERY_MLKEM1024_KEY_ID',
+    'DIRAC_RECOVERY_MLDSA87_PRIVATE_KEY_PEM',
+    'DIRAC_RECOVERY_MLDSA87_PRIVATE_KEY_DER_B64',
+    'DIRAC_RECOVERY_MLDSA87_PUBLIC_KEY_PEM',
+    'DIRAC_RECOVERY_MLDSA87_PUBLIC_KEY_DER_B64',
+    'DIRAC_RECOVERY_MLDSA87_KEY_ID',
+    'DIRAC_RECOVERY_HSM_PROVIDER',
+    'DIRAC_RECOVERY_HSM_VAULT_URL',
+    'DIRAC_RECOVERY_HSM_KEY_NAME',
+    'DIRAC_RECOVERY_HSM_KEY_VERSION',
+    'DIRAC_RECOVERY_HSM_TENANT_ID',
+    'DIRAC_RECOVERY_HSM_CLIENT_ID',
+    'DIRAC_RECOVERY_HSM_CLIENT_SECRET',
+    'DIRAC_RECOVERY_FIPS_RUNTIME_REQUIRED',
     'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_KIB',
     'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_TIME_COST',
     'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_PARALLELISM',
@@ -28888,13 +29971,25 @@ function diracCentralIssuePageNonceV146(req, res, action) {
   if (!res || typeof res.setHeader !== 'function') return '';
   const secret = diracCentralSecretV146();
   const now = Math.floor(Date.now() / 1000);
+  const recoveryV2Action = String(action || '') === 'customer_security_recovery_hpke_verify';
+  const recoveryV2ClientBinding = recoveryV2Action
+    ? diracCentralHashV146([
+        getLoginSecurityIp(req),
+        String(req && req.headers && req.headers['user-agent'] || ''),
+        String(req && req.headers && req.headers['accept-language'] || ''),
+        String(req && req.headers && req.headers['sec-ch-ua'] || '')
+      ].join('|'))
+    : '';
   const payload = {
     typ: 'dirac-page-nonce-v1',
     iat: now,
     exp: now + 300,
     act: String(action || ''),
     sid: diracCentralRequestSessionHashV146(req),
-    oh: diracCentralHashV146(diracCentralNormalizeOriginV146(req && req.headers && (req.headers.origin || req.headers.referer || req.headers.referrer) || ''))
+    oh: diracCentralHashV146(diracCentralNormalizeOriginV146(req && req.headers && (req.headers.origin || req.headers.referer || req.headers.referrer) || '')),
+    // Recovery V2 nonce is additionally bound to the same trusted client
+    // network/browser fingerprint. Other actions preserve their prior behavior.
+    cb: recoveryV2ClientBinding
   };
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = crypto.createHmac('sha256', secret).update(body).digest('base64url');
@@ -28920,6 +30015,17 @@ function diracCentralVerifyPageNonceV146(req, token, action) {
   if (payload.sid && sid && payload.sid !== sid) return { ok: false, reason: 'page_nonce_session_mismatch' };
   const originHash = diracCentralHashV146(diracCentralNormalizeOriginV146(req && req.headers && (req.headers.origin || req.headers.referer || req.headers.referrer) || ''));
   if (payload.oh && originHash && payload.oh !== originHash) return { ok: false, reason: 'page_nonce_origin_mismatch' };
+  if (String(action || '') === 'customer_security_recovery_hpke_verify') {
+    const clientBinding = diracCentralHashV146([
+      getLoginSecurityIp(req),
+      String(req && req.headers && req.headers['user-agent'] || ''),
+      String(req && req.headers && req.headers['accept-language'] || ''),
+      String(req && req.headers && req.headers['sec-ch-ua'] || '')
+    ].join('|'));
+    if (!payload.cb || payload.cb !== clientBinding) {
+      return { ok: false, reason: 'page_nonce_client_binding_mismatch' };
+    }
+  }
   return { ok: true };
 }
 
@@ -29258,8 +30364,12 @@ function diracCentralContractGuardV146(req, ctx) {
     const format = diracCentralValidateFieldFormatV146(key, item.value);
     if (!format.ok) return { ok: false, reason: format.reason };
   }
-  const actionSchema = diracCentralActionSchemaGuardV185(ctx.action, source);
-  if (!actionSchema.ok) return actionSchema;
+  // Recovery V2 uses HEAD only to obtain Central Guard CSRF/page-nonce credentials.
+  // HEAD has no body by definition; every POST field is still schema-validated fail-closed.
+  if (!(ctx.method === 'HEAD' && String(ctx.action || '') === 'customer_security_recovery_hpke_verify')) {
+    const actionSchema = diracCentralActionSchemaGuardV185(ctx.action, source);
+    if (!actionSchema.ok) return actionSchema;
+  }
   if (ctx.method === 'GET' && contract.mutation) return { ok: false, reason: 'mutation_get_rejected' };
   return { ok: true };
 }
@@ -30871,7 +31981,7 @@ const __diracRecoveryHpkePreviousContractV159 = diracCentralContractForActionV14
 diracCentralContractForActionV146 = function diracCentralContractForActionRecoveryHpkeV159(action) {
   if (String(action || '') === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) {
     return {
-      methods: ['POST'],
+      methods: ['HEAD', 'POST'],
       allowed: [
         'action',
         'version',
@@ -31826,3 +32936,332 @@ customerSecurityLostPasskeyReturnVaultJsonV169 = function customerSecurityLostPa
   }
 };
 Object.defineProperty(customerSecurityLostPasskeyReturnVaultJsonV169, '__diracRecoveryHpkeManifestV160', { value: true, enumerable: false });
+
+/* ============================================================
+   DIRAC RECOVERY CRYPTO V2 MAX-ASSURANCE — NARROW APPEND-ONLY PATCH
+   Scope: lost-passkey vault response + existing recovery verify action only.
+   Login, password hash, A2F/MFA, payment, email templates, cookies, and
+   endpoint names are intentionally untouched.
+   ============================================================ */
+
+const DIRAC_RECOVERY_CRYPTO_V2_PATCH = 'dirac-recovery-crypto-v2-max-2026';
+
+function diracRecoveryCryptoV2BundleFromMetadata(metadata) {
+  const source = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {};
+  const bundle = source.vault_bundle && typeof source.vault_bundle === 'object' && !Array.isArray(source.vault_bundle)
+    ? source.vault_bundle
+    : null;
+  return bundle && bundle.version === DIRAC_RECOVERY_CRYPTO_V2.VERSION ? bundle : null;
+}
+
+const __diracRecoveryCryptoV2PreviousVaultResponse = customerSecurityLostPasskeyReturnVaultJsonV169;
+customerSecurityLostPasskeyReturnVaultJsonV169 = function customerSecurityLostPasskeyReturnVaultJsonV2(res, row, metadata) {
+  const bundle = diracRecoveryCryptoV2BundleFromMetadata(metadata);
+  if (!bundle) {
+    customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
+    return res.status(410).json({
+      ok: false,
+      code: 'RECOVERY_LEGACY_VAULT_DISABLED',
+      message: 'Vault recovery lama tidak diizinkan. Buat permintaan recovery baru.'
+    });
+  }
+  if (!diracCentralCurrentContextPassedV146()) {
+    customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
+    return res.status(403).json({ ok: false, code: 'CENTRAL_GUARD_REQUIRED', message: 'Permintaan ditolak oleh sistem keamanan.' });
+  }
+  try {
+    DIRAC_RECOVERY_CRYPTO_V2.assertRuntimePolicy();
+    const hpkePrivateKey = diracRecoveryHpkePrivateKeyV159();
+    const hpkePublicRaw = DIRAC_RECOVERY_CRYPTO_V2.rawX25519Public(hpkePrivateKey);
+    const hpkeKeyId = diracRecoveryHpkeAsciiV159(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_KEY_ID'), 1, 80);
+    if (!hpkeKeyId) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_HPKE_KEY_ID_INVALID');
+    const response = DIRAC_RECOVERY_CRYPTO_V2.makeSignedVaultResponse({
+      row,
+      metadata,
+      bundle,
+      hpkePublicRaw,
+      hpkeKeyId,
+      action: DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165,
+      centralGuard: DIRAC_CENTRAL_SECURITY_GUARD_V146
+    });
+    hpkePublicRaw.fill(0);
+    customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
+    return res.status(200).json(response);
+  } catch (error) {
+    try {
+      console.error('[dirac-recovery-crypto-v2-manifest-failed]', JSON.stringify({
+        code: String(error && error.code || 'RECOVERY_CRYPTO_V2_MANIFEST_FAILED').slice(0, 100),
+        request_id: String(row && row.request_id || '').slice(0, 80)
+      }));
+    } catch (_) {}
+    customerSecurityLostPasskeySetVaultJsonHeadersV169(res);
+    return res.status(503).json({
+      ok: false,
+      code: String(error && error.code || 'RECOVERY_CRYPTO_V2_MANIFEST_FAILED'),
+      message: 'Layanan recovery maksimum belum siap.'
+    });
+  }
+};
+Object.defineProperty(customerSecurityLostPasskeyReturnVaultJsonV169, '__diracRecoveryCryptoV2', { value: true, enumerable: false });
+
+const __diracRecoveryCryptoV2PreviousContract = diracCentralContractForActionV146;
+diracCentralContractForActionV146 = function diracCentralContractForActionRecoveryCryptoV2(action) {
+  if (String(action || '') === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) {
+    return {
+      methods: ['HEAD', 'POST'],
+      allowed: [
+        'action',
+        'version',
+        'request_id',
+        'hpke_suite',
+        'hpke_key_id',
+        'mlkem_key_id',
+        'enc',
+        'aead_nonce',
+        'ciphertext',
+        'sent_at_ms',
+        'expires_at_ms',
+        'csrf',
+        'nonce',
+        'idempotency_key'
+      ],
+      // HEAD is the same-action Central Guard bootstrap and has no body.
+      // POST field presence is enforced fail-closed by validateEnvelope() and
+      // the V2 handler after every Central Guard stage has passed.
+      required: [],
+      maxBodyBytes: 64 * 1024,
+      maxFieldBytes: 48 * 1024,
+      mutation: true,
+      allowProtectedFields: false
+    };
+  }
+  return __diracRecoveryCryptoV2PreviousContract(action);
+};
+Object.defineProperty(diracCentralContractForActionV146, '__diracRecoveryCryptoV2', { value: true, enumerable: false });
+
+// Central Guard V2 schema adapter. Legacy envelopes are intentionally rejected;
+// the handler performs a second validation against the vault-bound ML-KEM key id.
+const __diracRecoveryCryptoV2PreviousEnvelopeValidator = diracRecoveryHpkeValidateEnvelopeV159;
+diracRecoveryHpkeValidateEnvelopeV159 = function diracRecoveryHpkeValidateEnvelopeCryptoV2(body) {
+  try {
+    const expectedHpkeKeyId = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_KEY_ID');
+    const expectedMlkemKeyId = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_MLKEM1024_KEY_ID');
+    if (!expectedHpkeKeyId || !expectedMlkemKeyId) return { ok: false, reason: 'key_id_unconfigured' };
+    DIRAC_RECOVERY_CRYPTO_V2.validateEnvelope(body, expectedHpkeKeyId, expectedMlkemKeyId);
+    if (String(body && body.action || '') !== DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) return { ok: false, reason: 'action_invalid' };
+    return {
+      ok: true,
+      requestId: String(body.request_id || ''),
+      keyId: expectedHpkeKeyId,
+      mlkemKeyId: expectedMlkemKeyId,
+      sentAtMs: Number(body.sent_at_ms),
+      expiresAtMs: Number(body.expires_at_ms)
+    };
+  } catch (error) {
+    return { ok: false, reason: String(error && error.code || 'invalid').toLowerCase() };
+  }
+};
+Object.defineProperty(diracRecoveryHpkeValidateEnvelopeV159, '__diracRecoveryCryptoV2', { value: true, enumerable: false });
+
+const __diracRecoveryCryptoV2PreviousVerifyHandler = diracRecoveryHpkeVerifyEnvelopeV159;
+diracRecoveryHpkeVerifyEnvelopeV159 = async function diracRecoveryHpkeVerifyEnvelopeV2(req, res) {
+  if (req.method === 'HEAD') return res.status(204).end();
+  const ctx = diracCentralCurrentContextV149();
+  const body = ctx && ctx.body && typeof ctx.body === 'object' && !Array.isArray(ctx.body) ? ctx.body : {};
+  if (String(body.version || '') === DIRAC_RECOVERY_CRYPTO_V2.ENVELOPE_VERSION) {
+    return diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body);
+  }
+  return res.status(426).json({
+    ok: false,
+    code: 'RECOVERY_LEGACY_ENVELOPE_DISABLED',
+    message: 'Envelope recovery lama tidak diizinkan.'
+  });
+};
+Object.defineProperty(diracRecoveryHpkeVerifyEnvelopeV159, '__diracRecoveryCryptoV2', { value: true, enumerable: false });
+
+async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, message: 'Gunakan POST.' });
+  if (req.__diracCentralSecurityGuardPassedV146 !== true || !diracCentralCurrentContextPassedV146()) {
+    return res.status(403).json({ ok: false, code: 'CENTRAL_GUARD_REQUIRED', message: 'Permintaan ditolak oleh sistem keamanan.' });
+  }
+  if (!ctx || ctx.req !== req || ctx.action !== DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159 || ctx.classification !== 'browser' || !ctx.guardPassport || ctx.guardPassport.integrity_checked !== true) {
+    return res.status(403).json({ ok: false, code: 'RECOVERY_V2_GUARD_CONTEXT_INVALID', message: 'Permintaan ditolak oleh sistem keamanan.' });
+  }
+  if (!DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.has(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159)) {
+    return res.status(403).json({ ok: false, code: 'RECOVERY_V2_ACTION_NOT_ALLOWED', message: 'Action tidak diizinkan pada server ini.' });
+  }
+
+  let hybrid = null;
+  let parsedHybrid = null;
+  let recovered = null;
+  let recoveryCode = '';
+  let argon2GateClaimed = false;
+  let argonQueueTicket = null;
+  try {
+    const env = diracRecoveryHpkeEnvGuardV159();
+    if (!env.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_ENVIRONMENT_INVALID');
+    DIRAC_RECOVERY_CRYPTO_V2.assertRuntimePolicy();
+    if (String(body.action || '') !== DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_ACTION_INVALID');
+
+    const request = await diracRecoveryHpkeReadRequestV159(String(body.request_id || ''));
+    if (!request.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_REQUEST_STORAGE_UNAVAILABLE');
+    const row = request.row;
+    if (!diracRecoveryHpkeRequestActiveV159(row)) {
+      return res.status(403).json({ ok: false, code: 'RECOVERY_REQUEST_INACTIVE', message: 'Recovery request tidak aktif.' });
+    }
+    const metadata = row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata) ? row.metadata : {};
+    const bundle = diracRecoveryCryptoV2BundleFromMetadata(metadata);
+    if (!bundle) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_VAULT_REQUIRED');
+    if (bundle.request_id !== row.request_id || bundle.request_id !== body.request_id) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_REQUEST_BINDING_INVALID');
+
+    DIRAC_RECOVERY_CRYPTO_V2.validateEnvelope(body, env.keyId, bundle.transport.mlkem_key_id);
+    await DIRAC_RECOVERY_CRYPTO_V2.atomicClaim(supabaseFetch, body, bundle);
+
+    hybrid = DIRAC_RECOVERY_CRYPTO_V2.openHybridEnvelope({
+      body,
+      bundle,
+      expectedHpkeKeyId: env.keyId,
+      x25519PrivateKey: diracRecoveryHpkePrivateKeyV159()
+    });
+    parsedHybrid = DIRAC_RECOVERY_CRYPTO_V2.parseHybridPlaintext(hybrid.plaintext, row.request_id);
+
+    const submittedManifest = parsedHybrid.parsed.signed_manifest;
+    const manifestPayload = DIRAC_RECOVERY_CRYPTO_V2.verifySignedManifestContainer(submittedManifest);
+    const currentBundleHash = DIRAC_RECOVERY_CRYPTO_V2.sha512B64u(Buffer.from(DIRAC_RECOVERY_CRYPTO_V2.jcs(bundle), 'utf8'));
+    if (parsedHybrid.parsed.vault_bundle_sha512 !== currentBundleHash || manifestPayload.vault_bundle_sha512 !== currentBundleHash) {
+      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_BUNDLE_HASH_INVALID');
+    }
+    if (manifestPayload.request_id !== row.request_id || manifestPayload.vault_id !== bundle.vault_id || manifestPayload.legacy_fallback_allowed !== false) {
+      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_MANIFEST_BINDING_INVALID');
+    }
+
+    recovered = await DIRAC_RECOVERY_CRYPTO_V2.openVaultPayload({
+      bundle,
+      share1: parsedHybrid.share1,
+      share2: parsedHybrid.share2
+    });
+    recoveryCode = String(recovered.recovery_code || '');
+
+    const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
+    if (!vaultSecrets.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail(String(vaultSecrets.code || 'RECOVERY_VAULT_SECRET_INVALID'));
+    const argon2Policy = diracRecoveryHpkeArgon2PolicyV159(row.recovery_code_hash, env.minimumMemory, env.minimumTime);
+    if (!argon2Policy.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_ARGON2_POLICY_INVALID');
+
+    argonQueueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, {
+      nonce: row.request_id,
+      caller_id: 'browser_hybrid_v2',
+      queue_task: DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159
+    });
+    if (!argonQueueTicket || !argonQueueTicket.ok) {
+      return res.status(429).json({ ok: false, code: 'RECOVERY_ARGON2_BUSY', message: 'Verifikasi recovery sedang diproses. Silakan coba kembali.' });
+    }
+    if (!diracRecoveryHpkeArgon2ClaimV187()) {
+      return res.status(429).json({ ok: false, code: 'RECOVERY_ARGON2_BUSY', message: 'Verifikasi recovery sedang diproses. Silakan coba kembali.' });
+    }
+    argon2GateClaimed = true;
+
+    const bindings = metadata.binding_hashes && typeof metadata.binding_hashes === 'object' && !Array.isArray(metadata.binding_hashes)
+      ? metadata.binding_hashes
+      : null;
+    if (!bindings || !metadata.binding_hash_commitment) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_BINDING_INVALID');
+    const bindingOk = await customerSecurityLostPasskeyArgon2VerifyHashV157(
+      'binding',
+      customerSecurityLostPasskeyCanonical(bindings),
+      metadata.binding_hash_commitment,
+      vaultSecrets.pepper,
+      vaultSecrets.rootSecret
+    ).catch(() => false);
+    if (!bindingOk) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_BINDING_INVALID');
+
+    const codeOk = await customerSecurityLostPasskeyArgon2VerifyHashV157(
+      'recovery_code',
+      recoveryCode,
+      row.recovery_code_hash,
+      vaultSecrets.pepper,
+      vaultSecrets.rootSecret
+    ).catch(() => false);
+    if (!customerSecurityLostPasskeyQueueLeaseHealthyV188(argonQueueTicket)) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_ARGON2_LEASE_LOST');
+    if (!codeOk) {
+      const failed = await diracRecoveryHpkeRegisterCodeFailureV159(req, row, row.request_id);
+      return res.status(failed.locked ? 423 : 403).json({
+        ok: false,
+        code: failed.locked ? 'RECOVERY_CODE_LOCKED' : 'RECOVERY_CODE_INVALID',
+        message: failed.locked ? 'Recovery request dikunci.' : 'Kode pemulihan tidak valid.'
+      });
+    }
+
+    const proofBody = diracRecoveryHpkeProofBodyV159(env, row);
+    const server1 = await diracRecoveryHpkeSendProofV159(env, proofBody);
+    if (!server1.ok) {
+      return res.status(server1.status >= 400 && server1.status <= 599 ? server1.status : 502).json({
+        ok: false,
+        code: 'RECOVERY_PROOF_DELIVERY_FAILED',
+        message: 'Bukti recovery belum dapat diproses oleh server utama.'
+      });
+    }
+    const server1Data = server1.data && typeof server1.data === 'object' ? server1.data : {};
+    const session = String(server1Data.dirac_lost_passkey_recovery_session || '').trim();
+    const sessionExpiresAt = String(server1Data.recovery_session_expires_at || '').trim();
+    if (!server1Data.ok || !/^[A-Za-z0-9_-]{32,160}$/.test(session) || !Number.isFinite(Date.parse(sessionExpiresAt))) {
+      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_PROOF_RESPONSE_INVALID');
+    }
+
+    const sealedRecovery = DIRAC_RECOVERY_CRYPTO_V2.encryptResponse(
+      hybrid.responseKey,
+      hybrid.transcriptHash,
+      row.request_id,
+      recoveryCode
+    );
+    await customerSecurityWriteGuardEvent(row.customer_id, {
+      event_type: 'lost_passkey_recovery_hybrid_v2_verified',
+      status: 'success',
+      risk_level: 'high',
+      description: 'Central Guard memverifikasi hybrid X25519 + ML-KEM-1024, dual signature, 3-of-3 shares, HSM unwrap, dan Argon2id.',
+      req,
+      metadata: {
+        action: DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159,
+        request_id: row.request_id,
+        crypto_profile: DIRAC_RECOVERY_CRYPTO_V2_PATCH,
+        plaintext_recovery_code_logged: false,
+        legacy_fallback_allowed: false
+      }
+    }).catch(() => null);
+
+    return res.status(200).json({
+      ok: true,
+      active: true,
+      method: 'x25519_mlkem1024_hsm_3of3_dual_signature',
+      code: 'RECOVERY_HYBRID_V2_VERIFIED',
+      central_guard: DIRAC_CENTRAL_SECURITY_GUARD_V146,
+      request_id: row.request_id,
+      recovery_session: session,
+      recovery_session_expires_at: sessionExpiresAt,
+      sealed_recovery: sealedRecovery
+    });
+  } catch (error) {
+    const code = String(error && error.code || 'RECOVERY_HYBRID_V2_FAILED');
+    const status = code === 'ATOMIC_REPLAY_REJECTED' ? 409
+      : code === 'ATOMIC_REPLAY_STORAGE_UNAVAILABLE' ? 503
+      : /INVALID|FAILED|REJECTED|EXPIRED|BINDING/.test(code) ? 403
+      : 503;
+    try {
+      console.error('[dirac-recovery-crypto-v2-verify-failed]', JSON.stringify({
+        code: code.slice(0, 100),
+        request_id: String(body && body.request_id || '').slice(0, 80)
+      }));
+    } catch (_) {}
+    return res.status(status).json({ ok: false, code, message: 'Recovery maksimum tidak dapat diverifikasi.' });
+  } finally {
+    if (argon2GateClaimed) diracRecoveryHpkeArgon2ReleaseV187();
+    if (argonQueueTicket && typeof argonQueueTicket.release === 'function') {
+      try { await argonQueueTicket.release(); } catch (_) {}
+    }
+    try { if (hybrid && hybrid.plaintext) hybrid.plaintext.fill(0); } catch (_) {}
+    try { if (hybrid && hybrid.responseKey) hybrid.responseKey.fill(0); } catch (_) {}
+    try { if (hybrid && hybrid.transcriptHash) hybrid.transcriptHash.fill(0); } catch (_) {}
+    try { if (parsedHybrid && parsedHybrid.share1) parsedHybrid.share1.fill(0); } catch (_) {}
+    try { if (parsedHybrid && parsedHybrid.share2) parsedHybrid.share2.fill(0); } catch (_) {}
+    recoveryCode = '';
+    recovered = null;
+  }
+}
