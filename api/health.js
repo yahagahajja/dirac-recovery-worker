@@ -18765,8 +18765,15 @@ try {
 } catch (_) {}
 
 function diracV101ValidateServiceRoleSupabasePath(path, options = {}) {
-  if (isEnvTrue('DIRAC_SERVICE_ROLE_GUARD_DISABLED')) return { ok: true };
   const raw = String(path || '').trim();
+  const restNamespaceRaw = raw.startsWith('/rest/v1/')
+    ? raw.slice('/rest/v1/'.length).split('?')[0].split('/')[0]
+    : '';
+  let restNamespace = '';
+  try { restNamespace = decodeURIComponent(restNamespaceRaw || '').trim().toLowerCase(); } catch (_) {}
+  const isRpcNamespace = restNamespace === 'rpc' || restNamespace.startsWith('rpc/');
+  const isRecoveryClaimRpc = raw === '/rest/v1/rpc/dirac_recovery_claim_once_v2';
+  if (!isRpcNamespace && isEnvTrue('DIRAC_SERVICE_ROLE_GUARD_DISABLED')) return { ok: true };
   if (!raw || /https?:\/\//i.test(raw) || /(?:\.\.|\\|\u0000)/.test(raw)) {
     return { ok: false, code: 'SERVICE_ROLE_PATH_INVALID' };
   }
@@ -18781,6 +18788,89 @@ function diracV101ValidateServiceRoleSupabasePath(path, options = {}) {
 
   if (raw.startsWith('/auth/v1/admin/users')) return { ok: true, scope: 'auth_admin_users' };
   if (!raw.startsWith('/rest/v1/')) return { ok: false, code: 'SERVICE_ROLE_SCOPE_REJECTED' };
+
+  // Narrow exception: one atomic anti-replay RPC, only from the fully guarded
+  // Vercel 2 recovery-verify action. No other RPC path is allowed.
+  if (isRecoveryClaimRpc) {
+    const requiredAction = 'customer_security_recovery_hpke_verify';
+    if (method !== 'POST' || String(options.auth || '') !== 'service') {
+      return { ok: false, code: 'SERVICE_ROLE_RPC_METHOD_REJECTED' };
+    }
+
+    const ctx = typeof diracCentralCurrentContextV149 === 'function'
+      ? diracCentralCurrentContextV149()
+      : null;
+    if (!ctx
+        || !ctx.req
+        || ctx.action !== requiredAction
+        || ctx.classification !== 'browser'
+        || ctx.req.__diracCentralSecurityGuardPassedV146 !== true
+        || !ctx.guardPassport
+        || ctx.guardPassport.integrity_checked !== true
+        || typeof diracCentralCurrentContextPassedV146 !== 'function'
+        || diracCentralCurrentContextPassedV146() !== true) {
+      return { ok: false, code: 'SERVICE_ROLE_RPC_CENTRAL_GUARD_REQUIRED' };
+    }
+
+    const deploymentRole = String(
+      process.env.DIRAC_CENTRAL_DEPLOYMENT_ROLE
+      || process.env.DIRAC_DEPLOYMENT_ROLE
+      || ''
+    ).trim().toLowerCase();
+    const vercel2ActionsEnabled = isEnvTrue('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')
+      || isEnvTrue('DIRAC_VERCEL2_ACTIONS_ENABLED');
+    if (deploymentRole !== 'vercel2' || !vercel2ActionsEnabled) {
+      return { ok: false, code: 'SERVICE_ROLE_RPC_VERCEL2_REQUIRED' };
+    }
+    if (typeof DIRAC_CENTRAL_COMPILED_VERCEL2_ACTIONS_V188 === 'undefined'
+        || !DIRAC_CENTRAL_COMPILED_VERCEL2_ACTIONS_V188.has(requiredAction)
+        || typeof DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174 === 'undefined'
+        || !DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.has(requiredAction)) {
+      return { ok: false, code: 'SERVICE_ROLE_RPC_ACTION_NOT_ALLOWED' };
+    }
+
+    const secureHost = typeof diracCentralServer2SecureHostGuardV169 === 'function'
+      ? diracCentralServer2SecureHostGuardV169(ctx.req, ctx)
+      : { ok: false };
+    if (!secureHost || secureHost.ok !== true) {
+      return { ok: false, code: 'SERVICE_ROLE_RPC_SECURE_HOST_REQUIRED' };
+    }
+
+    const rpcBody = options.body;
+    const rpcKeys = rpcBody && typeof rpcBody === 'object' && !Array.isArray(rpcBody)
+      ? Object.keys(rpcBody).sort()
+      : [];
+    const expectedRpcKeys = ['p_claim_hash', 'p_expires_at', 'p_request_id', 'p_scope'];
+    if (rpcKeys.length !== expectedRpcKeys.length
+        || rpcKeys.some((key, index) => key !== expectedRpcKeys[index])) {
+      return { ok: false, code: 'SERVICE_ROLE_RPC_BODY_FIELDS_INVALID' };
+    }
+    if (rpcBody.p_scope !== 'hybrid-envelope-v2'
+        || !/^[A-Za-z0-9_-]{86}$/.test(String(rpcBody.p_claim_hash || ''))
+        || customerSecurityNormalizeLostPasskeyRequestId(rpcBody.p_request_id) !== String(rpcBody.p_request_id || '')
+        || String(rpcBody.p_request_id || '') !== String(ctx.body && ctx.body.request_id || '')) {
+      return { ok: false, code: 'SERVICE_ROLE_RPC_BODY_BINDING_INVALID' };
+    }
+
+    const rpcExpiresAtMs = Date.parse(String(rpcBody.p_expires_at || ''));
+    const requestExpiresAtMs = Number(ctx.body && ctx.body.expires_at_ms);
+    if (!Number.isSafeInteger(rpcExpiresAtMs)
+        || new Date(rpcExpiresAtMs).toISOString() !== String(rpcBody.p_expires_at || '')
+        || !Number.isSafeInteger(requestExpiresAtMs)
+        || rpcExpiresAtMs !== requestExpiresAtMs) {
+      return { ok: false, code: 'SERVICE_ROLE_RPC_EXPIRY_BINDING_INVALID' };
+    }
+
+    return {
+      ok: true,
+      scope: 'rest_rpc',
+      rpc: 'dirac_recovery_claim_once_v2',
+      action: requiredAction
+    };
+  }
+  if (isRpcNamespace) {
+    return { ok: false, code: 'SERVICE_ROLE_RPC_NOT_ALLOWED' };
+  }
 
   const tablePart = raw.slice('/rest/v1/'.length).split('?')[0].split('/')[0];
   const table = decodeURIComponent(tablePart || '').trim();
