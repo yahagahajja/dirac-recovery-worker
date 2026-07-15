@@ -33610,16 +33610,67 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
     }
 
     let encryptedProofResponseValid = false;
+    let encryptedProofResponseErrorCode = '';
     if (data && data.proof_response_encrypted === true) {
       try {
         data = diracRecoveryHpkeOpenProofResponseV190(data, proofBody, response.status);
         encryptedProofResponseValid = true;
-      } catch (_) {
+      } catch (error) {
+        const safeErrorCode = error && /^[A-Z0-9_]{1,120}$/.test(String(error.code || ''))
+          ? String(error.code)
+          : 'RECOVERY_HPKE_PROOF_RESPONSE_OPEN_FAILED';
+        encryptedProofResponseErrorCode = safeErrorCode;
+        const outerEnvelope = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+        const encryptedEnvelope = outerEnvelope.proof_response && typeof outerEnvelope.proof_response === 'object' && !Array.isArray(outerEnvelope.proof_response)
+          ? outerEnvelope.proof_response
+          : {};
+        const failureStage = safeErrorCode.includes('OUTER_FIELDS') ? 'outer_envelope_shape'
+          : safeErrorCode.includes('ENCRYPTED_PROOF_RESPONSE_REQUIRED') ? 'encrypted_envelope_policy'
+          : safeErrorCode.includes('RESPONSE_FIELDS') ? 'encrypted_response_shape'
+          : safeErrorCode.includes('BINDING') ? 'response_binding'
+          : safeErrorCode.includes('BASE64URL') ? 'response_encoding'
+          : safeErrorCode.includes('AUTHENTICATION') ? 'aes_256_gcm_authentication'
+          : safeErrorCode.includes('HASH') ? 'plaintext_hash'
+          : safeErrorCode.includes('PLAINTEXT') ? 'plaintext_canonical_json'
+          : safeErrorCode.includes('SECRET_MISSING') ? 'local_worker_secret'
+          : 'encrypted_response_open';
+        diagnosticLog('server1_encrypted_response_open_failed', {
+          error_code: safeErrorCode,
+          failure_stage: failureStage,
+          outer_keys: Object.keys(outerEnvelope).sort().slice(0, 16),
+          proof_response_keys: Object.keys(encryptedEnvelope).sort().slice(0, 16),
+          envelope_policy_ok: outerEnvelope.ok === true && outerEnvelope.proof_response_encrypted === true,
+          response_version_matches: encryptedEnvelope.version === DIRAC_RECOVERY_HPKE_PROOF_RESPONSE_VERSION_V190,
+          response_status_matches: Number(encryptedEnvelope.status) === Number(response.status),
+          request_id_matches: encryptedEnvelope.request_id === String(proofBody && proofBody.request_id || ''),
+          proof_nonce_matches: encryptedEnvelope.proof_nonce === String(proofBody && proofBody.proof_nonce || ''),
+          nonce_b64url_length: String(encryptedEnvelope.nonce_b64url || '').length,
+          ciphertext_b64url_length: String(encryptedEnvelope.ciphertext_b64url || '').length,
+          auth_tag_b64url_length: String(encryptedEnvelope.auth_tag_b64url || '').length,
+          plaintext_hash_b64url_length: String(encryptedEnvelope.plaintext_sha512_b64url || '').length,
+          local_worker_secret_present: Boolean(customerSecurityRecoveryWorkerSecret()),
+          secret_value_logged: false,
+          encrypted_payload_logged: false
+        }, 'error');
         data = null;
       }
+    } else {
+      encryptedProofResponseErrorCode = jsonParsed
+        ? 'RECOVERY_HPKE_ENCRYPTED_PROOF_RESPONSE_REQUIRED'
+        : 'RECOVERY_HPKE_PROOF_RESPONSE_JSON_INVALID';
+      diagnosticLog('server1_encrypted_response_missing', {
+        error_code: encryptedProofResponseErrorCode,
+        json_parsed: jsonParsed,
+        response_object_present: Boolean(data && typeof data === 'object' && !Array.isArray(data)),
+        proof_response_encrypted_flag: Boolean(data && data.proof_response_encrypted === true),
+        secret_value_logged: false,
+        response_body_logged: false
+      }, 'error');
     }
     if (response.ok && !encryptedProofResponseValid) {
-      diagnosticLog('server1_encrypted_response_required', {}, 'error');
+      diagnosticLog('server1_encrypted_response_required', {
+        error_code: encryptedProofResponseErrorCode || 'RECOVERY_HPKE_ENCRYPTED_PROOF_RESPONSE_REQUIRED'
+      }, 'error');
     }
 
     diagnosticLog('server1_response_body', {
@@ -33635,7 +33686,12 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
       recovery_expiry_present: Boolean(data && data.recovery_session_expires_at)
     }, response.ok ? 'log' : 'error');
 
-    return { ok: Boolean(response.ok && encryptedProofResponseValid), status: response.status, data };
+    return {
+      ok: Boolean(response.ok && encryptedProofResponseValid),
+      status: response.status,
+      data,
+      code: encryptedProofResponseValid ? '' : (encryptedProofResponseErrorCode || 'RECOVERY_HPKE_ENCRYPTED_PROOF_RESPONSE_REQUIRED')
+    };
   } catch (error) {
     const cause = error && error.cause && typeof error.cause === 'object' ? error.cause : null;
     diagnosticLog('server1_fetch_error', {
