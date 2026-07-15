@@ -330,10 +330,18 @@ function assertExactObjectKeys(value, expectedKeys, code) {
 
 function assertArgon2Profile(params) {
   assertExactObjectKeys(params, ['memoryCost', 'timeCost', 'parallelism', 'hashLength'], 'ARGON2_FIELDS_INVALID');
-  if (Number(params.memoryCost) !== 1024000
-      || Number(params.timeCost) !== 4
-      || Number(params.parallelism) !== 4
-      || Number(params.hashLength) !== 64) {
+  const memoryCost = Number(params.memoryCost);
+  const timeCost = Number(params.timeCost);
+  const parallelism = Number(params.parallelism);
+  const hashLength = Number(params.hashLength);
+  if (!Number.isSafeInteger(memoryCost)
+      || memoryCost < 614400
+      || memoryCost > 5242880
+      || !Number.isSafeInteger(timeCost)
+      || timeCost < 4
+      || timeCost > 12
+      || parallelism !== 4
+      || hashLength !== 64) {
     throw fail('ARGON2_PROFILE_INVALID');
   }
   return true;
@@ -8204,37 +8212,80 @@ function customerSecurityRecoveryWorkerInstallResponseGuardV190(req, ctx, transp
   Object.defineProperty(res, '__diracRecoveryWorkerResponseGuardV190', { value: true, enumerable: false });
 }
 
+function customerSecurityLostPasskeyArgon2EnvIntegerV191(name, fallback, minimum, maximum) {
+  const raw = String(process.env[String(name || '')] || '').trim();
+  if (!raw) return fallback;
+  if (!/^\d+$/.test(raw)) {
+    throw customerSecurityRecoveryWorkerTransportFailV190('RECOVERY_ARGON2_PROFILE_INVALID');
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw customerSecurityRecoveryWorkerTransportFailV190('RECOVERY_ARGON2_PROFILE_INVALID');
+  }
+  return value;
+}
+
+function customerSecurityLostPasskeyArgon2ProfilesV191() {
+  const configuredMemory = customerSecurityLostPasskeyArgon2EnvIntegerV191(
+    'DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB', 1024000, 614400, 5242880
+  );
+  const configuredTime = customerSecurityLostPasskeyArgon2EnvIntegerV191(
+    'DIRAC_LOST_PASSKEY_ARGON2_TIME_COST', 4, 4, 12
+  );
+  const configuredParallelism = customerSecurityLostPasskeyArgon2EnvIntegerV191(
+    'DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM', 4, 4, 4
+  );
+  const hpkeMinimumMemory = customerSecurityLostPasskeyArgon2EnvIntegerV191(
+    'DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB', configuredMemory, 614400, 5242880
+  );
+  const hpkeMinimumTime = customerSecurityLostPasskeyArgon2EnvIntegerV191(
+    'DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST', configuredTime, 4, 12
+  );
+  const main = Object.freeze({
+    memoryCost: Math.max(configuredMemory, hpkeMinimumMemory),
+    timeCost: Math.max(configuredTime, hpkeMinimumTime),
+    parallelism: configuredParallelism
+  });
+  const linkOpen = Object.freeze({
+    memoryCost: customerSecurityLostPasskeyArgon2EnvIntegerV191(
+      'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_KIB', main.memoryCost, 614400, 5242880
+    ),
+    timeCost: customerSecurityLostPasskeyArgon2EnvIntegerV191(
+      'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_TIME_COST', main.timeCost, 4, 12
+    ),
+    parallelism: customerSecurityLostPasskeyArgon2EnvIntegerV191(
+      'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_PARALLELISM', 4, 4, 4
+    )
+  });
+  return Object.freeze({
+    main,
+    linkOpen,
+    hpkeMinimum: Object.freeze({ memoryCost: hpkeMinimumMemory, timeCost: hpkeMinimumTime })
+  });
+}
+
 function customerSecurityLostPasskeyArgon2ParamsV157(hashLength) {
-  customerSecurityLostPasskeyExactArgon2EnvV190();
+  const profile = customerSecurityLostPasskeyArgon2ProfilesV191().main;
   return {
-    memoryCost: 1024000,
-    timeCost: 4,
-    parallelism: 4,
+    memoryCost: profile.memoryCost,
+    timeCost: profile.timeCost,
+    parallelism: profile.parallelism,
     hashLength: Math.max(32, Math.min(128, Number(hashLength || 32)))
   };
 }
 
 function customerSecurityLostPasskeyLinkOpenArgon2ParamsV171(hashLength) {
-  return customerSecurityLostPasskeyArgon2ParamsV157(hashLength);
+  const profile = customerSecurityLostPasskeyArgon2ProfilesV191().linkOpen;
+  return {
+    memoryCost: profile.memoryCost,
+    timeCost: profile.timeCost,
+    parallelism: profile.parallelism,
+    hashLength: Math.max(32, Math.min(128, Number(hashLength || 32)))
+  };
 }
 
 function customerSecurityLostPasskeyExactArgon2EnvV190() {
-  const exact = {
-    DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB: 1024000,
-    DIRAC_LOST_PASSKEY_ARGON2_TIME_COST: 4,
-    DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM: 4,
-    DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_KIB: 1024000,
-    DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_TIME_COST: 4,
-    DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_PARALLELISM: 4,
-    DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB: 1024000,
-    DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST: 4
-  };
-  for (const [name, expected] of Object.entries(exact)) {
-    const raw = String(process.env[name] || '').trim();
-    if (raw && (!/^\d+$/.test(raw) || Number(raw) !== expected)) {
-      throw customerSecurityRecoveryWorkerTransportFailV190('RECOVERY_ARGON2_EXACT_PROFILE_REQUIRED');
-    }
-  }
+  customerSecurityLostPasskeyArgon2ProfilesV191();
   return true;
 }
 
@@ -32935,8 +32986,8 @@ function diracRecoveryHpkeEnvGuardV159() {
   const keyId = diracRecoveryHpkeAsciiV159(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_KEY_ID'), 1, 80);
   const pepper = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_PEPPER');
   const server1Url = diracRecoveryHpkeServer1UrlV159();
-  const minimumMemory = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB', 1024000, 1024000);
-  const minimumTime = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST', 4, 4);
+  const minimumMemory = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB', 614400, 5242880);
+  const minimumTime = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST', 4, 12);
   const server1OnlyEnv = [
     'DIRAC_RECOVERY_WORKER_URL',
     'DIRAC_RECOVERY_WORKER_CALLER',
@@ -32980,8 +33031,8 @@ function diracRecoveryHpkeArgon2PolicyV159(encodedHash, minimumMemory, minimumTi
   const parallelism = Number(matched[3]);
   return {
     ok: Number.isSafeInteger(memory) && Number.isSafeInteger(time) && Number.isSafeInteger(parallelism)
-      && memory === 1024000 && memory === minimumMemory
-      && time === 4 && time === minimumTime
+      && memory >= 614400 && memory >= minimumMemory && memory <= 5242880
+      && time >= 4 && time >= minimumTime && time <= 12
       && parallelism === 4,
     memory,
     time,
