@@ -7206,6 +7206,15 @@ function customerSecurityLostPasskeyQueueMaxWaitMsV164() {
   return customerSecurityLostPasskeyQueueIntV164('DIRAC_LOST_PASSKEY_QUEUE_MAX_WAIT_SECONDS', 240, 15, 840) * 1000;
 }
 
+// Narrow availability patch v191: the public recovery-link opener must fail
+// closed before the serverless request budget is exhausted. Argon2id policy,
+// queue serialization, lease heartbeat, and every Central Guard remain unchanged.
+function customerSecurityLostPasskeyQueueMaxWaitForTaskMsV191(queueTask) {
+  return String(queueTask || '') === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
+    ? 5000
+    : customerSecurityLostPasskeyQueueMaxWaitMsV164();
+}
+
 function customerSecurityLostPasskeyQueuePollMsV164() {
   return customerSecurityLostPasskeyQueueIntV164('DIRAC_LOST_PASSKEY_QUEUE_POLL_MS', 1200, 250, 5000);
 }
@@ -7464,7 +7473,7 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
     || queueTask === DIRAC_RECOVERY_WORKER_TASK_VERIFY
     || queueTask === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159;
   const deadlineMs = mayWaitForExistingArgon2
-    ? startMs + customerSecurityLostPasskeyQueueMaxWaitMsV164()
+    ? startMs + customerSecurityLostPasskeyQueueMaxWaitForTaskMsV191(queueTask)
     : startMs;
   const context = {
     nonce: body && body.nonce,
