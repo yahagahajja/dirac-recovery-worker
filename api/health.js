@@ -33069,7 +33069,7 @@ async function diracRecoveryHpkeVerifyEnvelopeV159(req, res) {
       central_guard: DIRAC_CENTRAL_SECURITY_GUARD_V146,
       request_status: 'accepted',
       request_id: envelope.requestId,
-      message: 'Kode pemulihan berhasil dikirim dan diverifikasi secara aman. Silakan lanjutkan tombol Verify.',
+      message: 'Kode pemulihan berhasil diverifikasi secara aman. Silakan lanjutkan pendaftaran Passkey baru.',
       dirac_lost_passkey_recovery_session: session,
       recovery_session_expires_at: sessionExpiresAt,
       recovery_code_verified: true,
