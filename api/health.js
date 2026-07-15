@@ -7247,6 +7247,26 @@ async function customerSecurityLostPasskeyQueueReadV164() {
   return result.data[0] || null;
 }
 
+// Narrow queue patch v189: reconcile only a warm-instance memory lock against
+// the persistent queue row. Storage uncertainty remains fail-closed.
+async function customerSecurityLostPasskeyQueueReadStateV189() {
+  const table = customerSecurityLostPasskeyQueueTableV164();
+  if (!table) return { ok: false, row: null, reason: 'queue_table_missing' };
+  const path = '/rest/v1/' + encodeURIComponent(table)
+    + '?select=security_key,record_json,blocked_until_ms,expires_at'
+    + '&security_key=eq.' + encodeURIComponent(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164)
+    + '&limit=1';
+  const result = await supabaseFetch(path, { method: 'GET', auth: 'service' }).catch(() => null);
+  if (!result || !result.ok || !Array.isArray(result.data)) {
+    return { ok: false, row: null, reason: 'queue_storage_unavailable' };
+  }
+  return {
+    ok: true,
+    row: result.data.length ? (result.data[0] || null) : null,
+    reason: result.data.length ? 'queue_row_found' : 'queue_row_absent'
+  };
+}
+
 function customerSecurityLostPasskeyQueueRowOwnerV164(row) {
   const record = row && row.record_json && typeof row.record_json === 'object' ? row.record_json : {};
   return String(record.owner_id || '');
@@ -7432,7 +7452,9 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
   const ownerId = customerSecurityLostPasskeyQueueOwnerV164();
   const startMs = Date.now();
   const queueTask = String(body && (body.worker_action || body.queue_task) || '').trim();
-  const mayWaitForExistingArgon2 = queueTask === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165;
+  const mayWaitForExistingArgon2 = queueTask === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
+    || queueTask === DIRAC_RECOVERY_WORKER_TASK_VERIFY
+    || queueTask === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159;
   const deadlineMs = mayWaitForExistingArgon2
     ? startMs + customerSecurityLostPasskeyQueueMaxWaitMsV164()
     : startMs;
@@ -7453,7 +7475,22 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
     let patched = null;
 
     if (memory && Number(memory.lockUntilMs || 0) > nowMs && String(memory.ownerId || '') !== ownerId) {
-      lastReason = 'memory_lock_busy';
+      const persistentState = await customerSecurityLostPasskeyQueueReadStateV189();
+      if (!persistentState.ok) {
+        // Never clear a live-looking memory lock when persistent storage cannot
+        // confirm its state. This intentionally remains fail-closed.
+        lastReason = 'memory_lock_busy_persistent_state_unavailable';
+      } else {
+        const persistentOwner = customerSecurityLostPasskeyQueueRowOwnerV164(persistentState.row);
+        const persistentActive = customerSecurityLostPasskeyQueueRowActiveV164(persistentState.row, nowMs);
+        const memoryOwner = String(memory.ownerId || '');
+        if (!persistentActive || !persistentOwner || persistentOwner !== memoryOwner) {
+          DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
+          lastReason = 'stale_memory_lock_cleared';
+          continue;
+        }
+        lastReason = 'memory_and_persistent_lock_busy';
+      }
     } else {
       if (memory && Number(memory.lockUntilMs || 0) <= nowMs) {
         DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
