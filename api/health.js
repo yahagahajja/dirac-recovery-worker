@@ -30719,6 +30719,13 @@ function diracCentralSampleCollectorV146(req, ctx) {
   const push = (key, value) => {
     if (out.join('\n').length > 10 * 1024) return;
     const cleanKey = String(key || '').toLowerCase();
+    const opaqueRecoveryEnvelopeField = ctx
+      && ctx.action === 'customer_security_recovery_hpke_verify'
+      && /^body\.(?:enc|aead_nonce|ciphertext)$/.test(cleanKey);
+    if (opaqueRecoveryEnvelopeField) {
+      out.push(cleanKey + '=[authenticated-opaque-crypto]');
+      return;
+    }
     if (diracCentralSensitiveKeyV146(cleanKey)) {
       out.push(cleanKey + '=[redacted-structure]');
       return;
