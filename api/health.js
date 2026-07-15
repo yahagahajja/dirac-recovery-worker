@@ -7784,6 +7784,197 @@ function customerSecurityRecoveryWorkerSha256ShortV158(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('base64url').slice(0, 22);
 }
 
+
+const DIRAC_RECOVERY_WORKER_DIAGNOSTIC_V192 = 'recovery-worker-safe-env-debug-v192';
+
+function customerSecurityRecoveryWorkerSafeDiagnosticCodeV192(error) {
+  const raw = String(error && (error.code || error.name) || 'UNKNOWN_DIAGNOSTIC_ERROR').trim();
+  return /^[A-Za-z0-9_.:-]{1,120}$/.test(raw) ? raw : 'UNKNOWN_DIAGNOSTIC_ERROR';
+}
+
+function customerSecurityRecoveryWorkerPrivateKeyDiagnosticV192(name, expectedType) {
+  const raw = String(process.env[String(name || '')] || '').trim();
+  const pemMatch = raw.match(/-----BEGIN ([A-Z0-9 ]{1,48})-----/);
+  const format = !raw ? 'missing' : (raw.includes('-----BEGIN') ? 'pem' : 'pkcs8_der_base64');
+  const result = {
+    env: String(name || ''),
+    present: Boolean(raw),
+    format,
+    pem_label: pemMatch ? pemMatch[1] : null,
+    expected_key_type: String(expectedType || ''),
+    parse_ok: false,
+    actual_key_type: null,
+    type_matches: false,
+    issue: null
+  };
+  if (!raw) {
+    result.issue = 'ENV_MISSING';
+    return result;
+  }
+  if (pemMatch && /PUBLIC KEY/.test(pemMatch[1])) {
+    result.issue = 'PUBLIC_KEY_PROVIDED_WHERE_PRIVATE_KEY_REQUIRED';
+    return result;
+  }
+  try {
+    const key = raw.includes('-----BEGIN')
+      ? crypto.createPrivateKey(raw.replace(/\\n/g, '\n'))
+      : crypto.createPrivateKey({ key: Buffer.from(raw, 'base64'), format: 'der', type: 'pkcs8' });
+    result.parse_ok = Boolean(key);
+    result.actual_key_type = key && key.asymmetricKeyType ? String(key.asymmetricKeyType) : null;
+    result.type_matches = Boolean(key && key.asymmetricKeyType === expectedType);
+    if (!result.type_matches) result.issue = 'PRIVATE_KEY_TYPE_MISMATCH';
+  } catch (error) {
+    result.issue = customerSecurityRecoveryWorkerSafeDiagnosticCodeV192(error) === 'UNKNOWN_DIAGNOSTIC_ERROR'
+      ? 'PRIVATE_KEY_PARSE_FAILED'
+      : 'PRIVATE_KEY_PARSE_FAILED:' + customerSecurityRecoveryWorkerSafeDiagnosticCodeV192(error);
+  }
+  return result;
+}
+
+function customerSecurityRecoveryWorkerIntegerEnvDiagnosticV192(name, fallback, minimum, maximum) {
+  const raw = String(process.env[String(name || '')] || '').trim();
+  const source = raw ? 'env' : 'default';
+  const formatValid = !raw || /^\d+$/.test(raw);
+  const parsed = raw && formatValid ? Number(raw) : Number(fallback);
+  const integerValid = Number.isSafeInteger(parsed);
+  const rangeValid = integerValid && parsed >= minimum && parsed <= maximum;
+  let issue = null;
+  if (!formatValid) issue = 'NON_DECIMAL_INTEGER';
+  else if (!integerValid) issue = 'NOT_SAFE_INTEGER';
+  else if (parsed < minimum) issue = source === 'env' ? 'BELOW_MINIMUM' : 'UPSTREAM_PROFILE_INVALID';
+  else if (parsed > maximum) issue = source === 'env' ? 'ABOVE_MAXIMUM' : 'UPSTREAM_PROFILE_INVALID';
+  return {
+    env: String(name || ''),
+    source,
+    configured_value: raw || null,
+    effective_value: parsed,
+    minimum,
+    maximum,
+    format_valid: formatValid,
+    integer_valid: integerValid,
+    range_valid: rangeValid,
+    valid: formatValid && rangeValid,
+    issue
+  };
+}
+
+function customerSecurityRecoveryWorkerArgon2DiagnosticsV192() {
+  const mainMemory = customerSecurityRecoveryWorkerIntegerEnvDiagnosticV192(
+    'DIRAC_LOST_PASSKEY_ARGON2_MEMORY_KIB', 1024000, 614400, 5242880
+  );
+  const mainTime = customerSecurityRecoveryWorkerIntegerEnvDiagnosticV192(
+    'DIRAC_LOST_PASSKEY_ARGON2_TIME_COST', 4, 4, 12
+  );
+  const mainParallelism = customerSecurityRecoveryWorkerIntegerEnvDiagnosticV192(
+    'DIRAC_LOST_PASSKEY_ARGON2_PARALLELISM', 4, 4, 4
+  );
+  const hpkeMemory = customerSecurityRecoveryWorkerIntegerEnvDiagnosticV192(
+    'DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB', mainMemory.effective_value, 614400, 5242880
+  );
+  const hpkeTime = customerSecurityRecoveryWorkerIntegerEnvDiagnosticV192(
+    'DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST', mainTime.effective_value, 4, 12
+  );
+  const effectiveMainMemory = Math.max(mainMemory.effective_value, hpkeMemory.effective_value);
+  const effectiveMainTime = Math.max(mainTime.effective_value, hpkeTime.effective_value);
+  const linkMemory = customerSecurityRecoveryWorkerIntegerEnvDiagnosticV192(
+    'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_MEMORY_KIB', effectiveMainMemory, 614400, 5242880
+  );
+  const linkTime = customerSecurityRecoveryWorkerIntegerEnvDiagnosticV192(
+    'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_TIME_COST', effectiveMainTime, 4, 12
+  );
+  const linkParallelism = customerSecurityRecoveryWorkerIntegerEnvDiagnosticV192(
+    'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_PARALLELISM', 4, 4, 4
+  );
+  const checks = [mainMemory, mainTime, mainParallelism, hpkeMemory, hpkeTime, linkMemory, linkTime, linkParallelism];
+  const invalid = checks.filter((item) => !item.valid);
+  return {
+    unit: 'KiB',
+    accepted_memory_range_kib: { minimum: 614400, maximum: 5242880 },
+    accepted_time_cost_range: { minimum: 4, maximum: 12 },
+    required_parallelism: 4,
+    checks,
+    effective_profiles: {
+      main: {
+        memory_cost_kib: effectiveMainMemory,
+        time_cost: effectiveMainTime,
+        parallelism: mainParallelism.effective_value
+      },
+      link_open: {
+        memory_cost_kib: linkMemory.effective_value,
+        time_cost: linkTime.effective_value,
+        parallelism: linkParallelism.effective_value
+      },
+      hpke_minimum: {
+        memory_cost_kib: hpkeMemory.effective_value,
+        time_cost: hpkeTime.effective_value
+      }
+    },
+    valid: invalid.length === 0,
+    invalid_env_names: invalid.filter((item) => item.source === 'env').map((item) => item.env),
+    root_cause_candidates: invalid.filter((item) => item.source === 'env').map((item) => item.env + ':' + item.issue)
+  };
+}
+
+function customerSecurityRecoveryWorkerCryptoDiagnosticsV192() {
+  const x25519 = customerSecurityRecoveryWorkerPrivateKeyDiagnosticV192(
+    'DIRAC_RECOVERY_WORKER_X25519_PRIVATE_KEY', 'x25519'
+  );
+  const mlkem1024 = customerSecurityRecoveryWorkerPrivateKeyDiagnosticV192(
+    'DIRAC_RECOVERY_WORKER_MLKEM1024_PRIVATE_KEY', 'ml-kem-1024'
+  );
+  const argon2 = customerSecurityRecoveryWorkerArgon2DiagnosticsV192();
+  const causes = [];
+  if (x25519.issue) causes.push(x25519.env + ':' + x25519.issue);
+  if (mlkem1024.issue) causes.push(mlkem1024.env + ':' + mlkem1024.issue);
+  causes.push(...argon2.root_cause_candidates);
+  return {
+    diagnostic_version: DIRAC_RECOVERY_WORKER_DIAGNOSTIC_V192,
+    secrets_redacted: true,
+    private_keys: { x25519, mlkem1024 },
+    argon2,
+    valid: !x25519.issue && !mlkem1024.issue && argon2.valid,
+    root_cause_candidates: Array.from(new Set(causes)).slice(0, 24)
+  };
+}
+
+function customerSecurityRecoveryWorkerFailureAnalysisV192(stage, reason, envDiagnostics, headers, body) {
+  const cleanStage = String(stage || 'unknown');
+  const cleanReason = String(reason || 'unknown');
+  const likely = [];
+  const envCauses = envDiagnostics && Array.isArray(envDiagnostics.root_cause_candidates)
+    ? envDiagnostics.root_cause_candidates : [];
+  if (cleanStage === 'vercel2_env_partition' || /env|profile|key|secret|role/i.test(cleanReason)) {
+    likely.push(...envCauses);
+  }
+  if (headers && headers.caller_present === false) likely.push('HEADER_X_DIRAC_WORKER_CALLER_MISSING');
+  if (headers && headers.caller_present && headers.caller_ascii_valid === false) likely.push('HEADER_X_DIRAC_WORKER_CALLER_FORMAT_INVALID');
+  if (headers && headers.caller_present && headers.allowed_caller_present && headers.caller_matches_allowed === false) likely.push('HEADER_CALLER_DOES_NOT_MATCH_ALLOWED_CALLER');
+  if (headers && headers.timestamp_present === false) likely.push('HEADER_X_DIRAC_WORKER_TIMESTAMP_MISSING');
+  if (headers && headers.timestamp_present && headers.timestamp_numeric === false) likely.push('HEADER_X_DIRAC_WORKER_TIMESTAMP_INVALID');
+  if (headers && headers.timestamp_numeric && headers.timestamp_within_skew === false) likely.push('HEADER_TIMESTAMP_OUTSIDE_ALLOWED_SKEW');
+  if (headers && headers.signature_present === false) likely.push('HEADER_X_DIRAC_WORKER_SIGNATURE_MISSING');
+  if (headers && headers.signature_present && headers.signature_shape_valid === false) likely.push('HEADER_X_DIRAC_WORKER_SIGNATURE_FORMAT_INVALID');
+  if (body && body.encrypted_transport === true) {
+    if (body.transport_version_valid === false) likely.push('ENCRYPTED_BODY_TRANSPORT_VERSION_INVALID');
+    if (body.transport_suite_valid === false) likely.push('ENCRYPTED_BODY_TRANSPORT_SUITE_INVALID');
+    if (body.body_action_valid === false) likely.push('ENCRYPTED_BODY_ACTION_INVALID');
+    if (body.caller_id_matches_header === false) likely.push('ENCRYPTED_BODY_CALLER_ID_MISMATCH');
+    if (body.nonce_shape_valid === false) likely.push('ENCRYPTED_BODY_NONCE_INVALID');
+    if (body.plaintext_fields_exposed === true) likely.push('PLAINTEXT_SENSITIVE_FIELD_EXPOSED_IN_TRANSPORT_ENVELOPE');
+  } else if (body && Array.isArray(body.missing_fields) && cleanStage !== 'vercel2_env_partition') {
+    for (const name of body.missing_fields.slice(0, 16)) likely.push('BODY_FIELD_MISSING:' + name);
+  }
+  return {
+    diagnostic_version: DIRAC_RECOVERY_WORKER_DIAGNOSTIC_V192,
+    primary_scope: cleanStage === 'vercel2_env_partition' ? 'environment'
+      : (/header|signature|timestamp|caller/i.test(cleanStage + ':' + cleanReason) ? 'worker_auth_headers'
+        : (/body|contract|transport|payload/i.test(cleanStage + ':' + cleanReason) ? 'request_body_or_transport' : 'central_guard')),
+    exact_reason: cleanReason,
+    likely_causes: Array.from(new Set(likely)).slice(0, 32),
+    secret_values_logged: false
+  };
+}
+
 function customerSecurityRecoveryWorkerServer2EnvDiagnosticsV158() {
   const rawUrl = String(process.env.DIRAC_RECOVERY_WORKER_URL || '').trim();
   const rawSecret = String(process.env.DIRAC_RECOVERY_WORKER_SECRET || '').trim();
@@ -7796,7 +7987,20 @@ function customerSecurityRecoveryWorkerServer2EnvDiagnosticsV158() {
   const rootSecretBytes = Buffer.byteLength(securityRootSecretText, 'utf8');
   const lostPasskeyDbPepperText = String(process.env.DIRAC_LOST_PASSKEY_DB_PEPPER || '').normalize('NFC');
   const pepperBytes = Buffer.byteLength(lostPasskeyDbPepperText || securityRootSecretText, 'utf8');
+  const cryptoProfile = customerSecurityRecoveryWorkerCryptoDiagnosticsV192();
+  const rootCauseCandidates = [
+    rawUrl ? 'DIRAC_RECOVERY_WORKER_URL is present on Vercel 2; remove it from server 2 receiver' : '',
+    rawSecret ? '' : 'DIRAC_RECOVERY_WORKER_SECRET missing on Vercel 2',
+    rawSecret && secretBytes < 64 ? 'DIRAC_RECOVERY_WORKER_SECRET shorter than 64 bytes' : '',
+    rawAllowedCaller ? '' : 'DIRAC_RECOVERY_WORKER_ALLOWED_CALLER missing on Vercel 2',
+    rawAllowedCaller && !customerSecurityRecoveryWorkerAsciiToken(rawAllowedCaller) ? 'DIRAC_RECOVERY_WORKER_ALLOWED_CALLER contains invalid characters' : '',
+    rawCaller ? 'DIRAC_RECOVERY_WORKER_CALLER is present on Vercel 2; keep caller env only on Vercel 1' : '',
+    rawX25519Private ? '' : 'DIRAC_RECOVERY_WORKER_X25519_PRIVATE_KEY missing on Vercel 2',
+    rawMlkemPrivate ? '' : 'DIRAC_RECOVERY_WORKER_MLKEM1024_PRIVATE_KEY missing on Vercel 2',
+    ...cryptoProfile.root_cause_candidates
+  ].filter(Boolean);
   return {
+    diagnostic_version: DIRAC_RECOVERY_WORKER_DIAGNOSTIC_V192,
     role: 'server2_recovery_worker_receiver',
     local_worker_enabled: customerSecurityRecoveryWorkerLocalEnabled(),
     vercel2_actions_enabled: diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED') || diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED'),
@@ -7818,19 +8022,14 @@ function customerSecurityRecoveryWorkerServer2EnvDiagnosticsV158() {
       caller_env_absent_recommended_on_server2: !rawCaller,
       x25519_transport_private_key_present: Boolean(rawX25519Private),
       mlkem1024_transport_private_key_present: Boolean(rawMlkemPrivate),
+      x25519_transport_private_key_parse_and_type_valid: Boolean(cryptoProfile.private_keys.x25519.parse_ok && cryptoProfile.private_keys.x25519.type_matches),
+      mlkem1024_transport_private_key_parse_and_type_valid: Boolean(cryptoProfile.private_keys.mlkem1024.parse_ok && cryptoProfile.private_keys.mlkem1024.type_matches),
+      argon2_profile_valid: Boolean(cryptoProfile.argon2.valid),
       root_secret_min_3000_bytes: rootSecretBytes >= 3000,
       db_pepper_min_64_bytes: pepperBytes >= 64
     },
-    root_cause_candidates: [
-      rawUrl ? 'DIRAC_RECOVERY_WORKER_URL is present on Vercel 2; remove it from server 2 receiver' : '',
-      rawSecret ? '' : 'DIRAC_RECOVERY_WORKER_SECRET missing on Vercel 2',
-      rawSecret && secretBytes < 64 ? 'DIRAC_RECOVERY_WORKER_SECRET shorter than 64 bytes' : '',
-      rawAllowedCaller ? '' : 'DIRAC_RECOVERY_WORKER_ALLOWED_CALLER missing on Vercel 2',
-      rawAllowedCaller && !customerSecurityRecoveryWorkerAsciiToken(rawAllowedCaller) ? 'DIRAC_RECOVERY_WORKER_ALLOWED_CALLER contains invalid characters' : '',
-      rawCaller ? 'DIRAC_RECOVERY_WORKER_CALLER is present on Vercel 2; keep caller env only on Vercel 1' : '',
-      rawX25519Private ? '' : 'DIRAC_RECOVERY_WORKER_X25519_PRIVATE_KEY missing on Vercel 2',
-      rawMlkemPrivate ? '' : 'DIRAC_RECOVERY_WORKER_MLKEM1024_PRIVATE_KEY missing on Vercel 2'
-    ].filter(Boolean)
+    crypto_profile: cryptoProfile,
+    root_cause_candidates: Array.from(new Set(rootCauseCandidates)).slice(0, 32)
   };
 }
 
@@ -7871,26 +8070,32 @@ function diracCentralRecoveryWorkerGuardDebugV158(req, ctx, stage, reason, extra
   const signature = customerSecurityRecoveryWorkerHeaderValue(req, 'x-dirac-worker-signature');
   const now = Date.now();
   const body = ctx && ctx.body && typeof ctx.body === 'object' ? ctx.body : null;
+  const envDiagnostics = customerSecurityRecoveryWorkerServer2EnvDiagnosticsV158();
+  const headerDiagnostics = {
+    caller_present: Boolean(caller),
+    caller_ascii_valid: Boolean(customerSecurityRecoveryWorkerAsciiToken(caller)),
+    allowed_caller_present: Boolean(allowedCaller),
+    caller_matches_allowed: Boolean(caller && allowedCaller && safeEqual(caller, allowedCaller)),
+    timestamp_present: Boolean(timestampText),
+    timestamp_numeric: Number.isFinite(timestamp) && timestamp > 0,
+    timestamp_skew_ms: Number.isFinite(timestamp) ? now - timestamp : null,
+    timestamp_within_skew: Number.isFinite(timestamp) && Math.abs(now - timestamp) <= customerSecurityRecoveryWorkerClockSkewMs(),
+    signature_present: Boolean(signature),
+    signature_shape_valid: /^[a-zA-Z0-9_-]{32,120}$/.test(signature)
+  };
+  const bodyDiagnostics = customerSecurityRecoveryWorkerBodyDiagnosticsV158(body, caller);
   const debug = {
-    diagnostic_version: 'recovery-worker-central-guard-debug-v160',
+    diagnostic_version: 'recovery-worker-central-guard-debug-v192',
     stage: String(stage || 'unknown').slice(0, 80),
     reason: String(reason || 'unknown').slice(0, 120),
     action: String(ctx && ctx.action || '').slice(0, 80),
     method: String(ctx && ctx.method || '').slice(0, 12),
-    env: customerSecurityRecoveryWorkerServer2EnvDiagnosticsV158(),
-    headers: {
-      caller_present: Boolean(caller),
-      caller_ascii_valid: Boolean(customerSecurityRecoveryWorkerAsciiToken(caller)),
-      allowed_caller_present: Boolean(allowedCaller),
-      caller_matches_allowed: Boolean(caller && allowedCaller && safeEqual(caller, allowedCaller)),
-      timestamp_present: Boolean(timestampText),
-      timestamp_numeric: Number.isFinite(timestamp) && timestamp > 0,
-      timestamp_skew_ms: Number.isFinite(timestamp) ? now - timestamp : null,
-      timestamp_within_skew: Number.isFinite(timestamp) && Math.abs(now - timestamp) <= customerSecurityRecoveryWorkerClockSkewMs(),
-      signature_present: Boolean(signature),
-      signature_shape_valid: /^[a-zA-Z0-9_-]{32,120}$/.test(signature)
-    },
-    body: customerSecurityRecoveryWorkerBodyDiagnosticsV158(body, caller),
+    env: envDiagnostics,
+    headers: headerDiagnostics,
+    body: bodyDiagnostics,
+    failure_analysis: customerSecurityRecoveryWorkerFailureAnalysisV192(
+      stage, reason, envDiagnostics, headerDiagnostics, bodyDiagnostics
+    ),
     extra: extra && typeof extra === 'object' ? extra : {}
   };
   if (ctx) ctx.__diracRecoveryWorkerDebugV158 = debug;
