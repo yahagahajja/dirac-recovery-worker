@@ -27932,9 +27932,17 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
   }
 
   const nowMs = Date.now();
-  if (row.status !== 'pending' || row.used_at || row.revoked_at || row.locked_at || new Date(row.expires_at).getTime() <= nowMs) {
-    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, row.status === 'used' || row.used_at ? 'used' : 'expired_or_inactive', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
+  const recoveryStatus = String(row.status || '');
+  const recoveryExpiresMs = new Date(row.expires_at).getTime();
+  if (row.used_at
+    || row.revoked_at
+    || row.locked_at
+    || !Number.isFinite(recoveryExpiresMs)
+    || recoveryExpiresMs <= nowMs
+    || !['pending', 'verified'].includes(recoveryStatus)) {
+    return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 403, recoveryStatus === 'used' || row.used_at ? 'used' : 'expired_or_inactive', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
   }
+  const verifiedRetry = recoveryStatus === 'verified';
 
   if (String(owner.customerId) !== String(row.customer_id) || String(owner.authUserId) !== String(row.auth_user_id)) {
     await customerSecurityRegisterFailedVerification(req, action, 'recovery_owner_mismatch', access.customerId).catch(() => null);
@@ -27983,6 +27991,27 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
   if (!activePasskeys.length) return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 409, 'active_passkey_not_found', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, metadata, bindingCommitmentOk: expectedBinding, recoveryCodeOk: codeOk, activePasskeyCount: 0, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
 
   const now = diracNowIso();
+  if (verifiedRetry) {
+    const previousSessionRevoked = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_SESSION_TABLE
+      + '?request_id=eq.' + encodeURIComponent(requestId)
+      + '&customer_id=eq.' + encodeURIComponent(owner.customerId)
+      + '&auth_user_id=eq.' + encodeURIComponent(owner.authUserId)
+      + '&status=eq.verified'
+      + '&used_at=is.null'
+      + '&revoked_at=is.null', {
+      method: 'PATCH',
+      auth: 'service',
+      prefer: 'return=representation',
+      body: {
+        status: 'revoked',
+        revoked_at: now
+      }
+    });
+    if (!previousSessionRevoked.ok) {
+      return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 503, 'recovery_session_rotation_failed', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, metadata, bindingCommitmentOk: expectedBinding, recoveryCodeOk: codeOk, activePasskeyCount: activePasskeys.length, supabaseStatus: previousSessionRevoked.status, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
+    }
+  }
+
   const recoverySessionToken = crypto.randomBytes(32).toString('base64url');
   const recoverySessionHash = customerSecurityLostPasskeyRecoverySessionHash(recoverySessionToken);
   const sessionExpiresAt = new Date(Date.now() + Math.max(5, Math.min(30, Number(process.env.DIRAC_LOST_PASSKEY_SESSION_MINUTES || 10))) * 60 * 1000).toISOString();
