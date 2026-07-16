@@ -12178,7 +12178,7 @@ async function sessionOwnershipCheckoutResolveCustomerOwner({ authUserId, email,
   const link = linkRows[0] || null;
 
   if (link && link.link_status === 'active' && link.customer_id && customerSecurityLooksLikeUuid(link.customer_id)) {
-    const customer = await sessionOwnershipCheckoutFetchCustomerById(link.customer_id);
+    const customer = await sessionOwnershipCheckoutFetchLinkedCustomerById({ authUserId, link });
     if (customer.ok && customer.customer && customer.customer.id) return { ok: true, customer: customer.customer, source: 'security_customer_auth_links' };
     return { ok: false, status: customer.status || 409, message: 'Auth link aktif ditemukan, tetapi data customer tidak valid.' };
   }
@@ -12197,6 +12197,42 @@ async function sessionOwnershipCheckoutResolveCustomerOwner({ authUserId, email,
   }
 
   return { ok: true, customer: customerResult.customer, source: customerResult.created ? 'backend_created_from_auth_email' : 'backend_matched_auth_email' };
+}
+
+async function sessionOwnershipCheckoutFetchLinkedCustomerById({ authUserId, link }) {
+  const cleanAuthUserId = String(authUserId || '').trim();
+  const customerId = String(link && link.customer_id || '').trim();
+  const linkedAuthUserId = String(link && link.auth_user_id || '').trim();
+  const activeLink = link
+    && String(link.link_status || '').toLowerCase() === 'active'
+    && !link.disabled_at
+    && !link.revoked_at;
+
+  if (!activeLink
+      || !customerSecurityLooksLikeUuid(cleanAuthUserId)
+      || linkedAuthUserId !== cleanAuthUserId
+      || !customerSecurityLooksLikeUuid(customerId)) {
+    return { ok: false, status: 403 };
+  }
+
+  const ctx = typeof diracCentralCurrentContextV149 === 'function'
+    ? diracCentralCurrentContextV149()
+    : null;
+  if (!ctx || ctx.action !== 'checkout_order' || !ctx.req) {
+    return { ok: false, status: 403 };
+  }
+
+  const previousBinding = ctx.__diracCentralCheckoutLinkedCustomerReadV195;
+  ctx.__diracCentralCheckoutLinkedCustomerReadV195 = Object.freeze({
+    authUserId: cleanAuthUserId,
+    customerId
+  });
+  try {
+    return await sessionOwnershipCheckoutFetchCustomerById(customerId);
+  } finally {
+    if (previousBinding === undefined) delete ctx.__diracCentralCheckoutLinkedCustomerReadV195;
+    else ctx.__diracCentralCheckoutLinkedCustomerReadV195 = previousBinding;
+  }
 }
 
 async function sessionOwnershipCheckoutFetchCustomerById(customerId) {
@@ -31913,6 +31949,7 @@ async function diracCentralInspectServiceRoleAccessV146(path, options = {}) {
   if (diracCentralIsInternalOwnerLookupV194(ctx, table, path, options, method)) {
     return { ok: true, guarded: 'central_owner_lookup_v194' };
   }
+  if (diracCentralIsCheckoutLinkedCustomerReadServiceRoleV195(ctx, table, path, options, method)) return { ok: true, guarded: 'checkout_linked_customer_read_service_role_v195' };
   if (diracCentralIsRegisterBootstrapServiceRoleV146(ctx, table, path, options, method)) return { ok: true, guarded: 'domain_register_bootstrap_service_role' };
   if (diracCentralIsCheckoutOwnerBootstrapServiceRoleV146(ctx, table, path, options, method)) return { ok: true, guarded: 'checkout_owner_bootstrap_service_role' };
   if (diracCentralIsCheckoutOrderCreateServiceRoleV146(ctx, table, path, options, method)) return { ok: true, guarded: 'checkout_order_create_service_role' };
@@ -32110,6 +32147,41 @@ function diracCentralIsRegisterBootstrapServiceRoleV146(ctx, table, path, option
   }
 
   return false;
+}
+
+function diracCentralIsCheckoutLinkedCustomerReadServiceRoleV195(ctx, table, path, options = {}, method) {
+  if (!ctx || ctx.action !== 'checkout_order' || !ctx.req) return false;
+  if (ctx.req.__diracCentralSecurityGuardPassedV146 !== true
+      && ctx.__diracCentralCheckoutOwnerBootstrapV146 !== true) return false;
+
+  const binding = ctx.__diracCentralCheckoutLinkedCustomerReadV195;
+  const expectedAuthUserId = String(binding && binding.authUserId || '').trim();
+  const expectedCustomerId = String(binding && binding.customerId || '').trim();
+  if (!diracCentralLooksLikeUuidV146(expectedAuthUserId)
+      || !diracCentralLooksLikeUuidV146(expectedCustomerId)) return false;
+
+  if (String(table || '').toLowerCase() !== 'customers') return false;
+  if (String(method || options.method || 'GET').toUpperCase() !== 'GET') return false;
+  if (options.auth !== 'service' || options.body !== undefined) return false;
+
+  const rawPath = String(path || '');
+  if (!rawPath.startsWith('/rest/v1/customers?') || rawPath.includes('#')) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(rawPath, 'https://dirac.invalid');
+  } catch (_) {
+    return false;
+  }
+  if (parsed.origin !== 'https://dirac.invalid' || parsed.pathname !== '/rest/v1/customers') return false;
+
+  const keys = Array.from(parsed.searchParams.keys());
+  if (keys.length !== 3 || new Set(keys).size !== 3) return false;
+  if (!keys.every((key) => key === 'select' || key === 'id' || key === 'limit')) return false;
+  if (parsed.searchParams.get('select') !== 'id,email,name,phone') return false;
+  if (parsed.searchParams.get('id') !== 'eq.' + expectedCustomerId) return false;
+  if (parsed.searchParams.get('limit') !== '1') return false;
+  return true;
 }
 
 function diracCentralIsCheckoutOwnerBootstrapServiceRoleV146(ctx, table, path, options = {}, method) {
