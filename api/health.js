@@ -1371,7 +1371,7 @@ function getAllowedOrigins() {
 
 function isAdminRequest(req) {
   const secret = process.env.AI_ADMIN_SECRET;
-  return !!secret && String(req.headers && req.headers['x-dirac-admin'] || '') === secret;
+  return !!secret && safeSecretEqual(String(req.headers && req.headers['x-dirac-admin'] || ''), secret);
 }
 
 function normalizeDomainAction(action) {
@@ -2466,45 +2466,10 @@ async function domainRegister(req, res, preloadedBody) {
       return res.status(409).json(buildDomainRegisterDuplicateEmailBody());
     }
 
-    // PATCH REGISTER EMAIL DELIVERY RECOVERY v1:
-    // Jika Supabase gagal mengirim confirmation email, jangan langsung menampilkan error mentah
-    // "Error sending confirmation email" ke customer. Backend mencoba recovery aman memakai
-    // service role: akun baru tetap dibuat/di-confirm tanpa mengirim email, lalu sesi hanya
-    // dikunci lewat HttpOnly cookie. domainLogin(), cookie helper, A2F/MFA, checkout, dan order
-    // tidak disentuh.
     if (isSupabaseRegisterEmailDeliveryError(result.data)) {
-      const recovered = await recoverDomainRegisterFromSupabaseEmailDeliveryFailure({
-        email,
-        password,
-        userData
-      });
-
-      if (recovered && recovered.duplicate === true) {
-        return res.status(409).json(buildDomainRegisterDuplicateEmailBody());
-      }
-
-      if (recovered && recovered.ok === true) {
-        const recoveredSession = recovered.session && typeof recovered.session === 'object' ? recovered.session : {};
-        if (recoveredSession.access_token && recoveredSession.refresh_token) {
-          setSessionCookies(res, recoveredSession);
-        }
-
-        return res.status(200).json({
-          ok: true,
-          code: 'REGISTER_CREATED_EMAIL_DELIVERY_RECOVERED',
-          message: recoveredSession.access_token
-            ? 'Akun berhasil dibuat dan login otomatis. Silakan lanjutkan setup keamanan akun.'
-            : 'Akun berhasil dibuat. Silakan masuk lalu lanjutkan setup keamanan akun.',
-          needs_email_confirmation: false,
-          email_delivery_recovered: true,
-          first_register_setup_required: true,
-          next: 'security_setup_required',
-          user: sanitizeUser(recovered.user || recoveredSession.user),
-          session: buildDomainAuthSessionPayload(recoveredSession)
-        });
-      }
-
-      return res.status(recovered && recovered.status ? recovered.status : 502).json({
+      // Fail closed: kegagalan delivery tidak pernah boleh mengonfirmasi email,
+      // membuat akun admin-confirmed, atau menerbitkan sesi tanpa bukti kepemilikan email.
+      return res.status(502).json({
         ok: false,
         code: 'REGISTER_EMAIL_DELIVERY_FAILED',
         message: 'Pendaftaran belum bisa diselesaikan karena layanan email verifikasi sedang bermasalah. Silakan coba lagi sebentar lagi.'
@@ -2592,97 +2557,6 @@ function isSupabaseRegisterEmailDeliveryError(data) {
     || /(?:send|sending|delivery|deliver|smtp|mailer|mailgun|sendgrid|resend|brevo|ses).*?email.*?(?:error|failed|fail|invalid|rejected)/i.test(text);
 }
 
-async function recoverDomainRegisterFromSupabaseEmailDeliveryFailure(input) {
-  const email = normalizeAuthEmail(input && input.email);
-  const password = String(input && input.password || '');
-  const userData = input && input.userData && typeof input.userData === 'object' ? input.userData : {};
-
-  if (!email || !isStrictDomainLoginEmail(email) || !password) {
-    return { ok: false, status: 400 };
-  }
-
-  // 1) Jika Supabase sudah sempat membuat user sebelum email gagal dikirim,
-  //    jangan buat user kedua. Recovery hanya boleh untuk user baru yang
-  //    created_at sangat dekat dengan request ini dan belum pernah confirmed.
-  const existing = await getSupabaseAuthUserByEmail(email);
-  if (existing && existing.user) {
-    if (!isSupabaseAuthUserSafeRecentUnconfirmed(existing.user)) {
-      return { ok: false, duplicate: true, status: 409 };
-    }
-
-    const confirmed = await confirmRecentSupabaseAuthUser(existing.user);
-    if (!confirmed.ok) {
-      return { ok: false, status: confirmed.status || 502 };
-    }
-
-    const login = await loginSupabaseAuthUserAfterRegisterRecovery(email, password);
-    if (!login.ok) {
-      return {
-        ok: true,
-        user: confirmed.user || existing.user,
-        session: null,
-        recovered_from: 'recent_unconfirmed_user'
-      };
-    }
-
-    return {
-      ok: true,
-      user: login.session && login.session.user ? login.session.user : (confirmed.user || existing.user),
-      session: login.session,
-      recovered_from: 'recent_unconfirmed_user'
-    };
-  }
-
-  // 2) Jika tidak ada user yang tercipta, buat akun lewat Admin API tanpa
-  //    mengirim confirmation email. Ini backend-only dan tetap tidak membuka token
-  //    ke JavaScript karena response session diproses oleh buildDomainAuthSessionPayload().
-  const createBody = {
-    email,
-    password,
-    email_confirm: true
-  };
-
-  if (Object.keys(userData).length) {
-    createBody.user_metadata = userData;
-  }
-
-  const created = await supabaseFetch('/auth/v1/admin/users', {
-    method: 'POST',
-    auth: 'service',
-    body: createBody
-  });
-
-  if (!created.ok) {
-    if (isSupabaseRegisterDuplicateEmailError(created.data)) {
-      return { ok: false, duplicate: true, status: 409 };
-    }
-
-    console.error('[register-email-recovery-create-failed]', customerSecuritySafeLogError(created.data));
-    return {
-      ok: false,
-      status: created.status || 502,
-      code: 'REGISTER_RECOVERY_CREATE_FAILED'
-    };
-  }
-
-  const login = await loginSupabaseAuthUserAfterRegisterRecovery(email, password);
-  if (!login.ok) {
-    return {
-      ok: true,
-      user: normalizeSupabaseAdminUser(created.data),
-      session: null,
-      recovered_from: 'admin_create_confirmed_user'
-    };
-  }
-
-  return {
-    ok: true,
-    user: login.session && login.session.user ? login.session.user : normalizeSupabaseAdminUser(created.data),
-    session: login.session,
-    recovered_from: 'admin_create_confirmed_user'
-  };
-}
-
 async function getSupabaseAuthUserByEmail(email) {
   const normalizedEmail = normalizeAuthEmail(email);
   if (!normalizedEmail || !isStrictDomainLoginEmail(normalizedEmail)) return { user: null, checked: false };
@@ -2718,59 +2592,6 @@ function normalizeSupabaseAdminUser(data) {
   if (data.user && typeof data.user === 'object') return data.user;
   return data;
 }
-
-function isSupabaseAuthUserSafeRecentUnconfirmed(user) {
-  if (!user || typeof user !== 'object') return false;
-
-  const confirmedAt = user.confirmed_at || user.email_confirmed_at || '';
-  if (confirmedAt) return false;
-
-  const createdAtMs = Date.parse(user.created_at || user.createdAt || '');
-  if (!Number.isFinite(createdAtMs)) return false;
-
-  const ageMs = Math.abs(Date.now() - createdAtMs);
-  const maxRecoveryAgeMs = Math.max(60 * 1000, Number(process.env.DOMAIN_REGISTER_EMAIL_RECOVERY_MAX_AGE_MS || 10 * 60 * 1000));
-  return ageMs <= maxRecoveryAgeMs;
-}
-
-async function confirmRecentSupabaseAuthUser(user) {
-  const userId = String(user && user.id || '').trim();
-  if (!userId) return { ok: false, status: 400 };
-
-  const result = await supabaseFetch(`/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
-    method: 'PUT',
-    auth: 'service',
-    body: {
-      email_confirm: true
-    }
-  });
-
-  if (!result.ok) {
-    console.error('[register-recovery-confirm-failed]', customerSecuritySafeLogError(result.data));
-    return { ok: false, status: result.status || 502, code: 'REGISTER_RECOVERY_CONFIRM_FAILED' };
-  }
-
-  return { ok: true, user: normalizeSupabaseAdminUser(result.data) || user };
-}
-
-async function loginSupabaseAuthUserAfterRegisterRecovery(email, password) {
-  const result = await supabaseFetch('/auth/v1/token?grant_type=password', {
-    method: 'POST',
-    auth: 'anon',
-    body: {
-      email: normalizeAuthEmail(email),
-      password: String(password || '')
-    }
-  });
-
-  if (!result.ok || !result.data || !result.data.access_token) {
-    console.error('[register-recovery-login-failed]', customerSecuritySafeLogError(result.data));
-    return { ok: false, status: result.status || 401, code: 'REGISTER_RECOVERY_LOGIN_FAILED' };
-  }
-
-  return { ok: true, session: result.data };
-}
-
 
 async function findSupabaseAuthUserByEmail(email) {
   const normalizedEmail = normalizeAuthEmail(email);
@@ -2896,7 +2717,13 @@ async function requireDomainDashboardAccess(req, res) {
 
   const protectedLock = await requireDomainProtectedDatabaseSessionLockSafe(req, res, user).catch((error) => {
     console.error('[domain-protected-lock-safe]', customerSecuritySafeLogError(error));
-    return { ok: true, skipped: true, reason: 'lock_exception_fail_open' };
+    res.status(503).json({
+      ok: false,
+      dashboard: false,
+      code: 'PROTECTED_SESSION_LOCK_UNAVAILABLE',
+      message: 'Validasi sesi protected sedang tidak tersedia. Silakan coba lagi.'
+    });
+    return null;
   });
   if (!protectedLock) return null;
 
@@ -2923,23 +2750,23 @@ async function requireDomainProtectedDatabaseSessionLockSafe(req, res, user) {
 async function checkDomainProtectedDatabaseSessionLockSafe(req, user) {
   const authUserId = String(user && user.id || '').trim();
   if (!authUserId || !customerSecurityLooksLikeUuid(authUserId)) {
-    return { ok: true, skipped: true, reason: 'invalid_user_fail_open' };
+    return { ok: false, status: 401, clearCookies: true, code: 'PROTECTED_SESSION_IDENTITY_INVALID' };
   }
 
   const linkResult = await customerSecurityFetchAuthLink(authUserId);
   if (!linkResult.ok) {
-    return { ok: true, skipped: true, reason: 'auth_link_unavailable_fail_open', status: linkResult.status };
+    return { ok: false, status: 503, code: 'PROTECTED_SESSION_AUTH_LINK_UNAVAILABLE' };
   }
 
   const link = customerSecurityPickSingleActiveAuthLink(linkResult);
   const customerId = String(link && link.customer_id || '').trim();
   if (!link || link.link_status !== 'active' || !customerSecurityLooksLikeUuid(customerId)) {
-    return { ok: true, skipped: true, reason: 'customer_link_not_ready_fail_open' };
+    return { ok: false, status: 403, clearCookies: true, code: 'PROTECTED_SESSION_AUTH_LINK_INACTIVE' };
   }
 
   const fingerprint = customerSecurityBuildSessionFingerprint(req, customerId);
   if (!fingerprint || !fingerprint.session_token_hash) {
-    return { ok: true, skipped: true, reason: 'missing_fingerprint_fail_open', customerId };
+    return { ok: false, status: 401, clearCookies: true, code: 'PROTECTED_SESSION_FINGERPRINT_MISSING', customerId };
   }
 
   const select = 'id,status,last_seen_at,expires_at,revoked_at,revoke_reason';
@@ -2951,7 +2778,7 @@ async function checkDomainProtectedDatabaseSessionLockSafe(req, user) {
 
   const found = await supabaseFetch(readPath, { method: 'GET', auth: 'service' });
   if (!found.ok) {
-    return { ok: true, skipped: true, reason: 'session_read_unavailable_fail_open', status: found.status, customerId };
+    return { ok: false, status: 503, code: 'PROTECTED_SESSION_STORAGE_UNAVAILABLE', customerId };
   }
 
   const rows = Array.isArray(found.data) ? found.data : [];
@@ -2960,9 +2787,11 @@ async function checkDomainProtectedDatabaseSessionLockSafe(req, user) {
   const nowIso = new Date(nowMs).toISOString();
 
   if (!row || !row.id) {
-    // Jangan blokir login hanya karena row belum ada. Buat/touch session memakai fungsi existing.
-    customerSecurityTouchCurrentSession(req, customerId).catch(() => null);
-    return { ok: true, create_or_touch_queued: true, customerId, skipped: false, reason: 'session_create_or_touch_queued' };
+    const created = await customerSecurityTouchCurrentSession(req, customerId);
+    if (!created || !created.ok) {
+      return { ok: false, status: 503, code: 'PROTECTED_SESSION_CREATE_FAILED', customerId };
+    }
+    return { ok: true, customerId, sessionId: created.session_id || null, created: created.created === true, skipped: false };
   }
 
   const status = String(row.status || '').trim().toLowerCase();
@@ -3041,12 +2870,26 @@ async function checkDomainProtectedDatabaseSessionLockSafe(req, user) {
     };
   }
 
-  customerSecurityTouchCurrentSession(req, customerId).catch(() => null);
-  return { ok: true, customerId, sessionId: row.id, idleMs, idle_timeout_ms: DOMAIN_PROTECTED_IDLE_TIMEOUT_MS, touch_queued: true };
+  const touched = await supabaseFetch('/rest/v1/security_customer_sessions?id=eq.' + encodeURIComponent(row.id)
+    + '&customer_id=eq.' + encodeURIComponent(customerId)
+    + '&status=eq.active&revoked_at=is.null', {
+    method: 'PATCH',
+    auth: 'service',
+    prefer: 'return=representation',
+    body: { last_seen_at: nowIso }
+  });
+  if (!touched.ok) {
+    return { ok: false, status: 503, code: 'PROTECTED_SESSION_TOUCH_FAILED', customerId, sessionId: row.id };
+  }
+  const touchedRows = Array.isArray(touched.data) ? touched.data : [];
+  if (touchedRows.length !== 1) {
+    return { ok: false, status: 401, clearCookies: true, code: 'PROTECTED_SESSION_CONCURRENTLY_REVOKED', customerId, sessionId: row.id };
+  }
+  return { ok: true, customerId, sessionId: row.id, idleMs, idle_timeout_ms: DOMAIN_PROTECTED_IDLE_TIMEOUT_MS };
 }
 
-async function revokeCurrentDomainProtectedSessionSafe(req, reason) {
-  const user = await getDomainUserForProtectedLogoutSafe(req);
+async function revokeCurrentDomainProtectedSessionSafe(req, reason, verifiedUser) {
+  const user = verifiedUser && verifiedUser.id ? verifiedUser : await getDomainUserForProtectedLogoutSafe(req);
   if (!user || !user.id) return { ok: false, reason: 'no_user' };
 
   const authUserId = String(user.id || '').trim();
@@ -3084,7 +2927,10 @@ async function revokeCurrentDomainProtectedSessionSafe(req, reason) {
 
 async function getDomainUserForProtectedLogoutSafe(req) {
   const cookies = parseCookies(req);
-  const accessTokens = uniqueNonEmptyStrings(readCookieTokenCandidates(cookies, ACCESS_COOKIE));
+  const accessTokens = uniqueNonEmptyStrings([
+    shouldAcceptFrontendAuthHeaders() ? getBearerToken(req) : '',
+    ...readCookieTokenCandidates(cookies, ACCESS_COOKIE)
+  ]);
 
   for (const accessToken of accessTokens) {
     const userResult = await supabaseFetch('/auth/v1/user', {
@@ -3095,10 +2941,76 @@ async function getDomainUserForProtectedLogoutSafe(req) {
     if (userResult.ok && userResult.data && userResult.data.id) return userResult.data;
   }
 
-  const signedSessionUser = await readSignedDomainSessionUser(cookies);
-  if (signedSessionUser && signedSessionUser.id) return signedSessionUser;
-
   return null;
+}
+
+async function revokeDomainAuthProviderSessionSafe(req, res) {
+  const cookies = parseCookies(req);
+  const acceptFrontendAuthHeaders = shouldAcceptFrontendAuthHeaders();
+  const accessTokens = uniqueNonEmptyStrings([
+    acceptFrontendAuthHeaders ? getBearerToken(req) : '',
+    ...readCookieTokenCandidates(cookies, ACCESS_COOKIE)
+  ]);
+  const refreshTokens = uniqueNonEmptyStrings([
+    acceptFrontendAuthHeaders ? String((req.headers && (req.headers['x-domain-refresh'] || req.headers['x-refresh-token'])) || '').trim() : '',
+    ...readCookieTokenCandidates(cookies, REFRESH_COOKIE)
+  ]);
+  let verifiedUser = null;
+  let revoked = false;
+  let refreshedSession = null;
+
+  const logoutAccessToken = async (accessToken, allowAlreadyInvalid) => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const result = await supabaseFetch('/auth/v1/logout?scope=local', {
+        method: 'POST',
+        auth: 'anon',
+        bearer: accessToken
+      });
+      if (result.ok) return { ok: true, revoked: true };
+      if (allowAlreadyInvalid && (result.status === 401 || result.status === 403)) {
+        return { ok: true, revoked: false, alreadyInvalid: true };
+      }
+      if (attempt === 1) return { ok: false, status: result.status || 503 };
+    }
+    return { ok: false, status: 503 };
+  };
+
+  for (const accessToken of accessTokens) {
+    const userResult = await supabaseFetch('/auth/v1/user', {
+      method: 'GET',
+      auth: 'anon',
+      bearer: accessToken
+    });
+    if (!verifiedUser && userResult.ok && userResult.data && userResult.data.id) verifiedUser = userResult.data;
+    const loggedOut = await logoutAccessToken(accessToken, true);
+    if (!loggedOut.ok) return { ok: false, status: loggedOut.status || 503, user: verifiedUser };
+    revoked = revoked || loggedOut.revoked === true;
+  }
+
+  for (const refreshToken of refreshTokens) {
+    const refreshResult = await supabaseFetch('/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      auth: 'anon',
+      body: { refresh_token: refreshToken }
+    });
+    if (!refreshResult.ok) {
+      if (refreshResult.status === 400 || refreshResult.status === 401 || refreshResult.status === 403) continue;
+      return { ok: false, status: refreshResult.status || 503, user: verifiedUser };
+    }
+    refreshedSession = refreshResult.data && typeof refreshResult.data === 'object' ? refreshResult.data : null;
+    if (!refreshedSession || !refreshedSession.access_token) {
+      return { ok: false, status: 503, user: verifiedUser };
+    }
+    if (!verifiedUser && refreshedSession.user && refreshedSession.user.id) verifiedUser = refreshedSession.user;
+    const loggedOut = await logoutAccessToken(refreshedSession.access_token, false);
+    if (!loggedOut.ok) {
+      if (hasValidDomainSessionTokens(refreshedSession)) setSessionCookies(res, refreshedSession);
+      return { ok: false, status: loggedOut.status || 503, user: verifiedUser };
+    }
+    revoked = true;
+  }
+
+  return { ok: true, revoked, user: verifiedUser };
 }
 
 async function domainDashboardMe(req, res) {
@@ -3156,8 +3068,18 @@ async function domainMfaStatus(req, res) {
 async function domainLogout(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, message: 'Gunakan POST.' });
 
-  // SAFE V2: logout mencabut row session database jika tersedia, tetapi tidak menggagalkan logout.
-  await revokeCurrentDomainProtectedSessionSafe(req, 'manual_logout').catch(() => null);
+  const databaseRevocation = await revokeCurrentDomainProtectedSessionSafe(req, 'manual_logout').catch(() => ({ ok: false }));
+  const providerRevocation = await revokeDomainAuthProviderSessionSafe(req, res).catch(() => ({ ok: false, status: 503 }));
+  if (!providerRevocation.ok) {
+    return res.status(providerRevocation.status || 503).json({
+      ok: false,
+      code: 'LOGOUT_PROVIDER_REVOCATION_FAILED',
+      message: 'Logout belum tuntas karena sesi provider belum berhasil dicabut. Silakan coba lagi.'
+    });
+  }
+  if (!databaseRevocation.ok && providerRevocation.user) {
+    await revokeCurrentDomainProtectedSessionSafe(req, 'manual_logout', providerRevocation.user).catch(() => null);
+  }
 
   clearSessionCookies(res);
 
@@ -3590,12 +3512,6 @@ async function requireDomainUser(req, res) {
     }
   }
 
-  const signedSessionUser = await readSignedDomainSessionUser(cookies);
-  if (signedSessionUser && signedSessionUser.id) {
-    res.setHeader('X-Domain-Signed-Session', 'true');
-    return signedSessionUser;
-  }
-
   clearSessionCookies(res);
   res.status(401).json({ ok: false, message: 'Belum login atau sesi sudah habis.' });
   return null;
@@ -3606,6 +3522,12 @@ function safeEqual(a, b) {
   const A = Buffer.from(String(a || ''));
   const B = Buffer.from(String(b || ''));
   if (A.length !== B.length) return false;
+  return crypto.timingSafeEqual(A, B);
+}
+
+function safeSecretEqual(a, b) {
+  const A = crypto.createHash('sha256').update(String(a || '')).digest();
+  const B = crypto.createHash('sha256').update(String(b || '')).digest();
   return crypto.timingSafeEqual(A, B);
 }
 
@@ -4494,6 +4416,8 @@ const DIRAC_TABLE_DB_MAP = Object.freeze({
   security_customer_recovery_codes: 'customerSecurity',
   security_customer_sessions: 'customerSecurity',
   security_customer_settings: 'customerSecurity',
+  security_lost_passkey_recovery_requests: 'customerSecurity',
+  security_lost_passkey_recovery_sessions: 'customerSecurity',
 
   public_mfa_recovery_codes: 'publicMfa',
   public_security_challenges: 'publicMfa',
@@ -6122,7 +6046,7 @@ async function customerSecurityTouchCurrentSession(req, customerId) {
     const fingerprint = customerSecurityBuildSessionFingerprint(req, customerId);
     if (!fingerprint || !fingerprint.session_token_hash) return { ok: false, reason: 'missing_session_fingerprint' };
 
-    const path = '/rest/v1/security_customer_sessions?select=id,status&customer_id=eq.' +
+    const path = '/rest/v1/security_customer_sessions?select=id,status,revoked_at&customer_id=eq.' +
       encodeURIComponent(customerId) +
       '&session_token_hash=eq.' +
       encodeURIComponent(fingerprint.session_token_hash) +
@@ -6141,14 +6065,17 @@ async function customerSecurityTouchCurrentSession(req, customerId) {
       operating_system: fingerprint.operating_system,
       user_agent: fingerprint.user_agent,
       ip_address: fingerprint.ip_address || null,
-      status: 'active',
       last_seen_at: now,
       expires_at: fingerprint.expires_at
     };
 
     if (rows.length && rows[0] && rows[0].id) {
+      if (String(rows[0].status || '').trim().toLowerCase() !== 'active' || rows[0].revoked_at) {
+        return { ok: false, reason: 'session_inactive_or_revoked' };
+      }
       const patched = await supabaseFetch('/rest/v1/security_customer_sessions?id=eq.' + encodeURIComponent(rows[0].id) +
-        '&customer_id=eq.' + encodeURIComponent(customerId), {
+        '&customer_id=eq.' + encodeURIComponent(customerId) +
+        '&status=eq.active&revoked_at=is.null', {
         method: 'PATCH',
         auth: 'service',
         prefer: 'return=representation',
@@ -6156,6 +6083,8 @@ async function customerSecurityTouchCurrentSession(req, customerId) {
       });
 
       if (!patched.ok) return { ok: false, reason: 'session_update_failed', status: patched.status };
+      const patchedRows = Array.isArray(patched.data) ? patched.data : [];
+      if (patchedRows.length !== 1) return { ok: false, reason: 'session_concurrently_revoked' };
       return { ok: true, created: false, session_id: rows[0].id };
     }
 
@@ -6171,6 +6100,7 @@ async function customerSecurityTouchCurrentSession(req, customerId) {
           source: 'customer_security_overview',
           auto_detected: true
         },
+        status: 'active',
         ...updateBody
       }]
     });
@@ -9412,80 +9342,95 @@ function customerSecurityLostPasskeyWorkerVerifyTraceV174(stage, reason, ctx = {
 // PDF recovery patch v156: encrypted PDF is the user-facing recovery container.
 // The complete PDF password is never stored and never returned; website shows only website_recovery_code.
 const DIRAC_RECOVERY_PDF_PATCH = 'lost-passkey-pdf-password-v156';
-const DIRAC_PDF_PADDING_V156 = Buffer.from([0x28,0xBF,0x4E,0x5E,0x4E,0x75,0x8A,0x41,0x64,0x00,0x4E,0x56,0xFF,0xFA,0x01,0x08,0x2E,0x2E,0x00,0xB6,0xD0,0x68,0x3E,0x80,0x2F,0x0C,0xA9,0xFE,0x64,0x53,0x69,0x7A]);
+const DIRAC_RECOVERY_PDF_SECURITY_HANDLER = 'PDF-R6-AES-256';
 
-function customerSecurityRecoveryPdfMd5V156(value) {
-  return crypto.createHash('md5').update(Buffer.from(value)).digest();
-}
-
-function customerSecurityRecoveryPdfPasswordBytesV156(password) {
-  const raw = Buffer.from(String(password || '').normalize('NFC'), 'utf8');
-  if (raw.length >= 32) return raw.subarray(0, 32);
-  return Buffer.concat([raw, DIRAC_PDF_PADDING_V156]).subarray(0, 32);
-}
-
-function customerSecurityRecoveryPdfRc4V156(key, data) {
-  const s = Array.from({ length: 256 }, (_, i) => i);
-  let j = 0;
-  for (let i = 0; i < 256; i += 1) {
-    j = (j + s[i] + key[i % key.length]) & 255;
-    const tmp = s[i]; s[i] = s[j]; s[j] = tmp;
-  }
-  const input = Buffer.from(data);
-  const out = Buffer.alloc(input.length);
-  let i = 0; j = 0;
-  for (let k = 0; k < input.length; k += 1) {
-    i = (i + 1) & 255;
-    j = (j + s[i]) & 255;
-    const tmp = s[i]; s[i] = s[j]; s[j] = tmp;
-    out[k] = input[k] ^ s[(s[i] + s[j]) & 255];
+function customerSecurityRecoveryPdfPasswordBytesR6(password) {
+  const text = String(password || '').normalize('NFC');
+  let out = Buffer.alloc(0);
+  for (const character of text) {
+    const encoded = Buffer.from(character, 'utf8');
+    if (out.length + encoded.length > 127) break;
+    out = Buffer.concat([out, encoded]);
   }
   return out;
 }
 
-function customerSecurityRecoveryPdfComputeOV156(userPassword, ownerPassword) {
-  let digest = customerSecurityRecoveryPdfMd5V156(customerSecurityRecoveryPdfPasswordBytesV156(ownerPassword || userPassword));
-  for (let i = 0; i < 50; i += 1) digest = customerSecurityRecoveryPdfMd5V156(digest);
-  let out = customerSecurityRecoveryPdfRc4V156(digest.subarray(0, 16), customerSecurityRecoveryPdfPasswordBytesV156(userPassword));
-  for (let i = 1; i <= 19; i += 1) {
-    const key = Buffer.from(digest.subarray(0, 16).map((item) => item ^ i));
-    out = customerSecurityRecoveryPdfRc4V156(key, out);
+function customerSecurityRecoveryPdfHashR6(passwordBytes, salt, userValue) {
+  const password = Buffer.from(passwordBytes || Buffer.alloc(0));
+  const user = userValue ? Buffer.from(userValue) : Buffer.alloc(0);
+  let key = crypto.createHash('sha256').update(password).update(Buffer.from(salt)).update(user).digest();
+  let encrypted = Buffer.alloc(0);
+  let round = 0;
+  while (round < 64 || encrypted[encrypted.length - 1] > round - 32) {
+    const seed = Buffer.concat([password, key, user]);
+    const repeated = Buffer.alloc(seed.length * 64);
+    for (let i = 0; i < 64; i += 1) seed.copy(repeated, i * seed.length);
+    const cipher = crypto.createCipheriv('aes-128-cbc', key.subarray(0, 16), key.subarray(16, 32));
+    cipher.setAutoPadding(false);
+    encrypted = Buffer.concat([cipher.update(repeated), cipher.final()]);
+    let selector = 0;
+    for (let i = 0; i < 16; i += 1) selector = (selector * 256 + encrypted[i]) % 3;
+    const algorithm = selector === 0 ? 'sha256' : (selector === 1 ? 'sha384' : 'sha512');
+    const nextKey = crypto.createHash(algorithm).update(encrypted).digest();
+    key.fill(0);
+    key = nextKey;
+    seed.fill(0);
+    repeated.fill(0);
+    round += 1;
   }
-  return out;
+  const result = Buffer.from(key.subarray(0, 32));
+  key.fill(0);
+  encrypted.fill(0);
+  password.fill(0);
+  user.fill(0);
+  return result;
 }
 
-function customerSecurityRecoveryPdfFileKeyV156(userPassword, ownerValue, permissionValue, documentId) {
-  const p = Number(permissionValue || -3904);
-  const permission = Buffer.from([p & 255, (p >> 8) & 255, (p >> 16) & 255, (p >> 24) & 255]);
-  let digest = customerSecurityRecoveryPdfMd5V156(Buffer.concat([
-    customerSecurityRecoveryPdfPasswordBytesV156(userPassword),
-    Buffer.from(ownerValue),
-    permission,
-    Buffer.from(documentId)
-  ]));
-  for (let i = 0; i < 50; i += 1) digest = customerSecurityRecoveryPdfMd5V156(digest.subarray(0, 16));
-  return digest.subarray(0, 16);
+function customerSecurityRecoveryPdfAesCbcNoPaddingR6(key, value) {
+  const plaintext = Buffer.from(value);
+  if (plaintext.length % 16 !== 0) throw new Error('RECOVERY_PDF_R6_BLOCK_SIZE_INVALID');
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key), Buffer.alloc(16));
+  cipher.setAutoPadding(false);
+  return Buffer.concat([cipher.update(plaintext), cipher.final()]);
 }
 
-function customerSecurityRecoveryPdfComputeUV156(fileKey, documentId) {
-  let out = customerSecurityRecoveryPdfRc4V156(fileKey, customerSecurityRecoveryPdfMd5V156(Buffer.concat([DIRAC_PDF_PADDING_V156, Buffer.from(documentId)])));
-  for (let i = 1; i <= 19; i += 1) {
-    const key = Buffer.from(fileKey.map((item) => item ^ i));
-    out = customerSecurityRecoveryPdfRc4V156(key, out);
-  }
-  return Buffer.concat([out, Buffer.alloc(16)]);
+function customerSecurityRecoveryPdfSecurityValuesR6(userPassword, ownerPassword, permissionValue) {
+  const userPasswordBytes = customerSecurityRecoveryPdfPasswordBytesR6(userPassword);
+  const ownerPasswordBytes = customerSecurityRecoveryPdfPasswordBytesR6(ownerPassword || userPassword);
+  const fileKey = crypto.randomBytes(32);
+  const userValidationSalt = crypto.randomBytes(8);
+  const userKeySalt = crypto.randomBytes(8);
+  const userHash = customerSecurityRecoveryPdfHashR6(userPasswordBytes, userValidationSalt);
+  const userValue = Buffer.concat([userHash, userValidationSalt, userKeySalt]);
+  const userEncryptionKey = customerSecurityRecoveryPdfHashR6(userPasswordBytes, userKeySalt);
+  const userEncryptedKey = customerSecurityRecoveryPdfAesCbcNoPaddingR6(userEncryptionKey, fileKey);
+  const ownerValidationSalt = crypto.randomBytes(8);
+  const ownerKeySalt = crypto.randomBytes(8);
+  const ownerHash = customerSecurityRecoveryPdfHashR6(ownerPasswordBytes, ownerValidationSalt, userValue);
+  const ownerValue = Buffer.concat([ownerHash, ownerValidationSalt, ownerKeySalt]);
+  const ownerEncryptionKey = customerSecurityRecoveryPdfHashR6(ownerPasswordBytes, ownerKeySalt, userValue);
+  const ownerEncryptedKey = customerSecurityRecoveryPdfAesCbcNoPaddingR6(ownerEncryptionKey, fileKey);
+  const permissionPlaintext = Buffer.alloc(16);
+  permissionPlaintext.writeInt32LE(Number(permissionValue || -3904), 0);
+  permissionPlaintext.fill(0xff, 4, 8);
+  permissionPlaintext.write('Tadb', 8, 4, 'ascii');
+  crypto.randomBytes(4).copy(permissionPlaintext, 12);
+  const permissionCipher = crypto.createCipheriv('aes-256-ecb', fileKey, null);
+  permissionCipher.setAutoPadding(false);
+  const permissions = Buffer.concat([permissionCipher.update(permissionPlaintext), permissionCipher.final()]);
+  userPasswordBytes.fill(0);
+  ownerPasswordBytes.fill(0);
+  userHash.fill(0);
+  userEncryptionKey.fill(0);
+  ownerHash.fill(0);
+  ownerEncryptionKey.fill(0);
+  permissionPlaintext.fill(0);
+  return { fileKey, userValue, userEncryptedKey, ownerValue, ownerEncryptedKey, permissions };
 }
 
-function customerSecurityRecoveryPdfEncryptObjectV156(fileKey, objectNumber, generationNumber, plaintext) {
-  const n = Buffer.alloc(5);
-  n[0] = objectNumber & 255;
-  n[1] = (objectNumber >> 8) & 255;
-  n[2] = (objectNumber >> 16) & 255;
-  n[3] = generationNumber & 255;
-  n[4] = (generationNumber >> 8) & 255;
-  const objectKey = customerSecurityRecoveryPdfMd5V156(Buffer.concat([Buffer.from(fileKey), n, Buffer.from('sAlT', 'binary')])).subarray(0, 16);
+function customerSecurityRecoveryPdfEncryptObjectR6(fileKey, plaintext) {
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-128-cbc', objectKey, iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(fileKey), iv);
   return Buffer.concat([iv, cipher.update(Buffer.from(plaintext)), cipher.final()]);
 }
 
@@ -9528,8 +9473,8 @@ function customerSecurityExtractAccountPasswordForPdfV156(body) {
 }
 
 function customerSecurityBuildPdfPasswordV156(accountPassword, websiteRecoveryCode, emailPdfCode) {
-  // PDF Standard Security Handler only uses the first 32 bytes of the entered password.
-  // Therefore the complete user-entered PDF password must fit inside 32 bytes.
+  // Pertahankan kontrak input lama maksimal 32 byte agar cara membuka PDF tidak berubah.
+  // Enkripsi file sendiri sudah memakai Standard Security Handler R6 (AES-256).
   return String(websiteRecoveryCode || '').trim() + String(emailPdfCode || '').trim() + String(accountPassword || '').normalize('NFC');
 }
 
@@ -9566,10 +9511,9 @@ function customerSecurityBuildEncryptedRecoveryPdfV156(input) {
   }
   const documentId = crypto.randomBytes(16);
   const permission = -3888;
-  const ownerValue = customerSecurityRecoveryPdfComputeOV156(password, password + ':owner:' + String(input.requestId || ''));
-  const fileKey = customerSecurityRecoveryPdfFileKeyV156(password, ownerValue, permission, documentId);
-  const userValue = customerSecurityRecoveryPdfComputeUV156(fileKey, documentId);
+  const security = customerSecurityRecoveryPdfSecurityValuesR6(password, password + ':owner:' + String(input.requestId || ''), permission);
 
+  try {
   let content = '';
   content += customerSecurityRecoveryPdfTextLineV156('DIRACGROUP SECURE RECOVERY', 72, 760, 16, 'F1');
   content += customerSecurityRecoveryPdfTextLineV156('Dokumen Pemulihan Passkey Terenkripsi', 72, 738, 12, 'F1');
@@ -9586,18 +9530,18 @@ function customerSecurityBuildEncryptedRecoveryPdfV156(input) {
   }
   content += customerSecurityRecoveryPdfTextLineV156('Jika Anda tidak meminta pemulihan ini, segera hubungi bantuan DiracGroup.', 72, 48, 8, 'F2');
 
-  const encryptedContent = customerSecurityRecoveryPdfEncryptObjectV156(fileKey, 4, 0, Buffer.from(content, 'binary'));
+  const encryptedContent = customerSecurityRecoveryPdfEncryptObjectR6(security.fileKey, Buffer.from(content, 'binary'));
   const objects = [];
   const putObject = (number, body) => { objects[number] = String(number) + ' 0 obj\n' + body + '\nendobj\n'; };
-  putObject(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  putObject(1, '<< /Type /Catalog /Pages 2 0 R /Extensions << /ADBE << /BaseVersion /1.7 /ExtensionLevel 8 >> >> >>');
   putObject(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
   putObject(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 7 0 R >> >> /Contents 4 0 R >>');
   objects[4] = '4 0 obj\n<< /Length ' + String(encryptedContent.length) + ' >>\nstream\n' + encryptedContent.toString('binary') + '\nendstream\nendobj\n';
   putObject(5, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-  putObject(6, '<< /Filter /Standard /V 4 /R 4 /Length 128 /O <' + ownerValue.toString('hex') + '> /U <' + userValue.toString('hex') + '> /P ' + String(permission) + ' /EncryptMetadata true /CF << /StdCF << /AuthEvent /DocOpen /CFM /AESV2 /Length 16 >> >> /StmF /StdCF /StrF /StdCF >>');
+  putObject(6, '<< /Filter /Standard /V 5 /R 6 /Length 256 /O <' + security.ownerValue.toString('hex') + '> /U <' + security.userValue.toString('hex') + '> /OE <' + security.ownerEncryptedKey.toString('hex') + '> /UE <' + security.userEncryptedKey.toString('hex') + '> /Perms <' + security.permissions.toString('hex') + '> /P ' + String(permission) + ' /EncryptMetadata true /CF << /StdCF << /AuthEvent /DocOpen /CFM /AESV3 /Length 32 >> >> /StmF /StdCF /StrF /StdCF >>');
   putObject(7, '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
 
-  let pdf = '%PDF-1.6\n%\xE2\xE3\xCF\xD3\n';
+  let pdf = '%PDF-1.7\n%\xE2\xE3\xCF\xD3\n';
   const offsets = [0];
   for (let i = 1; i < objects.length; i += 1) {
     offsets[i] = Buffer.byteLength(pdf, 'binary');
@@ -9608,6 +9552,9 @@ function customerSecurityBuildEncryptedRecoveryPdfV156(input) {
   for (let i = 1; i < objects.length; i += 1) pdf += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
   pdf += 'trailer\n<< /Size ' + String(objects.length) + ' /Root 1 0 R /Encrypt 6 0 R /ID [<' + documentId.toString('hex') + '> <' + documentId.toString('hex') + '>] >>\nstartxref\n' + String(xrefOffset) + '\n%%EOF\n';
   return Buffer.from(pdf, 'binary');
+  } finally {
+    security.fileKey.fill(0);
+  }
 }
 
 function customerSecurityLostPasskeySign(data) {
@@ -13813,7 +13760,17 @@ function midtransMappedPaymentStatus(payload) {
   if (status === 'cancel') return 'cancelled';
   if (status === 'deny' || status === 'failure') return 'failed';
   if (status === 'refund' || status === 'partial_refund') return 'refunded';
-  return 'pending';
+  return '';
+}
+
+function midtransEffectivePaymentStatus(currentStatus, incomingStatus) {
+  const current = String(currentStatus || '').trim().toLowerCase();
+  const incoming = String(incomingStatus || '').trim().toLowerCase();
+  if (!incoming) return '';
+  if (current === 'refunded') return 'refunded';
+  if (current === 'paid') return incoming === 'refunded' ? 'refunded' : 'paid';
+  if (['expired', 'cancelled', 'failed'].includes(current) && incoming === 'pending') return current;
+  return incoming;
 }
 
 function midtransGatewayEventId(payload) {
@@ -14101,7 +14058,7 @@ async function midtransHandleWebhook(req, res) {
   const mappedStatus = midtransMappedPaymentStatus(body);
   const success = midtransSuccessStatus(body);
 
-  if (!gatewayReference || !gatewayEventId || grossAmount <= 0) {
+  if (!gatewayReference || !gatewayEventId || grossAmount <= 0 || !mappedStatus) {
     return res.status(400).json({ ok: false, message: 'Payload Midtrans kurang lengkap.' });
   }
 
@@ -14115,6 +14072,7 @@ async function midtransHandleWebhook(req, res) {
   }
 
   const tx = txResult.transaction;
+  const effectiveStatus = midtransEffectivePaymentStatus(tx.payment_status, mappedStatus);
   const transactionAmount = midtransMoney(tx.amount);
   if (transactionAmount !== grossAmount) {
     await diracCentralBanCurrentContextV146('midtrans_amount_mismatch').catch(() => null);
@@ -14139,7 +14097,8 @@ async function midtransHandleWebhook(req, res) {
   const eventInsert = duplicateEvent
     ? { ok: true, duplicate: true, skipped: 'gateway_event_already_exists' }
     : await midtransInsertGatewayEventSafe(tx.id, gatewayEventId, eventStatus, body, {
-      mapped_payment_status: mappedStatus,
+      incoming_payment_status: mappedStatus,
+      effective_payment_status: effectiveStatus,
       success,
       gateway_reference: gatewayReference
     });
@@ -14148,12 +14107,12 @@ async function midtransHandleWebhook(req, res) {
     return res.status(eventInsert.status || 500).json({ ok: false, message: 'Gagal menyimpan event webhook Midtrans.' });
   }
 
-  const txPatch = await midtransPatchPaymentTransaction(tx.id, mappedStatus, body, success);
+  const txPatch = await midtransPatchPaymentTransaction(tx.id, effectiveStatus, body, success, tx.payment_status, tx.metadata);
   if (!txPatch.ok) {
     return res.status(txPatch.status || 500).json({ ok: false, message: 'Gagal update payment transaction dari webhook Midtrans.' });
   }
 
-  const paymentAlreadyMatched = midtransAlreadyHasPaymentStatus(tx, mappedStatus);
+  const paymentAlreadyMatched = midtransAlreadyHasPaymentStatus(tx, effectiveStatus) || txPatch.changed === false;
   const orderAlreadyPaid = midtransOrderAlreadyPaid(ownerCheck.order);
   let orderPatch = { ok: true, skipped: true };
   let orderMailNotification = orderMailPaidWebhookSkipSummary('midtrans', 'not_paid_status');
@@ -14180,7 +14139,7 @@ async function midtransHandleWebhook(req, res) {
     gateway_reference: gatewayReference,
     gateway_event_id: gatewayEventId,
     payment_transaction_id: tx.id,
-    payment_status: mappedStatus,
+    payment_status: effectiveStatus,
     order_updated: Boolean(success && orderPatch && orderPatch.ok),
     order_mail_notification: orderMailNotification,
     duplicate: duplicateEvent || Boolean(eventInsert && eventInsert.duplicate),
@@ -14293,7 +14252,7 @@ async function midtransInsertGatewayEventSafe(paymentTransactionId, gatewayEvent
 
     if (result.ok) return { ok: true, data: result.data };
 
-    const msg = lockedPaymentSafeUpstreamError(result.data).toLowerCase();
+    const msg = String(lockedPaymentSafeUpstreamError(result.data) || '').toLowerCase();
     if (result.status === 409 || msg.includes('duplicate') || msg.includes('unique')) {
       return { ok: true, duplicate: true, data: result.data };
     }
@@ -14302,8 +14261,9 @@ async function midtransInsertGatewayEventSafe(paymentTransactionId, gatewayEvent
   return { ok: false, status: 500 };
 }
 
-async function midtransPatchPaymentTransaction(transactionId, status, payload, success) {
+async function midtransPatchPaymentTransaction(transactionId, status, payload, success, expectedCurrentStatus, existingMetadata) {
   const metadata = {
+    ...(existingMetadata && typeof existingMetadata === 'object' && !Array.isArray(existingMetadata) ? existingMetadata : {}),
     midtrans_last_notification_at: diracNowIso(),
     midtrans_transaction_id: payload.transaction_id || null,
     midtrans_transaction_status: payload.transaction_status || null,
@@ -14321,23 +14281,33 @@ async function midtransPatchPaymentTransaction(transactionId, status, payload, s
 
   if (success) body.paid_at = payload.settlement_time || diracNowIso();
 
-  const first = await supabaseFetch('/rest/v1/payment_transactions?id=eq.' + encodeURIComponent(transactionId), {
+  const currentStatus = expectedCurrentStatus === null || expectedCurrentStatus === undefined
+    ? ''
+    : String(expectedCurrentStatus).trim();
+  const path = '/rest/v1/payment_transactions?id=eq.' + encodeURIComponent(transactionId)
+    + (currentStatus ? '&payment_status=eq.' + encodeURIComponent(currentStatus) : '&payment_status=is.null');
+  const first = await supabaseFetch(path, {
     method: 'PATCH',
     auth: 'service',
     prefer: 'return=representation',
     body
   });
 
-  if (first.ok) return first;
+  if (first.ok) {
+    const rows = Array.isArray(first.data) ? first.data : [];
+    return { ...first, changed: rows.length === 1, concurrent: rows.length === 0 };
+  }
 
-  const fallback = await supabaseFetch('/rest/v1/payment_transactions?id=eq.' + encodeURIComponent(transactionId), {
+  const fallback = await supabaseFetch(path, {
     method: 'PATCH',
     auth: 'service',
     prefer: 'return=representation',
     body: { payment_status: status, metadata }
   });
 
-  return fallback;
+  if (!fallback.ok) return fallback;
+  const rows = Array.isArray(fallback.data) ? fallback.data : [];
+  return { ...fallback, changed: rows.length === 1, concurrent: rows.length === 0 };
 }
 
 async function midtransPatchRelatedOrderPaid(tx, payload) {
@@ -14624,7 +14594,10 @@ function diracPasskeyA2FDecodeToken(token) {
   const expected = diracPasskeyA2FSign(parts[0]);
   if (!safeEqual(parts[1], expected)) return null;
   try {
-    return JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+    const decoded = diracPasskeyA2FBase64UrlToBuffer(parts[0], 16 * 1024);
+    if (!decoded.length) return null;
+    const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(decoded));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
   } catch (_) {
     return null;
   }
@@ -14647,8 +14620,9 @@ function diracPasskeyA2FRpName() {
 }
 
 function diracPasskeyA2FAttestationPolicy() {
-  const value = String(process.env.DIRAC_PASSKEY_ATTESTATION || process.env.WEBAUTHN_ATTESTATION || 'none').trim().toLowerCase();
-  return ['none', 'indirect', 'direct', 'enterprise'].includes(value) ? value : 'none';
+  // Validator ini hanya menerima format "none" secara lengkap. Jangan meminta
+  // attestation lain lalu menerima attStmt yang tidak pernah diverifikasi.
+  return 'none';
 }
 
 function diracPasskeyA2FUserHandle(user) {
@@ -14657,18 +14631,13 @@ function diracPasskeyA2FUserHandle(user) {
 }
 
 function diracPasskeyA2FDecodeClientData(clientDataJSON) {
-  const raw = String(clientDataJSON || '').trim();
-  if (!raw) return null;
+  const bytes = diracPasskeyA2FBase64UrlToBuffer(clientDataJSON, 16 * 1024);
+  if (!bytes.length) return null;
   try {
-    return JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+    const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
   } catch (_) {
-    try {
-      let normal = raw.replace(/-/g, '+').replace(/_/g, '/');
-      while (normal.length % 4) normal += '=';
-      return JSON.parse(Buffer.from(normal, 'base64').toString('utf8'));
-    } catch (_err) {
-      return null;
-    }
+    return null;
   }
 }
 
@@ -14682,27 +14651,28 @@ function diracPasskeyA2FSafeString(value, maxLen) {
   return clean.slice(0, Math.max(1, Number(maxLen || 2048)));
 }
 
-function diracPasskeyA2FBase64UrlToBuffer(value) {
-  const raw = String(value || '').trim();
+function diracPasskeyA2FBase64UrlToBuffer(value, maxBytes = 128 * 1024) {
+  const source = String(value || '');
+  const raw = source.trim();
   if (!raw) return Buffer.alloc(0);
+  if (source !== raw || !/^[A-Za-z0-9_-]+$/.test(raw) || raw.length % 4 === 1) return Buffer.alloc(0);
+  const limit = Math.max(1, Number(maxBytes || 0));
+  if (Math.ceil(raw.length * 3 / 4) > limit) return Buffer.alloc(0);
   try {
-    return Buffer.from(raw, 'base64url');
+    const decoded = Buffer.from(raw, 'base64url');
+    if (!decoded.length || decoded.length > limit || decoded.toString('base64url') !== raw) return Buffer.alloc(0);
+    return decoded;
   } catch (_) {
-    try {
-      let normal = raw.replace(/-/g, '+').replace(/_/g, '/');
-      while (normal.length % 4) normal += '=';
-      return Buffer.from(normal, 'base64');
-    } catch (_err) {
-      return Buffer.alloc(0);
-    }
+    return Buffer.alloc(0);
   }
 }
 
 function diracPasskeyA2FCredentialId(credential) {
-  return diracPasskeyA2FSafeString(
+  const id = diracPasskeyA2FSafeString(
     (credential && (credential.id || credential.rawId)) || '',
     4096
   );
+  return diracPasskeyA2FBase64UrlToBuffer(id, 1024).length ? id : '';
 }
 
 function diracPasskeyA2FTransports(credential, response) {
@@ -14788,6 +14758,7 @@ function diracPasskeyA2FParseCbor(data, offset = 0) {
       for (let i = 0; i < len.value; i += 1) {
         const key = read(cursor);
         const val = read(key.offset);
+        if (map.has(key.value)) throw new Error('CBOR_DUPLICATE_KEY');
         map.set(key.value, val.value);
         cursor = val.offset;
       }
@@ -14813,7 +14784,16 @@ function diracPasskeyA2FParseAuthData(authData, rpId, requireAttestedCredential)
   if ((flags & 0x04) !== 0x04) return { ok: false, reason: 'user_verification_missing' };
   const signCount = buf.readUInt32BE(33);
   const parsed = { ok: true, flags, signCount, authData: buf };
-  if (!requireAttestedCredential) return parsed;
+  if (!requireAttestedCredential) {
+    if ((flags & 0x40) === 0x40) return { ok: false, reason: 'unexpected_attested_credential' };
+    if ((flags & 0x80) === 0x80) {
+      const extensions = diracPasskeyA2FParseCbor(buf, 37);
+      if (!(extensions.value instanceof Map) || extensions.offset !== buf.length) return { ok: false, reason: 'authenticator_extensions_invalid' };
+    } else if (buf.length !== 37) {
+      return { ok: false, reason: 'authenticator_data_trailing_bytes' };
+    }
+    return parsed;
+  }
   if ((flags & 0x40) !== 0x40) return { ok: false, reason: 'attested_credential_missing' };
   if (buf.length < 55) return { ok: false, reason: 'attested_credential_too_short' };
   const aaguid = buf.slice(37, 53).toString('hex');
@@ -14824,6 +14804,15 @@ function diracPasskeyA2FParseAuthData(authData, rpId, requireAttestedCredential)
   const credentialId = buf.slice(credentialStart, credentialEnd).toString('base64url');
   const cose = diracPasskeyA2FParseCbor(buf, credentialEnd);
   const publicKeyJwk = diracPasskeyA2FCoseToJwk(cose.value);
+  try { crypto.createPublicKey({ key: publicKeyJwk, format: 'jwk' }); }
+  catch (_) { return { ok: false, reason: 'credential_public_key_invalid' }; }
+  let finalOffset = cose.offset;
+  if ((flags & 0x80) === 0x80) {
+    const extensions = diracPasskeyA2FParseCbor(buf, finalOffset);
+    if (!(extensions.value instanceof Map)) return { ok: false, reason: 'authenticator_extensions_invalid' };
+    finalOffset = extensions.offset;
+  }
+  if (finalOffset !== buf.length) return { ok: false, reason: 'authenticator_data_trailing_bytes' };
   return { ...parsed, aaguid, credentialId, credentialPublicKeyCose: buf.slice(credentialEnd, cose.offset).toString('base64url'), publicKeyJwk };
 }
 
@@ -14841,7 +14830,7 @@ function diracPasskeyA2FCoseToJwk(cose) {
   if (kty === 3 && alg === -257) {
     const n = cose.get(-1);
     const e = cose.get(-2);
-    if (!Buffer.isBuffer(n) || !Buffer.isBuffer(e) || n.length < 256 || e.length < 3) throw new Error('COSE_RS256_INVALID');
+    if (!Buffer.isBuffer(n) || !Buffer.isBuffer(e) || n.length < 256 || e.length !== 3 || e[0] !== 0x01 || e[1] !== 0x00 || e[2] !== 0x01) throw new Error('COSE_RS256_INVALID');
     return { kty: 'RSA', n: n.toString('base64url'), e: e.toString('base64url'), alg: 'RS256', ext: true };
   }
   throw new Error('COSE_ALGORITHM_UNSUPPORTED');
@@ -14850,9 +14839,16 @@ function diracPasskeyA2FCoseToJwk(cose) {
 function diracPasskeyA2FValidateRegistrationResponse({ credential, response, payload, clientData, req }) {
   const attestation = diracPasskeyA2FBase64UrlToBuffer(response && response.attestationObject);
   if (!attestation.length) return { ok: false, reason: 'attestation_object_missing' };
-  let attestationMap;
-  try { attestationMap = diracPasskeyA2FParseCbor(attestation).value; } catch (_) { return { ok: false, reason: 'attestation_object_invalid' }; }
+  let decodedAttestation;
+  try { decodedAttestation = diracPasskeyA2FParseCbor(attestation); } catch (_) { return { ok: false, reason: 'attestation_object_invalid' }; }
+  if (decodedAttestation.offset !== attestation.length) return { ok: false, reason: 'attestation_object_trailing_bytes' };
+  const attestationMap = decodedAttestation.value;
   if (!(attestationMap instanceof Map)) return { ok: false, reason: 'attestation_object_invalid' };
+  const format = attestationMap.get('fmt');
+  const statement = attestationMap.get('attStmt');
+  if (format !== 'none' || !(statement instanceof Map) || statement.size !== 0) {
+    return { ok: false, reason: 'attestation_format_unsupported' };
+  }
   const authData = attestationMap.get('authData');
   if (!Buffer.isBuffer(authData)) return { ok: false, reason: 'attestation_auth_data_missing' };
   const rpId = String(payload && payload.rpId || diracPasskeyA2FRpId(req));
@@ -14872,9 +14868,9 @@ function diracPasskeyA2FStoredPublicKey(row) {
 }
 
 function diracPasskeyA2FValidateAuthenticationResponse({ row, response, payload, clientData, req }) {
-  const authData = diracPasskeyA2FBase64UrlToBuffer(response && response.authenticatorData);
-  const signature = diracPasskeyA2FBase64UrlToBuffer(response && response.signature);
-  const clientDataRaw = diracPasskeyA2FBase64UrlToBuffer(response && response.clientDataJSON);
+  const authData = diracPasskeyA2FBase64UrlToBuffer(response && response.authenticatorData, 16 * 1024);
+  const signature = diracPasskeyA2FBase64UrlToBuffer(response && response.signature, 16 * 1024);
+  const clientDataRaw = diracPasskeyA2FBase64UrlToBuffer(response && response.clientDataJSON, 16 * 1024);
   if (!authData.length || !signature.length || !clientDataRaw.length) return { ok: false, reason: 'assertion_response_incomplete' };
   const rpId = String(payload && payload.rpId || diracPasskeyA2FRpId(req));
   let parsed;
@@ -14892,7 +14888,7 @@ function diracPasskeyA2FValidateAuthenticationResponse({ row, response, payload,
     return { ok: false, reason: 'passkey_signature_invalid' };
   }
   const previousCount = Math.max(0, Number(row && row.sign_count || 0));
-  if (previousCount > 0 && parsed.signCount > 0 && parsed.signCount <= previousCount) {
+  if (previousCount > 0 && parsed.signCount <= previousCount) {
     return { ok: false, reason: 'passkey_sign_count_replay' };
   }
   return { ok: true, ...parsed };
@@ -14902,13 +14898,43 @@ async function diracPasskeyA2FStoreChallenge(setupToken, payload) {
   const jti = String(payload && payload.jti || '');
   if (!jti) return false;
   const record = { token_hash: customerMfaBindingHash('passkey_token', setupToken), expiresAtMs: Number(payload.expiresAtMs || 0), used: false };
+  const persistenceRequired = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production' || Boolean(LOGIN_SECURITY_PERSIST_TABLE);
+  const persisted = LOGIN_SECURITY_PERSIST_TABLE && typeof writePersistentSecurityJson === 'function'
+    ? await writePersistentSecurityJson('passkey-a2f-jti:' + jti, record, 0, Math.max(60, Math.ceil((record.expiresAtMs - Date.now()) / 1000) + 30)).catch(() => false)
+    : false;
+  if (persistenceRequired && !persisted) return false;
   DIRAC_PASSKEY_A2F_CHALLENGE_STORE.set(jti, record);
-  try {
-    if (typeof writePersistentSecurityJson === 'function') {
-      await writePersistentSecurityJson('passkey-a2f-jti:' + jti, record, 0, Math.max(60, Math.ceil((record.expiresAtMs - Date.now()) / 1000) + 30)).catch(() => false);
-    }
-  } catch (_) {}
   return true;
+}
+
+async function diracPasskeyA2FAtomicConsumePersistentChallenge(jti, expectedHash, record, now) {
+  if (!LOGIN_SECURITY_PERSIST_TABLE) {
+    return String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production'
+      ? { ok: false, reason: 'passkey_challenge_storage_required' }
+      : { ok: true, persistent: false };
+  }
+  const securityKey = 'passkey-a2f-jti:' + jti;
+  const usedRecord = { ...record, used: true, usedAtMs: now };
+  const path = `/rest/v1/${encodeURIComponent(LOGIN_SECURITY_PERSIST_TABLE)}`
+    + `?security_key=eq.${encodeURIComponent(securityKey)}`
+    + '&record_json->>used=eq.false'
+    + `&record_json->>token_hash=eq.${encodeURIComponent(expectedHash)}`
+    + `&expires_at=gt.${encodeURIComponent(new Date(now).toISOString())}`;
+  const result = await supabaseFetch(path, {
+    method: 'PATCH',
+    auth: 'service',
+    prefer: 'return=representation',
+    body: {
+      record_json: usedRecord,
+      updated_at: new Date(now).toISOString(),
+      expires_at: new Date(now + 60_000).toISOString()
+    }
+  });
+  if (!result.ok) return { ok: false, reason: 'passkey_challenge_storage_unavailable' };
+  const rows = Array.isArray(result.data) ? result.data : [];
+  return rows.length === 1
+    ? { ok: true, persistent: true }
+    : { ok: false, reason: 'passkey_challenge_missing_or_used' };
 }
 
 async function diracPasskeyA2FConsumeChallenge(setupToken, payload) {
@@ -14925,12 +14951,9 @@ async function diracPasskeyA2FConsumeChallenge(setupToken, payload) {
     if (!record || record.used === true) return { ok: false, reason: 'passkey_challenge_missing_or_used' };
     if (Number(record.expiresAtMs || 0) <= now) return { ok: false, reason: 'passkey_challenge_expired' };
     if (!expectedHash || !record.token_hash || !safeEqual(String(record.token_hash), expectedHash)) return { ok: false, reason: 'passkey_challenge_token_mismatch' };
+    const claimed = await diracPasskeyA2FAtomicConsumePersistentChallenge(jti, expectedHash, record, now);
+    if (!claimed.ok) return claimed;
     DIRAC_PASSKEY_A2F_CHALLENGE_STORE.set(jti, { ...record, used: true, expiresAtMs: now + 1000 });
-    try {
-      if (typeof writePersistentSecurityJson === 'function') {
-        await writePersistentSecurityJson('passkey-a2f-jti:' + jti, { ...record, used: true, usedAtMs: now }, 0, 60).catch(() => false);
-      }
-    } catch (_) {}
     return { ok: true };
   } finally {
     setTimeout(() => {
@@ -15166,8 +15189,7 @@ async function diracPasskeyA2FUpdateUsage({ row, owner, response, credential, cl
   const nowIso = new Date().toISOString();
   const body = {
     last_used_at: nowIso,
-    updated_at: nowIso,
-    is_active: true
+    updated_at: nowIso
   };
   if (signCount > 0) body.sign_count = signCount;
   body.credential_json = {
@@ -15175,7 +15197,16 @@ async function diracPasskeyA2FUpdateUsage({ row, owner, response, credential, cl
     last_authentication: diracPasskeyA2FMinimalCredentialJson({ credential, response, clientData, payload, owner, req, mode: 'authentication' })
   };
 
-  const patched = await supabaseFetch('/rest/v1/domain_passkeys?id=eq.' + encodeURIComponent(row.id), {
+  let patchPath = '/rest/v1/domain_passkeys?id=eq.' + encodeURIComponent(row.id)
+    + '&user_id=eq.' + encodeURIComponent(owner.customerId)
+    + '&is_active=eq.true';
+  if (signCount > 0) {
+    const storedCounter = row.sign_count;
+    patchPath += storedCounter === null || storedCounter === undefined
+      ? '&sign_count=is.null'
+      : '&sign_count=eq.' + encodeURIComponent(Math.max(0, Number(storedCounter || 0)));
+  }
+  const patched = await supabaseFetch(patchPath, {
     method: 'PATCH',
     auth: 'service',
     prefer: 'return=representation',
@@ -15185,7 +15216,11 @@ async function diracPasskeyA2FUpdateUsage({ row, owner, response, credential, cl
     console.error('[passkey-usage-update-failed]', customerSecuritySafeLogError(patched.data));
     return { ok: false, status: patched.status || 500, message: 'Gagal memperbarui penggunaan Passkey.', code: 'PASSKEY_USAGE_UPDATE_FAILED' };
   }
-  return { ok: true, row: Array.isArray(patched.data) ? patched.data[0] : patched.data };
+  const patchedRows = Array.isArray(patched.data) ? patched.data : [];
+  if (patchedRows.length !== 1) {
+    return { ok: false, status: 409, message: 'Counter Passkey berubah atau Passkey sudah dinonaktifkan.', code: 'PASSKEY_COUNTER_CONCURRENT_REPLAY' };
+  }
+  return { ok: true, row: patchedRows[0] };
 }
 
 async function diracPasskeyA2FMarkSettingsActive(owner) {
@@ -15267,7 +15302,15 @@ async function diracPasskeyA2FStart(req, res) {
     expiresAtMs: now + DIRAC_PASSKEY_A2F_TTL_MS
   };
   const setupToken = diracPasskeyA2FEncodeToken(payload);
-  await diracPasskeyA2FStoreChallenge(setupToken, payload);
+  const challengeStored = await diracPasskeyA2FStoreChallenge(setupToken, payload);
+  if (!challengeStored) {
+    return res.status(503).json({
+      ok: false,
+      method: 'passkey',
+      code: 'PASSKEY_CHALLENGE_STORAGE_UNAVAILABLE',
+      message: 'Challenge Passkey belum dapat disimpan dengan aman. Silakan coba lagi.'
+    });
+  }
 
   const basePublicKey = {
     challenge,
@@ -15384,7 +15427,7 @@ async function diracPasskeyA2FVerify(req, res) {
     await diracA2FHardBanCurrentRequest('passkey_a2f_challenge_mismatch');
     return res.status(403).json({ ok: false, method: 'passkey', message: 'Challenge Passkey tidak cocok. Minta challenge baru.' });
   }
-  if (clientData.crossOrigin === true) {
+  if (clientData.crossOrigin !== undefined && clientData.crossOrigin !== false) {
     await diracA2FHardBanCurrentRequest('passkey_a2f_cross_origin');
     return res.status(403).json({ ok: false, method: 'passkey', message: 'Passkey harus dibuat dari origin website utama.' });
   }
@@ -15399,7 +15442,7 @@ async function diracPasskeyA2FVerify(req, res) {
   }
   const clientOrigin = normalizeDashboardMfaOrigin(clientData.origin || '');
   const expectedOrigin = normalizeDashboardMfaOrigin(payload.origin || requestOrigin(req));
-  if (expectedOrigin && clientOrigin && clientOrigin !== expectedOrigin) {
+  if (!expectedOrigin || !clientOrigin || clientOrigin !== expectedOrigin) {
     await diracA2FHardBanCurrentRequest('passkey_a2f_origin_mismatch');
     return res.status(403).json({ ok: false, method: 'passkey', message: 'Origin Passkey tidak cocok dengan domain login.' });
   }
@@ -18953,7 +18996,7 @@ async function diracUltraWriteGenericSecurityEvent(req, options = {}) {
   if (!isEnvTrue('DIRAC_ULTRA_GENERIC_SECURITY_EVENT')) return false;
   if (!LOGIN_SECURITY_PERSIST_TABLE || typeof writePersistentSecurityJson !== 'function') return false;
   const action = String(options.action || '').slice(0, 80);
-  const keyBase = [Date.now(), action, Math.random().toString(36).slice(2)].join(':');
+  const keyBase = [Date.now(), action, crypto.randomBytes(18).toString('base64url')].join(':');
   const key = 'ultra-event:' + (typeof loginSecurityHash === 'function' ? loginSecurityHash(keyBase) : crypto.createHash('sha256').update(keyBase).digest('hex'));
   const headers = (req && req.headers) || {};
   return writePersistentSecurityJson(key, {
@@ -19731,7 +19774,7 @@ async function diracV107RegisterHardBan(req, res, action, method, threat) {
   // Pasang cookie hard-ban untuk browser yang melakukan attack; membantu tetap blokir bila IP/VPN berubah tetapi cookie masih sama.
   try {
     if (res && typeof res.setHeader === 'function') {
-      const cookieValue = diracV107Hmac('cookie|' + String(now) + '|' + String(Math.random())).slice(0, 64);
+      const cookieValue = diracV107Hmac('cookie|' + String(now) + '|' + crypto.randomBytes(18).toString('base64url')).slice(0, 64);
       const maxAge = Math.max(60, Math.min(Math.floor((blockedUntilMs - now) / 1000), 2147483647));
       res.setHeader('Set-Cookie', 'dirac_global_hard_ban=' + cookieValue + '; Path=/; Max-Age=' + maxAge + '; HttpOnly; Secure; SameSite=Lax');
       keys.push(...diracV107KeysForValue('cookie', 'cookie|' + cookieValue));
@@ -21500,7 +21543,7 @@ async function diracUltraXssV3RegisterPermanentBlock(req, res, action, method, x
   // Cookie hard-ban browser; tidak menyimpan cookie mentah ke database.
   try {
     if (res && typeof res.setHeader === 'function' && typeof diracV107Hmac === 'function' && typeof diracV107KeysForValue === 'function') {
-      const cookieValue = diracV107Hmac('xss-cookie|' + String(now) + '|' + String(Math.random())).slice(0, 64);
+      const cookieValue = diracV107Hmac('xss-cookie|' + String(now) + '|' + crypto.randomBytes(18).toString('base64url')).slice(0, 64);
       const maxAge = Math.max(60, Math.min(Math.floor((blockedUntilMs - now) / 1000), 2147483647));
       res.setHeader('Set-Cookie', 'dirac_global_hard_ban=' + cookieValue + '; Path=/; Max-Age=' + maxAge + '; HttpOnly; Secure; SameSite=Lax');
       keys.push(...diracV107KeysForValue('cookie', 'cookie|' + cookieValue));
@@ -29095,8 +29138,8 @@ const DIRAC_SECURITY_REPORT_ACTION_V186 = 'security_report';
 const DIRAC_SECURITY_REPORT_CALLER_V186 = 'vercel2-security-report-v186';
 
 const DIRAC_CENTRAL_ACTIVE_ACTIONS_V146 = new Set([
-  ...DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157,
-  ...DIRAC_CENTRAL_SERVER2_RECOVERY_LINK_ACTIONS_V165,
+  // Recovery actions are active only when explicitly selected by the
+  // Vercel 2 ENV allowlist and present in the immutable compiled policy.
   ...[...DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174].filter((action) => DIRAC_CENTRAL_COMPILED_VERCEL2_ACTIONS_V188.has(action)),
   DIRAC_SECURITY_REPORT_ACTION_V186
 ]);
@@ -29520,7 +29563,7 @@ async function diracCentralSecurityGuardV146(req, res, nextHandler) {
     }
     diracCentralStampV146(ctx, 'contract_checked');
 
-    const a2fSignature = diracCentralA2FRequestSignatureGuardV148(req, ctx);
+    const a2fSignature = await diracCentralA2FRequestSignatureGuardV148(req, ctx);
     if (!a2fSignature.ok) return await diracCentralBanAndBlockV146(req, res, ctx, action, method, a2fSignature.reason);
     diracCentralStampV146(ctx, 'a2f_signature_checked');
 
@@ -30156,6 +30199,7 @@ function diracCentralVercel2RecoveryEnvPartitionGuardV183(action) {
     'DIRAC_RECOVERY_HPKE_PEPPER_KEY_ID',
     'DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB',
     'DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST',
+    'DIRAC_LOST_PASSKEY_ED25519_KEY_ID',
     'DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY',
     'DIRAC_LOST_PASSKEY_ED25519_PRIVATE_KEY_PEM',
     'DIRAC_LOST_PASSKEY_ED25519_PUBLIC_KEY_PEM',
@@ -30180,9 +30224,14 @@ function diracCentralVercel2RecoveryEnvPartitionGuardV183(action) {
     'DIRAC_LOST_PASSKEY_QUEUE_POLL_MS'
   ];
   const present = (name) => Boolean(String(process.env[name] || '').trim());
+  const unknownVercel2Actions = [...DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174]
+    .filter((item) => !DIRAC_CENTRAL_COMPILED_VERCEL2_ACTIONS_V188.has(item));
 
   if (diracCentralIsProductionV146() && role !== 'vercel1' && role !== 'vercel2') {
     return { ok: false, reason: 'deployment_role_required' };
+  }
+  if (unknownVercel2Actions.length) {
+    return { ok: false, reason: 'vercel2_env_allowlist_contains_unknown_action' };
   }
 
   if (role === 'vercel1') {
@@ -30620,6 +30669,34 @@ function diracCentralHtmlActionSignaturePayloadV180(req, ctx, parsed, requestBod
   };
 }
 
+async function diracCentralClaimHtmlActionNonceV194(nonceKey, usedUntilMs) {
+  const table = String(LOGIN_SECURITY_PERSIST_TABLE || '').trim();
+  if (!table) {
+    return diracCentralIsProductionV146()
+      ? { ok: false, reason: 'html_action_signature_nonce_storage_required' }
+      : { ok: true, persistent: false };
+  }
+  const securityKey = 'html-action-nonce-v194:' + String(nonceKey || '');
+  const now = Date.now();
+  const claimed = await supabaseFetch('/rest/v1/' + encodeURIComponent(table) + '?on_conflict=security_key', {
+    method: 'POST',
+    auth: 'service',
+    prefer: 'resolution=ignore-duplicates,return=representation',
+    body: [{
+      security_key: securityKey,
+      record_json: { type: 'html_action_nonce_v194', nonce_hash: String(nonceKey || ''), used_until_ms: usedUntilMs },
+      blocked_until_ms: usedUntilMs,
+      updated_at: new Date(now).toISOString(),
+      expires_at: new Date(usedUntilMs + 24 * 60 * 60 * 1000).toISOString()
+    }]
+  }).catch(() => null);
+  if (!claimed || !claimed.ok) return { ok: false, reason: 'html_action_signature_nonce_storage_failed' };
+  if (!Array.isArray(claimed.data) || !claimed.data.some((row) => String(row && row.security_key || '') === securityKey)) {
+    return { ok: false, reason: 'html_action_signature_replay' };
+  }
+  return { ok: true, persistent: true };
+}
+
 async function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
   if (!ctx || ctx.classification !== 'recovery_link') return { ok: true, source: 'not_recovery_link' };
   if (ctx.action !== DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) return { ok: false, reason: 'html_action_signature_action_invalid' };
@@ -30705,6 +30782,11 @@ async function diracCentralHtmlActionSignatureGuardV178(req, ctx) {
     return { ok: false, reason: 'html_action_signature_replay' };
   }
   DIRAC_CENTRAL_HTML_ACTION_SIGNATURE_NONCES_V178.set(nonceKey, now + 120000);
+  const durableNonce = await diracCentralClaimHtmlActionNonceV194(nonceKey, now + 120000);
+  if (!durableNonce.ok) {
+    DIRAC_CENTRAL_HTML_ACTION_SIGNATURE_NONCES_V178.delete(nonceKey);
+    return durableNonce;
+  }
   req.__diracHtmlActionSignatureVerifiedV178 = true;
   return { ok: true, source: 'html_action_signature_v180' };
 }
@@ -30967,7 +31049,7 @@ function diracCentralDecodeA2FTicketV148(ticket) {
   }
 }
 
-function diracCentralConsumeA2FNonceV148(jti, exp) {
+async function diracCentralConsumeA2FNonceV148(jti, exp) {
   const clean = String(jti || '').trim();
   const now = Math.floor(Date.now() / 1000);
   if (!clean || !/^[a-zA-Z0-9_-]{16,160}$/.test(clean)) return { ok: false, reason: 'a2f_signature_nonce_invalid' };
@@ -30975,7 +31057,30 @@ function diracCentralConsumeA2FNonceV148(jti, exp) {
     if (Number(until || 0) <= now) DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148.delete(key);
   }
   if (DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148.has(clean)) return { ok: false, reason: 'a2f_signature_replay' };
-  DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148.set(clean, Math.max(now + 60, Number(exp || 0)));
+  const usedUntil = Math.max(now + 60, Number(exp || 0));
+  const table = String(LOGIN_SECURITY_PERSIST_TABLE || '').trim();
+  if (table) {
+    const securityKey = 'central-a2f-nonce-v194:' + crypto.createHash('sha256').update(clean).digest('hex');
+    const claimed = await supabaseFetch(`/rest/v1/${encodeURIComponent(table)}?on_conflict=security_key`, {
+      method: 'POST',
+      auth: 'service',
+      prefer: 'resolution=ignore-duplicates,return=representation',
+      body: [{
+        security_key: securityKey,
+        record_json: { type: 'central_a2f_nonce_v194', nonce_hash: crypto.createHash('sha256').update(clean).digest('hex'), used_until: usedUntil },
+        blocked_until_ms: usedUntil * 1000,
+        updated_at: new Date(now * 1000).toISOString(),
+        expires_at: new Date((usedUntil + 86400) * 1000).toISOString()
+      }]
+    }).catch(() => null);
+    if (!claimed || !claimed.ok) return { ok: false, reason: 'a2f_signature_nonce_storage_failed' };
+    if (!Array.isArray(claimed.data) || !claimed.data.some((row) => String(row && row.security_key || '') === securityKey)) {
+      return { ok: false, reason: 'a2f_signature_replay' };
+    }
+  } else if (diracCentralIsProductionV146()) {
+    return { ok: false, reason: 'a2f_signature_nonce_storage_required' };
+  }
+  DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148.set(clean, usedUntil);
   if (DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148.size > 5000) {
     for (const key of DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148.keys()) {
       DIRAC_CENTRAL_A2F_SIGNATURE_NONCES_V148.delete(key);
@@ -30985,7 +31090,7 @@ function diracCentralConsumeA2FNonceV148(jti, exp) {
   return { ok: true };
 }
 
-function diracCentralA2FRequestSignatureGuardV148(req, ctx) {
+async function diracCentralA2FRequestSignatureGuardV148(req, ctx) {
   if (!ctx || !ctx.isA2FAction) return { ok: true, source: 'not_a2f' };
   try { diracCentralRootSecretV146(); } catch (_) { return { ok: false, reason: 'a2f_signature_root_secret_invalid' }; }
   const headers = req && req.headers || {};
@@ -31013,7 +31118,7 @@ function diracCentralA2FRequestSignatureGuardV148(req, ctx) {
     if (!safeEqual(expectedSignature, signature)) return { ok: false, reason: 'a2f_signature_invalid' };
   } else if (expectedSignature !== signature) return { ok: false, reason: 'a2f_signature_invalid' };
 
-  const nonce = diracCentralConsumeA2FNonceV148(expectedPayload.jti, expectedPayload.exp);
+  const nonce = await diracCentralConsumeA2FNonceV148(expectedPayload.jti, expectedPayload.exp);
   if (!nonce.ok) return nonce;
   return { ok: true, source: 'a2f_request_signature_v148' };
 }
@@ -31147,6 +31252,63 @@ function diracCentralPublicReadGuardV146(req, ctx) {
   return { ok: true };
 }
 
+async function diracCentralAtomicRateIncrementV194(key, windowMs) {
+  const table = String(LOGIN_SECURITY_PERSIST_TABLE || '').trim();
+  if (!table || !key) return { ok: false, reason: 'distributed_rate_limit_storage_required' };
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const now = Date.now();
+    const read = await supabaseFetch(`/rest/v1/${encodeURIComponent(table)}?select=record_json&security_key=eq.${encodeURIComponent(key)}&limit=1`, {
+      method: 'GET',
+      auth: 'service'
+    });
+    if (!read.ok) return { ok: false, reason: 'distributed_rate_limit_read_failed' };
+    const rows = Array.isArray(read.data) ? read.data : [];
+    if (!rows.length) {
+      const record = { count: 1, resetAtMs: now + windowMs };
+      const created = await supabaseFetch(`/rest/v1/${encodeURIComponent(table)}?on_conflict=security_key`, {
+        method: 'POST',
+        auth: 'service',
+        prefer: 'resolution=ignore-duplicates,return=representation',
+        body: [{
+          security_key: key,
+          record_json: record,
+          blocked_until_ms: 0,
+          updated_at: new Date(now).toISOString(),
+          expires_at: new Date(now + windowMs + 60_000).toISOString()
+        }]
+      });
+      if (!created.ok) return { ok: false, reason: 'distributed_rate_limit_create_failed' };
+      if (Array.isArray(created.data) && created.data.length === 1) return { ok: true, count: 1 };
+      continue;
+    }
+    const current = rows[0] && rows[0].record_json && typeof rows[0].record_json === 'object'
+      ? rows[0].record_json
+      : {};
+    const rawCount = current.count;
+    const rawReset = current.resetAtMs;
+    const oldCount = Math.max(0, Number(rawCount || 0));
+    const oldReset = Number(rawReset || 0);
+    const expired = !Number.isFinite(oldReset) || oldReset <= now;
+    const next = { count: expired ? 1 : oldCount + 1, resetAtMs: expired ? now + windowMs : oldReset };
+    const countFilter = rawCount === undefined || rawCount === null ? 'is.null' : 'eq.' + encodeURIComponent(String(rawCount));
+    const resetFilter = rawReset === undefined || rawReset === null ? 'is.null' : 'eq.' + encodeURIComponent(String(rawReset));
+    const updated = await supabaseFetch(`/rest/v1/${encodeURIComponent(table)}?security_key=eq.${encodeURIComponent(key)}`
+      + `&record_json->>count=${countFilter}&record_json->>resetAtMs=${resetFilter}`, {
+      method: 'PATCH',
+      auth: 'service',
+      prefer: 'return=representation',
+      body: {
+        record_json: next,
+        updated_at: new Date(now).toISOString(),
+        expires_at: new Date(next.resetAtMs + 60_000).toISOString()
+      }
+    });
+    if (!updated.ok) return { ok: false, reason: 'distributed_rate_limit_update_failed' };
+    if (Array.isArray(updated.data) && updated.data.length === 1) return { ok: true, count: next.count };
+  }
+  return { ok: false, reason: 'distributed_rate_limit_contention' };
+}
+
 async function diracCentralDistributedRateLimitGuardV146(req, ctx) {
   const action = String(ctx && ctx.action || '');
   const method = String(ctx && ctx.method || '').toUpperCase();
@@ -31162,13 +31324,9 @@ async function diracCentralDistributedRateLimitGuardV146(req, ctx) {
   const max = diracCentralDistributedRateLimitMaxV146(action);
   const now = Date.now();
   const key = 'central-rate:' + diracCentralHashV146([ctx.identity.key, action, Math.floor(now / windowMs)].join('|'));
-  let row = await readPersistentSecurityJson(key).catch(() => null);
-  row = row && typeof row === 'object' ? row : { count: 0, resetAtMs: now + windowMs };
-  if (Number(row.resetAtMs || 0) <= now) row = { count: 0, resetAtMs: now + windowMs };
-  row.count = Number(row.count || 0) + 1;
-  const wrote = await writePersistentSecurityJson(key, row, 0, Math.ceil(windowMs / 1000) + 60).catch(() => false);
-  if (!wrote && diracCentralIsProductionV146()) return { ok: false, reason: 'distributed_rate_limit_write_failed' };
-  if (row.count > max) return { ok: false, reason: 'distributed_rate_limit' };
+  const increment = await diracCentralAtomicRateIncrementV194(key, windowMs).catch(() => ({ ok: false, reason: 'distributed_rate_limit_storage_error' }));
+  if (!increment.ok) return diracCentralIsProductionV146() ? increment : { ok: true };
+  if (increment.count > max) return { ok: false, reason: 'distributed_rate_limit' };
   return { ok: true };
 }
 
@@ -32265,7 +32423,7 @@ function diracCentralCircuitBreakerV146(req, ctx, event) {
 }
 
 function diracCentralConfirmedAttackReasonV185(reason) {
-  return /(?:sql|xss|scanner|command|rce|ssrf|path_traversal|lfi|rfi|prototype|nosql|xxe|ssti|log4shell|crlf|smuggling|webshell|secret_file|oauth_token|graphql|jwt|bola|idor|signature_invalid|signature_missing|nonce_replay|service_role|egress_|private_or_metadata|action_shadow|action_foreign|html_security_report)/i.test(String(reason || ''));
+  return /(?:sql|xss|scanner|command|rce|ssrf|path_traversal|lfi|rfi|prototype|nosql|xxe|ssti|log4shell|crlf|smuggling|webshell|secret_file|oauth_token|graphql|jwt|bola|idor|signature_invalid|signature_missing|signature_replay|proof_replay|challenge_replay|nonce_replay|service_role|egress_|private_or_metadata|action_shadow|action_foreign|html_security_report)/i.test(String(reason || ''));
 }
 
 function diracCentralBlockDurationV185(reason) {
@@ -32531,7 +32689,8 @@ function diracCentralNormalizeOriginV146(value) {
 
 function diracCentralRequestSessionHashV146(req) {
   const cookies = typeof parseCookies === 'function' ? parseCookies(req) : {};
-  return diracCentralHashV146([cookies[ACCESS_COOKIE], cookies[DOMAIN_SIGNED_SESSION_COOKIE], cookies.sb_access_token].filter(Boolean).join('|'));
+  const material = [cookies[ACCESS_COOKIE], cookies[DOMAIN_SIGNED_SESSION_COOKIE], cookies.sb_access_token].filter(Boolean).join('|');
+  return material ? diracCentralHashV146(material) : '';
 }
 
 function diracCentralExtractValuesV146(value) {
@@ -32868,7 +33027,9 @@ globalThis.__DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187__ = DIRAC_RECOVERY_HPKE_ARGON2
 
 CUSTOMER_SECURITY_GUARDED_ACTIONS.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
 DIRAC_CENTRAL_SERVER2_RECOVERY_ACTIONS_V157.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
-DIRAC_CENTRAL_ACTIVE_ACTIONS_V146.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
+if (DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.has(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159)) {
+  DIRAC_CENTRAL_ACTIVE_ACTIONS_V146.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
+}
 DIRAC_CENTRAL_KNOWN_ACTION_INPUTS_V146.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
 
 const __diracRecoveryHpkePreviousContractV159 = diracCentralContractForActionV146;
@@ -34188,12 +34349,6 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
     });
     recoveryCode = String(recovered.recovery_code || '');
 
-    // Claim only after the envelope, signatures, bundle binding, wrapped DEK,
-    // and AES-GCM payload have all authenticated successfully. This keeps
-    // malformed traffic from consuming durable replay rows while preserving
-    // first-valid-request-wins atomicity before any server-1 proof is sent.
-    await DIRAC_RECOVERY_CRYPTO_V2.atomicClaim(supabaseFetch, body, bundle, row);
-
     const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
     if (!vaultSecrets.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail(String(vaultSecrets.code || 'RECOVERY_VAULT_SECRET_INVALID'));
     const argon2Policy = diracRecoveryHpkeArgon2PolicyV159(row.recovery_code_hash, env.minimumMemory, env.minimumTime);
@@ -34241,6 +34396,12 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
         message: failed.locked ? 'Recovery request dikunci.' : 'Kode pemulihan tidak valid.'
       });
     }
+
+    // Claim after every authenticated envelope, binding, queue/lease, and
+    // Argon2id code check succeeds, but before any proof reaches Server 1.
+    // A transient busy response therefore cannot consume a valid request,
+    // while concurrent valid replays still have exactly one atomic winner.
+    await DIRAC_RECOVERY_CRYPTO_V2.atomicClaim(supabaseFetch, body, bundle, row);
 
     const proofBody = diracRecoveryHpkeProofBodyV159(env, row);
     const server1 = await diracRecoveryHpkeSendProofV159(env, proofBody);
