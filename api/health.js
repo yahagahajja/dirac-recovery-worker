@@ -11455,10 +11455,6 @@ async function diracRecoveryWorkerGuardV201(req, res, ctx, body, identityKey) {
   if (!expected || !safeEqual(signature, expected)) {
     return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_hmac_invalid', 403, identityKey);
   }
-  const persistentNonce = await diracCentralRecoveryWorkerClaimNonceV183(caller, body.nonce, Date.now() + customerSecurityRecoveryWorkerClockSkewMs() + 60000);
-  if (!persistentNonce || persistentNonce.ok !== true) {
-    return diracRecoveryGuardRejectV201(req, res, ctx.action, String(persistentNonce && persistentNonce.reason || 'worker_nonce_replay'), 409, identityKey);
-  }
   let transportContext;
   try {
     transportContext = customerSecurityRecoveryWorkerOpenV190(body, caller, timestampText);
@@ -11471,6 +11467,26 @@ async function diracRecoveryWorkerGuardV201(req, res, ctx, body, identityKey) {
   } catch (error) {
     if (transportContext && transportContext.responseKey) transportContext.responseKey.fill(0);
     return diracRecoveryGuardRejectV201(req, res, ctx.action, String(error && error.code || 'worker_transport_invalid'), 403, identityKey);
+  }
+
+  // The transport is authenticated before the replay claim so every response to
+  // a valid encrypted Server 1 envelope, including a replay rejection, remains
+  // encrypted with the request-bound response key. The replay guard itself is
+  // still mandatory and executes before any recovery business handler.
+  const persistentNonce = await diracCentralRecoveryWorkerClaimNonceV183(
+    caller,
+    body.nonce,
+    Date.now() + customerSecurityRecoveryWorkerClockSkewMs() + 60000
+  );
+  if (!persistentNonce || persistentNonce.ok !== true) {
+    return diracRecoveryGuardRejectV201(
+      req,
+      res,
+      ctx.action,
+      String(persistentNonce && persistentNonce.reason || 'worker_nonce_replay'),
+      409,
+      identityKey
+    );
   }
   return null;
 }
@@ -11548,15 +11564,25 @@ module.exports = async function diracRecoveryOnlyServer2HandlerV201(req, res) {
   const action = rawAction.trim().toLowerCase();
   diracRecoveryApplyHeadersV201(req, res, action);
 
+  const isRecoveryWorkerAction = action === DIRAC_RECOVERY_WORKER_ACTION;
   let identity;
-  try { identity = await diracRecoveryCheckBanV201(req, /^[a-z0-9_-]{1,80}$/.test(action) ? action : 'invalid_action'); }
-  catch (_) { return res.status(503).json({ ok: false, code: 'RECOVERY_GUARD_UNAVAILABLE', message: 'Sistem keamanan belum tersedia.' }); }
-  if (!identity.ok) {
-    return res.status(identity.persistenceUnavailable ? 503 : 403).json({
-      ok: false,
-      code: identity.persistenceUnavailable ? 'RECOVERY_GUARD_PERSISTENCE_UNAVAILABLE' : 'RECOVERY_PERSISTENT_BAN_ACTIVE',
-      message: 'Permintaan ditolak oleh sistem keamanan.'
-    });
+  if (isRecoveryWorkerAction) {
+    // For the authenticated Server 1 channel, defer only the ban lookup until
+    // the hybrid envelope has been authenticated and the encrypted response
+    // guard is installed. The persistent-ban decision remains mandatory and
+    // still runs before the business handler.
+    try { identity = { ok: true, key: diracRecoveryIdentityV201(req, action), deferredWorkerBan: true }; }
+    catch (_) { return res.status(503).json({ ok: false, code: 'RECOVERY_GUARD_UNAVAILABLE', message: 'Sistem keamanan belum tersedia.' }); }
+  } else {
+    try { identity = await diracRecoveryCheckBanV201(req, /^[a-z0-9_-]{1,80}$/.test(action) ? action : 'invalid_action'); }
+    catch (_) { return res.status(503).json({ ok: false, code: 'RECOVERY_GUARD_UNAVAILABLE', message: 'Sistem keamanan belum tersedia.' }); }
+    if (!identity.ok) {
+      return res.status(identity.persistenceUnavailable ? 503 : 403).json({
+        ok: false,
+        code: identity.persistenceUnavailable ? 'RECOVERY_GUARD_PERSISTENCE_UNAVAILABLE' : 'RECOVERY_PERSISTENT_BAN_ACTIVE',
+        message: 'Permintaan ditolak oleh sistem keamanan.'
+      });
+    }
   }
   if (!rawAction || rawAction !== action || !/^[a-z0-9_-]{1,80}$/.test(action)) {
     return diracRecoveryGuardRejectV201(req, res, 'invalid_action', 'action_format_invalid', 403, identity.key);
@@ -11588,7 +11614,7 @@ module.exports = async function diracRecoveryOnlyServer2HandlerV201(req, res) {
     classification: action === DIRAC_RECOVERY_WORKER_ACTION ? 'server' : 'browser',
     body,
     guardPassport: {
-      persistent_ban_checked: true,
+      persistent_ban_checked: !isRecoveryWorkerAction,
       action_format_checked: true,
       whitelist_checked: true,
       deployment_role_checked: deploymentRoleChecked,
@@ -11610,6 +11636,30 @@ module.exports = async function diracRecoveryOnlyServer2HandlerV201(req, res) {
           ? await diracRecoveryLinkOpenGuardV202(req, res, ctx, body, identity.key)
           : await diracRecoveryBrowserGuardV201(req, res, ctx, body, identity.key);
     if (guardResponse) return guardResponse;
+
+    if (isRecoveryWorkerAction && identity && identity.deferredWorkerBan === true) {
+      let checkedIdentity;
+      try { checkedIdentity = await diracRecoveryCheckBanV201(req, action); }
+      catch (_) {
+        return res.status(503).json({
+          ok: false,
+          code: 'RECOVERY_GUARD_UNAVAILABLE',
+          message: 'Sistem keamanan belum tersedia.'
+        });
+      }
+      if (!checkedIdentity.ok) {
+        return res.status(checkedIdentity.persistenceUnavailable ? 503 : 403).json({
+          ok: false,
+          code: checkedIdentity.persistenceUnavailable
+            ? 'RECOVERY_GUARD_PERSISTENCE_UNAVAILABLE'
+            : 'RECOVERY_PERSISTENT_BAN_ACTIVE',
+          message: 'Permintaan ditolak oleh sistem keamanan.'
+        });
+      }
+      identity = checkedIdentity;
+      ctx.guardPassport.persistent_ban_checked = true;
+    }
+
     ctx.guardPassport.action_guard_checked = true;
     ctx.guardPassport.integrity_checked = Object.entries(ctx.guardPassport)
       .filter(([key]) => key.endsWith('_checked') && key !== 'integrity_checked')
