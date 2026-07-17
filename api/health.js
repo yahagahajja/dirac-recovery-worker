@@ -11147,10 +11147,6 @@ function diracRecoveryAssertServer2EnvironmentV201() {
     diracCentralRootSecretV146();
     const workerSecret = customerSecurityRecoveryWorkerSecret();
     if (!workerSecret) throw new Error('DIRAC_SERVER2_WORKER_SECRET_REQUIRED');
-    const server1AutomationBypass = String(process.env.DIRAC_RECOVERY_SERVER1_AUTOMATION_BYPASS_SECRET || '').trim();
-    if (!/^[A-Za-z0-9._~-]{32,512}$/.test(server1AutomationBypass)) {
-      throw new Error('DIRAC_SERVER2_SERVER1_AUTOMATION_BYPASS_REQUIRED');
-    }
     const explicitPepper = String(process.env.DIRAC_LOST_PASSKEY_DB_PEPPER || '').normalize('NFC');
     if (Buffer.byteLength(explicitPepper, 'utf8') < LOST_PASSKEY_DB_PEPPER_MIN_BYTES_V157) {
       throw new Error('DIRAC_SERVER2_DB_PEPPER_REQUIRED');
