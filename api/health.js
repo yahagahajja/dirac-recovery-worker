@@ -10619,6 +10619,10 @@ const DIRAC_RECOVERY_ONLY_SERVER2_V201 = 'dirac-recovery-only-server2-v201';
 const DIRAC_RECOVERY_WORKER_AUTH_CONTEXT_V201 = 'dirac-recovery-worker-auth-v201';
 const DIRAC_RECOVERY_WORKER_DEFAULT_PATH_V201 = '/api/health';
 const DIRAC_RECOVERY_BROWSER_ORIGIN_V201 = 'https://secure.diracgroup.store';
+const DIRAC_RECOVERY_PAGE_NONCE_HEADER_V203 = 'X-Dirac-Page-Nonce';
+const DIRAC_RECOVERY_PAGE_NONCE_TYPE_V203 = 'dirac-recovery-page-nonce-v203';
+const DIRAC_RECOVERY_PAGE_NONCE_MAX_AGE_MS_V203 = 120_000;
+const DIRAC_RECOVERY_PAGE_NONCE_CLOCK_SKEW_MS_V203 = 30_000;
 const DIRAC_RECOVERY_PERMANENT_BAN_MS_V201 = 100 * 365 * 24 * 60 * 60 * 1000;
 const DIRAC_RECOVERY_CONTEXT_STACK_V201 = [];
 const DIRAC_RECOVERY_MEMORY_BANS_V201 = globalThis.__DIRAC_RECOVERY_MEMORY_BANS_V201__ || new Map();
@@ -10663,6 +10667,105 @@ function diracRecoveryHeaderV201(req, name) {
   const lower = String(name || '').toLowerCase();
   const value = headers[lower] !== undefined ? headers[lower] : headers[name];
   return Array.isArray(value) ? String(value[0] || '').trim() : String(value || '').trim();
+}
+
+function diracRecoveryPageNonceCsrfV203(req) {
+  return diracRecoveryHeaderV201(req, 'x-dirac-csrf-token')
+    || diracRecoveryHeaderV201(req, 'x-csrf-token');
+}
+
+function diracRecoveryPageNonceIssueV203(res, action, csrfToken) {
+  const csrf = String(csrfToken || '').trim();
+  if (!csrf || !res || typeof res.setHeader !== 'function') return '';
+  const now = Date.now();
+  const payload = {
+    typ: DIRAC_RECOVERY_PAGE_NONCE_TYPE_V203,
+    action: String(action || ''),
+    guard: DIRAC_CENTRAL_SECURITY_GUARD_V146,
+    iat_ms: now,
+    exp_ms: now + DIRAC_RECOVERY_PAGE_NONCE_MAX_AGE_MS_V203,
+    nonce: crypto.randomBytes(24).toString('base64url'),
+    csrf_sha512: crypto.createHash('sha512').update('csrf|' + csrf, 'utf8').digest('base64url'),
+    origin_sha512: crypto.createHash('sha512').update('origin|' + DIRAC_RECOVERY_BROWSER_ORIGIN_V201, 'utf8').digest('base64url')
+  };
+  const body = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  let secret;
+  try {
+    secret = Buffer.from(diracCentralDeriveSecretV146('recovery-page-nonce-v203'));
+    if (secret.length !== 64) return '';
+    const signature = crypto.createHmac('sha512', secret).update(body, 'ascii').digest('base64url');
+    const token = body + '.' + signature;
+    res.setHeader(DIRAC_RECOVERY_PAGE_NONCE_HEADER_V203, token);
+    return token;
+  } catch (_) {
+    return '';
+  } finally {
+    if (Buffer.isBuffer(secret)) secret.fill(0);
+  }
+}
+
+function diracRecoveryPageNonceVerifyV203(req, action) {
+  const csrf = diracRecoveryPageNonceCsrfV203(req);
+  const token = diracRecoveryHeaderV201(req, 'x-dirac-page-nonce');
+  if (!csrf) return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_CSRF_MISSING' };
+  if (!token) return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_MISSING' };
+  if (token.length > 4096) return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_FORMAT_INVALID' };
+  const parts = token.split('.');
+  if (parts.length !== 2 || !/^[A-Za-z0-9_-]+$/.test(parts[0]) || !/^[A-Za-z0-9_-]{86}$/.test(parts[1])) {
+    return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_FORMAT_INVALID' };
+  }
+  let secret;
+  try {
+    secret = Buffer.from(diracCentralDeriveSecretV146('recovery-page-nonce-v203'));
+    if (secret.length !== 64) return { ok: false, status: 503, code: 'RECOVERY_PAGE_NONCE_SECRET_INVALID' };
+    const expectedSignature = crypto.createHmac('sha512', secret).update(parts[0], 'ascii').digest('base64url');
+    if (!safeEqual(parts[1], expectedSignature)) return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_SIGNATURE_INVALID' };
+
+    const decodedBytes = Buffer.from(parts[0], 'base64url');
+    if (!decodedBytes.length || decodedBytes.length > 2048 || decodedBytes.toString('base64url') !== parts[0]) {
+      decodedBytes.fill(0);
+      return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_FORMAT_INVALID' };
+    }
+    let payload;
+    try { payload = JSON.parse(decodedBytes.toString('utf8')); }
+    finally { decodedBytes.fill(0); }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_PAYLOAD_INVALID' };
+    }
+    const keys = Object.keys(payload).sort();
+    const expectedKeys = ['action', 'csrf_sha512', 'exp_ms', 'guard', 'iat_ms', 'nonce', 'origin_sha512', 'typ'];
+    if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) {
+      return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_FIELDS_INVALID' };
+    }
+    const now = Date.now();
+    const issuedAt = Number(payload.iat_ms);
+    const expiresAt = Number(payload.exp_ms);
+    if (payload.typ !== DIRAC_RECOVERY_PAGE_NONCE_TYPE_V203
+        || payload.action !== String(action || '')
+        || payload.guard !== DIRAC_CENTRAL_SECURITY_GUARD_V146
+        || !Number.isSafeInteger(issuedAt)
+        || !Number.isSafeInteger(expiresAt)
+        || expiresAt <= issuedAt
+        || expiresAt - issuedAt !== DIRAC_RECOVERY_PAGE_NONCE_MAX_AGE_MS_V203
+        || issuedAt > now + DIRAC_RECOVERY_PAGE_NONCE_CLOCK_SKEW_MS_V203
+        || expiresAt + DIRAC_RECOVERY_PAGE_NONCE_CLOCK_SKEW_MS_V203 < now
+        || !/^[A-Za-z0-9_-]{32}$/.test(String(payload.nonce || ''))) {
+      return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_POLICY_INVALID' };
+    }
+    const expectedCsrfHash = crypto.createHash('sha512').update('csrf|' + csrf, 'utf8').digest('base64url');
+    const expectedOriginHash = crypto.createHash('sha512').update('origin|' + DIRAC_RECOVERY_BROWSER_ORIGIN_V201, 'utf8').digest('base64url');
+    if (!safeEqual(payload.csrf_sha512, expectedCsrfHash)) {
+      return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_CSRF_BINDING_INVALID' };
+    }
+    if (!safeEqual(payload.origin_sha512, expectedOriginHash)) {
+      return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_ORIGIN_BINDING_INVALID' };
+    }
+    return { ok: true, source: 'central_guard_bootstrap_page_nonce_v203' };
+  } catch (_) {
+    return { ok: false, status: 403, code: 'RECOVERY_PAGE_NONCE_INVALID' };
+  } finally {
+    if (Buffer.isBuffer(secret)) secret.fill(0);
+  }
 }
 
 function diracRecoveryValidatePlainObjectV201(value, depth = 0, budget = { keys: 0, bytes: 0 }) {
@@ -10890,7 +10993,7 @@ function diracRecoveryApplyHeadersV201(req, res, action) {
         'Access-Control-Allow-Headers',
         'Content-Type, Accept, X-Dirac-CSRF-Token, X-CSRF-Token, X-Dirac-Page-Nonce, X-Idempotency-Key, X-Dirac-Html-Signature-Version, X-Dirac-Html-Signature-Timestamp, X-Dirac-Html-Signature-Nonce, X-Dirac-Html-Signature'
       );
-      res.setHeader('Access-Control-Expose-Headers', 'X-Dirac-CSRF-Token, X-Dirac-CSRF-Ready, X-Dirac-Central-Security-Guard');
+      res.setHeader('Access-Control-Expose-Headers', 'X-Dirac-CSRF-Token, X-Dirac-CSRF-Ready, X-Dirac-Page-Nonce, X-Dirac-Central-Security-Guard');
       res.setHeader('Access-Control-Max-Age', '300');
     }
   }
@@ -11330,6 +11433,10 @@ async function diracRecoveryBrowserGuardV201(req, res, ctx, body, identityKey) {
   if (!csrf || csrf.ok !== true) {
     return diracRecoveryGuardRejectV201(req, res, ctx.action, String(csrf && csrf.code || 'csrf_guard_failed'), Number(csrf && csrf.status || 403), identityKey);
   }
+  const pageNonce = diracRecoveryPageNonceVerifyV203(req, ctx.action);
+  if (!pageNonce || pageNonce.ok !== true) {
+    return diracRecoveryGuardRejectV201(req, res, ctx.action, String(pageNonce && pageNonce.code || 'recovery_page_nonce_invalid'), Number(pageNonce && pageNonce.status || 403), identityKey);
+  }
   try {
     const expectedHpkeKeyId = String(process.env.DIRAC_RECOVERY_HPKE_KEY_ID || '').trim();
     const expectedMlkemKeyId = String(process.env.DIRAC_RECOVERY_MLKEM1024_KEY_ID || '').trim();
@@ -11393,7 +11500,8 @@ module.exports = async function diracRecoveryOnlyServer2HandlerV201(req, res) {
     if (req.method === 'HEAD') {
       res.setHeader('X-Dirac-Central-Security-Guard', DIRAC_CENTRAL_SECURITY_GUARD_V146);
       const bootstrapToken = diracCsrfIssueToken(req, res, action);
-      if (!bootstrapToken) {
+      const pageNonce = bootstrapToken ? diracRecoveryPageNonceIssueV203(res, action, bootstrapToken) : '';
+      if (!bootstrapToken || !pageNonce) {
         return res.status(503).json({
           ok: false,
           code: 'CENTRAL_GUARD_BOOTSTRAP_TOKEN_UNAVAILABLE',
