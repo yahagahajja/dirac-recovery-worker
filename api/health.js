@@ -9906,6 +9906,7 @@ function diracRecoveryHpkeEnvGuardV159() {
   const keyId = diracRecoveryHpkeAsciiV159(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_KEY_ID'), 1, 80);
   const pepper = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_PEPPER');
   const server1Url = diracRecoveryHpkeServer1UrlV159();
+  const server1AutomationBypass = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_SERVER1_AUTOMATION_BYPASS_SECRET');
   const minimumMemory = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB', 1048576, 5242880);
   const minimumTime = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST', 4, 12);
   const server1OnlyEnv = [
@@ -9921,9 +9922,12 @@ function diracRecoveryHpkeEnvGuardV159() {
   if (!privateKey || !keyId) return { ok: false, reason: 'hpke_key_env_invalid' };
   if (Buffer.byteLength(pepper, 'utf8') < 64) return { ok: false, reason: 'hpke_pepper_invalid' };
   if (!server1Url) return { ok: false, reason: 'server1_url_invalid' };
+  if (!/^[A-Za-z0-9._~-]{32,512}$/.test(server1AutomationBypass)) {
+    return { ok: false, reason: 'server1_automation_bypass_invalid' };
+  }
   if (!minimumMemory || !minimumTime) return { ok: false, reason: 'argon2_policy_invalid' };
   try { diracRecoveryHpkePrivateKeyV159(); } catch (_) { return { ok: false, reason: 'hpke_private_key_invalid' }; }
-  return { ok: true, workerSecret, pepper, keyId, server1Url, minimumMemory, minimumTime };
+  return { ok: true, workerSecret, pepper, keyId, server1Url, server1AutomationBypass, minimumMemory, minimumTime };
 }
 
 /* source 33587-33601 */
@@ -9933,6 +9937,7 @@ function diracRecoveryHpkeServer1UrlV159() {
   try {
     const url = new URL(raw);
     if (url.protocol !== 'https:' || url.username || url.password || url.hash) return '';
+    if (url.origin !== 'https://diracgroup.store') return '';
     if (typeof diracCentralIsUnsafeHostV146 === 'function' && diracCentralIsUnsafeHostV146(url.hostname)) return '';
     if (url.pathname.replace(/\/+$/, '') !== '/api/health') return '';
     url.pathname = '/api/health';
@@ -10250,7 +10255,8 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
         'Referer': target.origin + '/',
         'X-Dirac-HPKE-Caller': caller,
         'X-Dirac-HPKE-Timestamp': timestamp,
-        'X-Dirac-HPKE-Signature': signature
+        'X-Dirac-HPKE-Signature': signature,
+        'x-vercel-protection-bypass': env.server1AutomationBypass
       },
       body: JSON.stringify(proofBody),
       redirect: 'error',
@@ -10259,6 +10265,9 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
 
     const contentType = String(response.headers && response.headers.get && response.headers.get('content-type') || '');
     const length = Number(response.headers && response.headers.get && response.headers.get('content-length') || 0);
+    const vercelMitigated = String(response.headers && response.headers.get && response.headers.get('x-vercel-mitigated') || '');
+    const retryAfter = String(response.headers && response.headers.get && response.headers.get('retry-after') || '');
+    const vercelId = String(response.headers && response.headers.get && response.headers.get('x-vercel-id') || '');
     diagnosticLog('server1_response_headers', {
       http_status: Number(response.status || 0),
       response_ok: Boolean(response.ok),
@@ -10270,7 +10279,12 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
         try { return new URL(response.url).pathname; } catch (_) { return ''; }
       })(),
       content_type: contentType.slice(0, 120),
-      content_length: Number.isFinite(length) ? length : 0
+      content_length: Number.isFinite(length) ? length : 0,
+      vercel_mitigated: vercelMitigated.slice(0, 80),
+      retry_after: retryAfter.slice(0, 40),
+      vercel_id_present: Boolean(vercelId),
+      automation_bypass_present: true,
+      automation_bypass_value_logged: false
     });
 
     if (Number.isFinite(length) && length > 64 * 1024) {
@@ -10345,9 +10359,13 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
         data = null;
       }
     } else {
-      encryptedProofResponseErrorCode = jsonParsed
-        ? 'RECOVERY_HPKE_ENCRYPTED_PROOF_RESPONSE_REQUIRED'
-        : 'RECOVERY_HPKE_PROOF_RESPONSE_JSON_INVALID';
+      encryptedProofResponseErrorCode = vercelMitigated
+        ? 'RECOVERY_SERVER1_VERCEL_MITIGATED'
+        : Number(response.status) === 429
+          ? 'RECOVERY_SERVER1_RATE_LIMITED'
+          : jsonParsed
+            ? 'RECOVERY_HPKE_ENCRYPTED_PROOF_RESPONSE_REQUIRED'
+            : 'RECOVERY_HPKE_PROOF_RESPONSE_JSON_INVALID';
       diagnosticLog('server1_encrypted_response_missing', {
         error_code: encryptedProofResponseErrorCode,
         json_parsed: jsonParsed,
@@ -10538,7 +10556,12 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
     const proofBody = diracRecoveryHpkeProofBodyV159(env, row);
     const server1 = await diracRecoveryHpkeSendProofV159(env, proofBody);
     if (!server1.ok) {
-      return res.status(server1.status >= 400 && server1.status <= 599 ? server1.status : 502).json({
+      const deliveryStatus = server1.status === 429
+        || server1.code === 'RECOVERY_SERVER1_VERCEL_MITIGATED'
+        || server1.code === 'RECOVERY_SERVER1_RATE_LIMITED'
+        ? 503
+        : (server1.status >= 400 && server1.status <= 599 ? server1.status : 502);
+      return res.status(deliveryStatus).json({
         ok: false,
         code: 'RECOVERY_PROOF_DELIVERY_FAILED',
         message: 'Bukti recovery belum dapat diproses oleh server utama.'
@@ -11124,6 +11147,10 @@ function diracRecoveryAssertServer2EnvironmentV201() {
     diracCentralRootSecretV146();
     const workerSecret = customerSecurityRecoveryWorkerSecret();
     if (!workerSecret) throw new Error('DIRAC_SERVER2_WORKER_SECRET_REQUIRED');
+    const server1AutomationBypass = String(process.env.DIRAC_RECOVERY_SERVER1_AUTOMATION_BYPASS_SECRET || '').trim();
+    if (!/^[A-Za-z0-9._~-]{32,512}$/.test(server1AutomationBypass)) {
+      throw new Error('DIRAC_SERVER2_SERVER1_AUTOMATION_BYPASS_REQUIRED');
+    }
     const explicitPepper = String(process.env.DIRAC_LOST_PASSKEY_DB_PEPPER || '').normalize('NFC');
     if (Buffer.byteLength(explicitPepper, 'utf8') < LOST_PASSKEY_DB_PEPPER_MIN_BYTES_V157) {
       throw new Error('DIRAC_SERVER2_DB_PEPPER_REQUIRED');
