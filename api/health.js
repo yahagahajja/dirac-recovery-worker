@@ -11294,16 +11294,30 @@ async function diracRecoveryWorkerGuardV201(req, res, ctx, body, identityKey) {
 }
 
 async function diracRecoveryBrowserGuardV201(req, res, ctx, body, identityKey) {
+  const method = String(req && req.method || '').toUpperCase();
   const origin = diracRecoveryHeaderV201(req, 'origin');
-  if (origin !== DIRAC_RECOVERY_BROWSER_ORIGIN_V201) {
+  const secFetchSite = diracRecoveryHeaderV201(req, 'sec-fetch-site').toLowerCase();
+  const forwardedHost = diracRecoveryHeaderV201(req, 'x-forwarded-host').split(',')[0].trim().toLowerCase();
+  const host = (forwardedHost || diracRecoveryHeaderV201(req, 'host').split(',')[0].trim()).toLowerCase();
+  const forwardedProto = diracRecoveryHeaderV201(req, 'x-forwarded-proto').split(',')[0].trim().toLowerCase();
+
+  const exactBrowserOrigin = origin === DIRAC_RECOVERY_BROWSER_ORIGIN_V201;
+  const exactHeadTarget = method !== 'HEAD'
+    || (secFetchSite === 'same-origin'
+      && host === 'secure.diracgroup.store'
+      && forwardedProto === 'https');
+  const exactSameOriginHead = method === 'HEAD'
+    && !origin
+    && exactHeadTarget;
+
+  if ((!exactBrowserOrigin && !exactSameOriginHead) || !exactHeadTarget) {
     return diracRecoveryGuardRejectV201(req, res, ctx.action, 'browser_origin_invalid', 403, identityKey);
   }
-  const secFetchSite = diracRecoveryHeaderV201(req, 'sec-fetch-site').toLowerCase();
   if (secFetchSite && !['same-origin', 'same-site'].includes(secFetchSite)) {
     return diracRecoveryGuardRejectV201(req, res, ctx.action, 'browser_fetch_site_invalid', 403, identityKey);
   }
-  if (req.method === 'HEAD') return res.status(204).end();
-  if (req.method !== 'POST') return diracRecoveryGuardRejectV201(req, res, ctx.action, 'browser_method_invalid', 405, identityKey);
+  if (method === 'HEAD') return null;
+  if (method !== 'POST') return diracRecoveryGuardRejectV201(req, res, ctx.action, 'browser_method_invalid', 405, identityKey);
   const contentType = diracRecoveryHeaderV201(req, 'content-type').toLowerCase();
   if (!contentType.startsWith('application/json')) {
     return diracRecoveryGuardRejectV201(req, res, ctx.action, 'browser_content_type_invalid', 415, identityKey);
@@ -11368,6 +11382,17 @@ module.exports = async function diracRecoveryOnlyServer2HandlerV201(req, res) {
     if (guardResponse) return guardResponse;
     ctx.guardPassport.integrity_checked = true;
     req.__diracCentralSecurityGuardPassedV146 = true;
+    if (req.method === 'HEAD') {
+      const bootstrapToken = diracCsrfIssueToken(req, res, action);
+      if (!bootstrapToken) {
+        return res.status(503).json({
+          ok: false,
+          code: 'CENTRAL_GUARD_BOOTSTRAP_TOKEN_UNAVAILABLE',
+          message: 'Token bootstrap keamanan belum tersedia.'
+        });
+      }
+      return res.status(204).end();
+    }
     if (action === DIRAC_RECOVERY_WORKER_ACTION) {
       return customerSecurityHandleRecoveryWorkerGenerate(req, res, action);
     }
