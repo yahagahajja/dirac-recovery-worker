@@ -10899,12 +10899,15 @@ function diracRecoveryIdentityV201(req, action) {
   const ip = diracCentralTrustedClientIpV183(req);
   const caller = diracRecoveryHeaderV201(req, 'x-dirac-worker-caller').slice(0, 80);
   const ua = diracRecoveryHeaderV201(req, 'user-agent').slice(0, 512);
-  const material = [String(action || ''), ip, caller, ua].join('|');
+  const cleanAction = String(action || '');
+  const hpkeVerifyNamespaceV203 = cleanAction === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159;
+  const material = [cleanAction, ip, caller, ua].join('|');
   let secret;
   try { secret = Buffer.from(diracCentralRootSecretV146()); } catch (_) { secret = Buffer.from(customerSecurityRecoveryWorkerSecret() || '', 'utf8'); }
   if (!Buffer.isBuffer(secret) || secret.length < 64) throw new Error('RECOVERY_BAN_SECRET_INVALID');
   try {
-    return 'central-ban-v201:' + crypto.createHmac('sha512', secret).update(material, 'utf8').digest('hex');
+    const namespace = hpkeVerifyNamespaceV203 ? 'central-ban-v203:' : 'central-ban-v201:';
+    return namespace + crypto.createHmac('sha512', secret).update(material, 'utf8').digest('hex');
   } finally {
     if (Buffer.isBuffer(secret)) secret.fill(0);
   }
