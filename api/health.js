@@ -187,8 +187,21 @@ function aesGcmDecrypt(key, nonce, ciphertext, tag, aad) {
 function parsePrivateKey(raw, expectedType) {
   const clean = String(raw || '').trim();
   if (!clean) throw fail('PRIVATE_KEY_MISSING');
-  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : Buffer.from(clean, 'base64');
-  const key = crypto.createPrivateKey(material);
+  let key;
+  if (clean.includes('-----BEGIN')) {
+    key = crypto.createPrivateKey(clean.replace(/\\n/g, '\n'));
+  } else {
+    if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(clean) || clean.length % 4 === 1) throw fail('PRIVATE_KEY_ENCODING_INVALID');
+    const encoding = /[-_]/.test(clean) ? 'base64url' : 'base64';
+    const der = Buffer.from(clean, encoding);
+    try {
+      const canonical = der.toString(encoding).replace(/=+$/g, '');
+      if (!der.length || canonical !== clean.replace(/=+$/g, '')) throw fail('PRIVATE_KEY_ENCODING_INVALID');
+      key = crypto.createPrivateKey({ key: der, format: 'der', type: 'pkcs8' });
+    } finally {
+      der.fill(0);
+    }
+  }
   if (expectedType && key.asymmetricKeyType !== expectedType) throw fail('PRIVATE_KEY_TYPE_INVALID');
   return key;
 }
@@ -196,8 +209,21 @@ function parsePrivateKey(raw, expectedType) {
 function parsePublicKey(raw, expectedType) {
   const clean = String(raw || '').trim();
   if (!clean) throw fail('PUBLIC_KEY_MISSING');
-  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : Buffer.from(clean, 'base64');
-  const key = crypto.createPublicKey(material);
+  let key;
+  if (clean.includes('-----BEGIN')) {
+    key = crypto.createPublicKey(clean.replace(/\\n/g, '\n'));
+  } else {
+    if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(clean) || clean.length % 4 === 1) throw fail('PUBLIC_KEY_ENCODING_INVALID');
+    const encoding = /[-_]/.test(clean) ? 'base64url' : 'base64';
+    const der = Buffer.from(clean, encoding);
+    try {
+      const canonical = der.toString(encoding).replace(/=+$/g, '');
+      if (!der.length || canonical !== clean.replace(/=+$/g, '')) throw fail('PUBLIC_KEY_ENCODING_INVALID');
+      key = crypto.createPublicKey({ key: der, format: 'der', type: 'spki' });
+    } finally {
+      der.fill(0);
+    }
+  }
   if (expectedType && key.asymmetricKeyType !== expectedType) throw fail('PUBLIC_KEY_TYPE_INVALID');
   return key;
 }
@@ -1288,9 +1314,16 @@ function getLoginSecurityIp(req) {
     }
   } catch (_) {}
   const headers = (req && req.headers) || {};
-  const vercelForwarded = String(headers['x-vercel-forwarded-for'] || '').split(',')[0].trim();
-  const forwarded = String(headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return vercelForwarded || forwarded || String(headers['x-real-ip'] || req.socket && req.socket.remoteAddress || '').trim() || 'unknown';
+  for (const candidate of [
+    headers['x-vercel-forwarded-for'],
+    headers['x-forwarded-for'],
+    headers['x-real-ip'],
+    req && req.socket && req.socket.remoteAddress
+  ]) {
+    const normalized = diracCentralNormalizeTrustedIpV185(candidate);
+    if (normalized) return normalized;
+  }
+  return 'unknown';
 }
 
 /* source 2091-2107 */
@@ -5257,9 +5290,7 @@ function diracV107KeysForValue(type, value) {
 
 /* source 19909-19913 */
 function diracV107Ip(req) {
-  const headers = (req && req.headers) || {};
-  const forwarded = String(headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return forwarded || String(headers['x-real-ip'] || (req && req.socket && req.socket.remoteAddress) || '').trim() || 'unknown';
+  return getLoginSecurityIp(req);
 }
 
 /* source 19915-19920 */
@@ -9747,8 +9778,16 @@ function diracCentralSecretV146() {
 
 /* source 33090-33093 */
 function diracCentralHashV146(value) {
-  try { return crypto.createHmac('sha256', diracCentralSecretV146()).update(String(value || '')).digest('hex'); } catch (_) {}
-  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+  const secret = diracCentralSecretV146();
+  if (!Buffer.isBuffer(secret) || secret.length < 64) {
+    const error = new Error('DIRAC_CENTRAL_HASH_KEY_INVALID');
+    error.code = 'DIRAC_CENTRAL_HASH_KEY_INVALID';
+    throw error;
+  }
+  return crypto.createHmac('sha512', secret)
+    .update('dirac-central-pseudonym-v204\n', 'utf8')
+    .update(String(value || ''), 'utf8')
+    .digest('hex');
 }
 
 /* source 33095-33106 */
@@ -10976,8 +11015,10 @@ function diracRecoveryApplyHeadersV201(req, res, action) {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
@@ -10999,44 +11040,72 @@ function diracRecoveryApplyHeadersV201(req, res, action) {
   }
 }
 
-function diracRecoveryIdentityV201(req, action) {
+function diracRecoveryIdentityKeysV204(req, action) {
   const ip = diracCentralTrustedClientIpV183(req);
   const caller = diracRecoveryHeaderV201(req, 'x-dirac-worker-caller').slice(0, 80);
   const ua = diracRecoveryHeaderV201(req, 'user-agent').slice(0, 512);
+  const origin = diracRecoveryHeaderV201(req, 'origin').slice(0, 256);
   const cleanAction = String(action || '');
-  const hpkeVerifyNamespaceV203 = cleanAction === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159;
-  const material = [cleanAction, ip, caller, ua].join('|');
-  let secret;
-  try { secret = Buffer.from(diracCentralRootSecretV146()); } catch (_) { secret = Buffer.from(customerSecurityRecoveryWorkerSecret() || '', 'utf8'); }
-  if (!Buffer.isBuffer(secret) || secret.length < 64) throw new Error('RECOVERY_BAN_SECRET_INVALID');
+  let sourceSecret;
+  try { sourceSecret = Buffer.from(diracCentralRootSecretV146(), 'utf8'); }
+  catch (_) { sourceSecret = Buffer.from(customerSecurityRecoveryWorkerSecret() || '', 'utf8'); }
+  if (!Buffer.isBuffer(sourceSecret) || sourceSecret.length < 64) throw new Error('RECOVERY_BAN_SECRET_INVALID');
+  const salt = crypto.createHash('sha512').update('dirac/recovery/ban/v204/key-separation', 'utf8').digest();
+  const banKey = Buffer.from(crypto.hkdfSync(
+    'sha512',
+    sourceSecret,
+    salt,
+    Buffer.from('dirac-recovery-persistent-ban-v204', 'utf8'),
+    64
+  ));
   try {
-    const namespace = hpkeVerifyNamespaceV203 ? 'central-ban-v203:' : 'central-ban-v201:';
-    return namespace + crypto.createHmac('sha512', secret).update(material, 'utf8').digest('hex');
+    const hmac = (namespace, material) => namespace + crypto.createHmac('sha512', banKey).update(material, 'utf8').digest('hex');
+    const globalMaterial = ['global', ip].join('|');
+    const deviceMaterial = ['device', ip, caller || 'browser', ua || 'missing-ua', origin || 'missing-origin'].join('|');
+    const legacyMaterial = [cleanAction, ip, caller, ua].join('|');
+    const legacyNamespace = cleanAction === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159 ? 'central-ban-v203:' : 'central-ban-v201:';
+    return Array.from(new Set([
+      hmac('central-ban-global-v204:', globalMaterial),
+      hmac('central-ban-device-v204:', deviceMaterial),
+      legacyNamespace + crypto.createHmac('sha512', sourceSecret).update(legacyMaterial, 'utf8').digest('hex')
+    ]));
   } finally {
-    if (Buffer.isBuffer(secret)) secret.fill(0);
+    sourceSecret.fill(0);
+    salt.fill(0);
+    banKey.fill(0);
   }
 }
 
+function diracRecoveryIdentityV201(req, action) {
+  return diracRecoveryIdentityKeysV204(req, action)[0];
+}
+
 async function diracRecoveryCheckBanV201(req, action) {
-  const key = diracRecoveryIdentityV201(req, action);
-  const memory = Number(DIRAC_RECOVERY_MEMORY_BANS_V201.get(key) || 0);
-  if (memory > Date.now()) return { ok: false, key, blockedUntilMs: memory };
-  const strict = await readPersistentSecurityJsonStrictV194(key);
-  if (!strict || strict.ok !== true) return { ok: false, key, persistenceUnavailable: true };
-  const blockedUntilMs = Number(strict.found && strict.record && strict.record.blocked_until_ms || 0);
-  if (blockedUntilMs > Date.now()) {
-    DIRAC_RECOVERY_MEMORY_BANS_V201.set(key, blockedUntilMs);
-    return { ok: false, key, blockedUntilMs };
+  const keys = diracRecoveryIdentityKeysV204(req, action);
+  const now = Date.now();
+  for (const key of keys) {
+    const memory = Number(DIRAC_RECOVERY_MEMORY_BANS_V201.get(key) || 0);
+    if (memory > now) return { ok: false, key: keys[0], keys, blockedUntilMs: memory };
   }
-  return { ok: true, key };
+  for (const key of keys) {
+    const strict = await readPersistentSecurityJsonStrictV194(key);
+    if (!strict || strict.ok !== true) return { ok: false, key: keys[0], keys, persistenceUnavailable: true };
+    const blockedUntilMs = Number(strict.found && strict.record && strict.record.blocked_until_ms || 0);
+    if (blockedUntilMs > now) {
+      for (const identityKey of keys) DIRAC_RECOVERY_MEMORY_BANS_V201.set(identityKey, blockedUntilMs);
+      return { ok: false, key: keys[0], keys, blockedUntilMs };
+    }
+  }
+  return { ok: true, key: keys[0], keys };
 }
 
 async function diracRecoveryPermanentBanV201(req, action, reason, identityKey) {
   const now = Date.now();
   const blockedUntilMs = now + DIRAC_RECOVERY_PERMANENT_BAN_MS_V201;
-  const key = identityKey || diracRecoveryIdentityV201(req, action);
+  const derivedKeys = diracRecoveryIdentityKeysV204(req, action);
+  const keys = Array.from(new Set([identityKey, ...derivedKeys].filter(Boolean)));
   const record = {
-    type: 'recovery_one_strike_persistent_ban_v201',
+    type: 'recovery_one_strike_persistent_ban_v204',
     risk: 'critical',
     action: String(action || '').slice(0, 100),
     method: String(req && req.method || '').slice(0, 20),
@@ -11045,9 +11114,19 @@ async function diracRecoveryPermanentBanV201(req, action, reason, identityKey) {
     created_at: new Date(now).toISOString(),
     blocked_until_ms: blockedUntilMs
   };
-  const wrote = await writePersistentSecurityJsonRequiredV194(key, record, blockedUntilMs, Math.ceil(DIRAC_RECOVERY_PERMANENT_BAN_MS_V201 / 1000));
-  DIRAC_RECOVERY_MEMORY_BANS_V201.set(key, blockedUntilMs);
-  return Boolean(wrote);
+  let primaryWritten = false;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    const wrote = await writePersistentSecurityJsonRequiredV194(
+      key,
+      { ...record, identity_scope: index === 0 ? 'global' : index === 1 ? 'device' : 'legacy' },
+      blockedUntilMs,
+      Math.ceil(DIRAC_RECOVERY_PERMANENT_BAN_MS_V201 / 1000)
+    );
+    if (index === 0) primaryWritten = Boolean(wrote);
+    DIRAC_RECOVERY_MEMORY_BANS_V201.set(key, blockedUntilMs);
+  }
+  return primaryWritten;
 }
 
 async function diracRecoveryGuardRejectV201(req, res, action, reason, status = 403, identityKey = '') {
@@ -11072,6 +11151,13 @@ function diracRecoveryAssertServer2EnvironmentV201() {
   }
   if (process.env.NODE_ENV === 'production' && !String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim()) {
     throw new Error('DIRAC_SERVER2_PERSISTENT_BAN_TABLE_REQUIRED');
+  }
+  if (process.env.NODE_ENV === 'production') {
+    diracCentralRootSecretV146();
+    if (!customerSecurityRecoveryWorkerSecret()) throw new Error('DIRAC_SERVER2_WORKER_SECRET_INVALID');
+    if (/^(?:1|true|yes|on|enabled)$/i.test(String(process.env.DIRAC_RECOVERY_WORKER_DEBUG || process.env.DIRAC_RECOVERY_WORKER_ROOT_CAUSE_DEBUG || ''))) {
+      throw new Error('DIRAC_SERVER2_PRODUCTION_DEBUG_FORBIDDEN');
+    }
   }
   return true;
 }
