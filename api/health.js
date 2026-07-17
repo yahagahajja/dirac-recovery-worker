@@ -10193,7 +10193,6 @@ function diracRecoveryHpkeOpenProofResponseV190(data, body, status) {
 async function diracRecoveryHpkeSendProofV159(env, proofBody) {
   const target = new URL(env.server1Url);
   target.searchParams.set('action', DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159);
-  const automationBypass = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_SERVER1_AUTOMATION_BYPASS_SECRET');
   const caller = 'vercel2';
   const timestamp = String(Date.now());
   const signature = diracRecoveryHpkeProofSignatureV159(caller, timestamp, proofBody);
@@ -10229,10 +10228,6 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
     diagnosticLog('proof_signature_unavailable', {}, 'error');
     return { ok: false, status: 503, code: 'proof_signature_unavailable' };
   }
-  if (!/^[A-Za-z0-9_-]{16,512}$/.test(automationBypass)) {
-    diagnosticLog('server1_automation_bypass_unavailable', { secret_value_logged: false }, 'error');
-    return { ok: false, status: 503, code: 'RECOVERY_SERVER1_AUTOMATION_BYPASS_REQUIRED' };
-  }
 
   const controller = new AbortController();
   let timeoutTriggered = false;
@@ -10256,8 +10251,7 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
         'Referer': target.origin + '/',
         'X-Dirac-HPKE-Caller': caller,
         'X-Dirac-HPKE-Timestamp': timestamp,
-        'X-Dirac-HPKE-Signature': signature,
-        'x-vercel-protection-bypass': automationBypass
+        'X-Dirac-HPKE-Signature': signature
       },
       body: JSON.stringify(proofBody),
       redirect: 'error',
