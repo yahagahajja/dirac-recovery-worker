@@ -9906,7 +9906,6 @@ function diracRecoveryHpkeEnvGuardV159() {
   const keyId = diracRecoveryHpkeAsciiV159(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_KEY_ID'), 1, 80);
   const pepper = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_PEPPER');
   const server1Url = diracRecoveryHpkeServer1UrlV159();
-  const server1AutomationBypass = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_SERVER1_AUTOMATION_BYPASS_SECRET');
   const minimumMemory = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB', 1048576, 5242880);
   const minimumTime = diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST', 4, 12);
   const server1OnlyEnv = [
@@ -9922,12 +9921,9 @@ function diracRecoveryHpkeEnvGuardV159() {
   if (!privateKey || !keyId) return { ok: false, reason: 'hpke_key_env_invalid' };
   if (Buffer.byteLength(pepper, 'utf8') < 64) return { ok: false, reason: 'hpke_pepper_invalid' };
   if (!server1Url) return { ok: false, reason: 'server1_url_invalid' };
-  if (!/^[A-Za-z0-9._~-]{32,512}$/.test(server1AutomationBypass)) {
-    return { ok: false, reason: 'server1_automation_bypass_invalid' };
-  }
   if (!minimumMemory || !minimumTime) return { ok: false, reason: 'argon2_policy_invalid' };
   try { diracRecoveryHpkePrivateKeyV159(); } catch (_) { return { ok: false, reason: 'hpke_private_key_invalid' }; }
-  return { ok: true, workerSecret, pepper, keyId, server1Url, server1AutomationBypass, minimumMemory, minimumTime };
+  return { ok: true, workerSecret, pepper, keyId, server1Url, minimumMemory, minimumTime };
 }
 
 /* source 33587-33601 */
@@ -10255,8 +10251,7 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
         'Referer': target.origin + '/',
         'X-Dirac-HPKE-Caller': caller,
         'X-Dirac-HPKE-Timestamp': timestamp,
-        'X-Dirac-HPKE-Signature': signature,
-        'x-vercel-protection-bypass': env.server1AutomationBypass
+        'X-Dirac-HPKE-Signature': signature
       },
       body: JSON.stringify(proofBody),
       redirect: 'error',
@@ -10282,9 +10277,7 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
       content_length: Number.isFinite(length) ? length : 0,
       vercel_mitigated: vercelMitigated.slice(0, 80),
       retry_after: retryAfter.slice(0, 40),
-      vercel_id_present: Boolean(vercelId),
-      automation_bypass_present: true,
-      automation_bypass_value_logged: false
+      vercel_id_present: Boolean(vercelId)
     });
 
     if (Number.isFinite(length) && length > 64 * 1024) {
