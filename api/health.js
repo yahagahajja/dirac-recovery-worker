@@ -10890,6 +10890,7 @@ function diracRecoveryApplyHeadersV201(req, res, action) {
         'Access-Control-Allow-Headers',
         'Content-Type, Accept, X-Dirac-CSRF-Token, X-CSRF-Token, X-Dirac-Page-Nonce, X-Idempotency-Key, X-Dirac-Html-Signature-Version, X-Dirac-Html-Signature-Timestamp, X-Dirac-Html-Signature-Nonce, X-Dirac-Html-Signature'
       );
+      res.setHeader('Access-Control-Expose-Headers', 'X-Dirac-CSRF-Token, X-Dirac-CSRF-Ready, X-Dirac-Central-Security-Guard');
       res.setHeader('Access-Control-Max-Age', '300');
     }
   }
@@ -10962,7 +10963,7 @@ function diracRecoveryAssertServer2EnvironmentV201() {
     throw new Error('DIRAC_SERVER2_DEPLOYMENT_ROLE_REQUIRED');
   }
   if (process.env.NODE_ENV === 'production' && !enabled) throw new Error('DIRAC_SERVER2_ACTIONS_ENABLED_REQUIRED');
-  const forbidden = ['DIRAC_RECOVERY_WORKER_URL', 'DIRAC_RECOVERY_WORKER_CALLER'];
+  const forbidden = ['DIRAC_RECOVERY_WORKER_URL', 'DIRAC_RECOVERY_WORKER_CALLER', 'DIRAC_RECOVERY_HPKE_ALLOWED_CALLER'];
   if (process.env.NODE_ENV === 'production' && forbidden.some((name) => String(process.env[name] || '').trim())) {
     throw new Error('DIRAC_SERVER2_ENV_PARTITION_FAILED');
   }
@@ -11325,6 +11326,10 @@ async function diracRecoveryBrowserGuardV201(req, res, ctx, body, identityKey) {
   if (!contentType.startsWith('application/json')) {
     return diracRecoveryGuardRejectV201(req, res, ctx.action, 'browser_content_type_invalid', 415, identityKey);
   }
+  const csrf = diracV138CsrfForceVerify(req, ctx.action);
+  if (!csrf || csrf.ok !== true) {
+    return diracRecoveryGuardRejectV201(req, res, ctx.action, String(csrf && csrf.code || 'csrf_guard_failed'), Number(csrf && csrf.status || 403), identityKey);
+  }
   try {
     const expectedHpkeKeyId = String(process.env.DIRAC_RECOVERY_HPKE_KEY_ID || '').trim();
     const expectedMlkemKeyId = String(process.env.DIRAC_RECOVERY_MLKEM1024_KEY_ID || '').trim();
@@ -11386,6 +11391,7 @@ module.exports = async function diracRecoveryOnlyServer2HandlerV201(req, res) {
     ctx.guardPassport.integrity_checked = true;
     req.__diracCentralSecurityGuardPassedV146 = true;
     if (req.method === 'HEAD') {
+      res.setHeader('X-Dirac-Central-Security-Guard', DIRAC_CENTRAL_SECURITY_GUARD_V146);
       const bootstrapToken = diracCsrfIssueToken(req, res, action);
       if (!bootstrapToken) {
         return res.status(503).json({
