@@ -10286,7 +10286,7 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
         'X-Dirac-HPKE-Signature': signature,
         ...diracS2SSignHeadersV206({
           target,
-          action: DIRAC_RECOVERY_HPKE_ACTION_V159,
+          action: DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159,
           body: proofBody,
           targetServerId: diracS2SIdV206(process.env.DIRAC_RECOVERY_SERVER1_SERVER_ID || 'vercel1-main')
         })
