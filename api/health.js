@@ -11130,6 +11130,15 @@ function diracRecoveryAssertServer2EnvironmentV201() {
     throw new Error('DIRAC_SERVER2_DEPLOYMENT_ROLE_REQUIRED');
   }
   if (process.env.NODE_ENV === 'production' && !enabled) throw new Error('DIRAC_SERVER2_ACTIONS_ENABLED_REQUIRED');
+  if (process.env.NODE_ENV === 'production') {
+    const configuredActions = DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174;
+    const compiledActions = DIRAC_CENTRAL_ACTIVE_ACTIONS_V146;
+    if (configuredActions.size !== compiledActions.size
+        || Array.from(compiledActions).some((action) => !configuredActions.has(action))
+        || Array.from(configuredActions).some((action) => !compiledActions.has(action))) {
+      throw new Error('DIRAC_SERVER2_ACTION_ENV_ALLOWLIST_INVALID');
+    }
+  }
   const forbidden = [
     'DIRAC_RECOVERY_WORKER_URL',
     'DIRAC_RECOVERY_WORKER_EXPECTED_HOST',
@@ -11157,8 +11166,6 @@ function diracRecoveryAssertServer2EnvironmentV201() {
 }
 
 diracRecoveryAssertServer2EnvironmentV201();
-DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.add(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159);
-DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.add(DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165);
 
 const DIRAC_RECOVERY_HTML_SIGNATURE_VERSION_V202 = 'dirac-html-action-signature-v180';
 const DIRAC_RECOVERY_HTML_SIGNATURE_MAX_SKEW_MS_V202 = 30_000;
@@ -11449,6 +11456,65 @@ function diracS2STextV206(name) {
   return String(process.env[name] || '').trim();
 }
 
+const DIRAC_S2S_ENV_JSON_CACHE_V207 = globalThis.__DIRAC_S2S_ENV_JSON_CACHE_V207__ || new Map();
+globalThis.__DIRAC_S2S_ENV_JSON_CACHE_V207__ = DIRAC_S2S_ENV_JSON_CACHE_V207;
+
+function diracS2SEnvJsonObjectV207(name, required) {
+  const envName = String(name || '').trim();
+  const raw = diracS2STextV206(envName);
+  if (!raw) return required
+    ? { ok: false, unavailable: true, reason: envName + '_missing', value: null }
+    : { ok: true, value: Object.freeze({}), source: 'environment' };
+  const cached = DIRAC_S2S_ENV_JSON_CACHE_V207.get(envName);
+  if (cached && cached.raw === raw) return cached.result;
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch (_) {
+    const result = { ok: false, unavailable: true, reason: envName + '_invalid_json', value: null };
+    DIRAC_S2S_ENV_JSON_CACHE_V207.set(envName, { raw, result });
+    return result;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    const result = { ok: false, unavailable: true, reason: envName + '_invalid_object', value: null };
+    DIRAC_S2S_ENV_JSON_CACHE_V207.set(envName, { raw, result });
+    return result;
+  }
+  const result = { ok: true, value: parsed, source: 'environment' };
+  DIRAC_S2S_ENV_JSON_CACHE_V207.set(envName, { raw, result });
+  return result;
+}
+
+function diracS2SValidateEnvRegistryV207(registry) {
+  if (!registry || typeof registry !== 'object' || Array.isArray(registry) || Object.keys(registry).length === 0) return false;
+  const signatureNames = diracS2SSignatureSpecsV206().map((spec) => spec.name);
+  for (const [serverId, entry] of Object.entries(registry)) {
+    if (diracS2SIdV206(serverId) !== serverId || !entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    if (!['active', 'revoked'].includes(String(entry.status || '').trim().toLowerCase())) return false;
+    if (!diracS2SKeyVersionV206(entry.key_version)) return false;
+    if (!Array.isArray(entry.allowed_targets) || !entry.allowed_targets.length || entry.allowed_targets.some((item) => !diracS2SIdV206(item))) return false;
+    if (!Array.isArray(entry.allowed_actions) || !entry.allowed_actions.length || entry.allowed_actions.some((item) => !/^[a-z0-9_-]{1,80}$/.test(String(item || '').trim()))) return false;
+    const publicKeys = entry.public_keys;
+    if (!publicKeys || typeof publicKeys !== 'object' || Array.isArray(publicKeys)) return false;
+    if (signatureNames.some((name) => !String(publicKeys[name] || '').trim())) return false;
+  }
+  return true;
+}
+
+function diracS2SEnvRevocationStatusV207(serverId, keyVersion) {
+  const cleanServerId = diracS2SIdV206(serverId);
+  const cleanKeyVersion = diracS2SKeyVersionV206(keyVersion);
+  if (!cleanServerId || !cleanKeyVersion) return { ok: false, unavailable: true, reason: 'env_revocation_identity_invalid', revoked: false };
+  const parsed = diracS2SEnvJsonObjectV207('DIRAC_S2S_REVOKED_KEYS_JSON', false);
+  if (!parsed.ok) return { ok: false, unavailable: true, reason: 'env_revocation_json_invalid', revoked: false };
+  const configured = parsed.value[cleanServerId];
+  if (configured === undefined) return { ok: true, revoked: false, source: 'environment' };
+  if (!Array.isArray(configured) || configured.some((item) => !diracS2SKeyVersionV206(item))) {
+    return { ok: false, unavailable: true, reason: 'env_revocation_entry_invalid', revoked: false };
+  }
+  return { ok: true, revoked: configured.includes(cleanKeyVersion), source: 'environment' };
+}
+
+
 function diracS2SIdV206(value) {
   const clean = String(value || '').trim().toLowerCase();
   return /^[a-z0-9](?:[a-z0-9_.-]{0,78}[a-z0-9])?$/.test(clean) ? clean : '';
@@ -11478,6 +11544,7 @@ function diracS2SBodyHashV206(body) {
 function diracS2SCanonicalV206(meta) {
   return Buffer.from([
     DIRAC_S2S_VERSION_V206,
+    String(meta.networkId || ''),
     String(meta.serverId || ''),
     String(meta.targetServerId || ''),
     String(meta.keyVersion || ''),
@@ -11523,15 +11590,19 @@ function diracS2SAssertEcCurveV206(key, expectedCurve) {
 function diracS2SAssertConfigurationV206() {
   const serverId = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
   const keyVersion = diracS2SKeyVersionV206(diracS2STextV206('DIRAC_S2S_KEY_VERSION'));
+  const networkId = diracS2STextV206('DIRAC_S2S_NETWORK_ID');
   if (!serverId || !keyVersion) throw new Error('DIRAC_S2S_CONFIGURATION_IDENTITY_INVALID');
-  if (process.env.NODE_ENV === 'production' && !String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim()) {
-    throw new Error('DIRAC_S2S_PERSISTENT_REGISTRY_REQUIRED');
-  }
-  const registryRaw = diracS2STextV206('DIRAC_S2S_SERVER_REGISTRY_JSON');
-  if (registryRaw) {
-    let registry;
-    try { registry = JSON.parse(registryRaw); } catch (_) { throw new Error('DIRAC_S2S_REGISTRY_JSON_INVALID'); }
-    if (!registry || typeof registry !== 'object' || Array.isArray(registry)) throw new Error('DIRAC_S2S_REGISTRY_JSON_INVALID');
+  if (!/^[A-Za-z0-9_-]{43,256}$/.test(networkId)) throw new Error('DIRAC_S2S_NETWORK_ID_INVALID');
+  const registry = diracS2SEnvJsonObjectV207('DIRAC_S2S_SERVER_REGISTRY_JSON', true);
+  if (!registry.ok || !diracS2SValidateEnvRegistryV207(registry.value)) throw new Error('DIRAC_S2S_REGISTRY_JSON_INVALID');
+  const revoked = diracS2SEnvJsonObjectV207('DIRAC_S2S_REVOKED_KEYS_JSON', false);
+  if (!revoked.ok) throw new Error('DIRAC_S2S_REVOKED_KEYS_JSON_INVALID');
+  for (const [revokedServerId, versions] of Object.entries(revoked.value)) {
+    if (diracS2SIdV206(revokedServerId) !== revokedServerId
+        || !Array.isArray(versions)
+        || versions.some((item) => !diracS2SKeyVersionV206(item))) {
+      throw new Error('DIRAC_S2S_REVOKED_KEYS_JSON_INVALID');
+    }
   }
   for (const spec of diracS2SSignatureSpecsV206()) {
     const key = diracS2SKeyObjectV206(diracS2STextV206(spec.privateEnv), 'private', spec.type);
@@ -11542,29 +11613,14 @@ function diracS2SAssertConfigurationV206() {
 
 async function diracS2SRegistryEntryV206(serverId) {
   const cleanServerId = diracS2SIdV206(serverId);
-  if (!cleanServerId) return { ok: true, found: false, entry: null };
-  if (process.env.NODE_ENV !== 'production') {
-    const raw = diracS2STextV206('DIRAC_S2S_SERVER_REGISTRY_JSON');
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false, found: false, entry: null, unavailable: true };
-        const entry = parsed[cleanServerId];
-        const validEntry = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : null;
-        return { ok: true, found: Boolean(validEntry), entry: validEntry, source: 'development_env' };
-      } catch (_) { return { ok: false, found: false, entry: null, unavailable: true }; }
-    }
+  if (!cleanServerId) return { ok: true, found: false, entry: null, source: 'environment_registry' };
+  const registry = diracS2SEnvJsonObjectV207('DIRAC_S2S_SERVER_REGISTRY_JSON', true);
+  if (!registry.ok || !diracS2SValidateEnvRegistryV207(registry.value)) {
+    return { ok: false, found: false, entry: null, unavailable: true, source: 'environment_registry' };
   }
-  if (!String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim() || typeof readPersistentSecurityJsonStrictV194 !== 'function') {
-    return { ok: false, found: false, entry: null, unavailable: true };
-  }
-  const lookup = await readPersistentSecurityJsonStrictV194('s2s-server-registry:' + cleanServerId);
-  if (!lookup || lookup.ok !== true) return { ok: false, found: false, entry: null, unavailable: true };
-  if (!lookup.found) return { ok: true, found: false, entry: null, source: 'persistent_registry' };
-  const record = lookup.record && typeof lookup.record === 'object' && !Array.isArray(lookup.record) ? lookup.record : null;
-  const entry = record && record.entry && typeof record.entry === 'object' && !Array.isArray(record.entry) ? record.entry : record;
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return { ok: true, found: false, entry: null, source: 'persistent_registry' };
-  return { ok: true, found: true, entry, source: 'persistent_registry' };
+  const entry = registry.value[cleanServerId];
+  const validEntry = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : null;
+  return { ok: true, found: Boolean(validEntry), entry: validEntry, source: 'environment_registry' };
 }
 
 function diracS2SSignHeadersV206(input) {
@@ -11574,12 +11630,13 @@ function diracS2SSignHeadersV206(input) {
   const serverId = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
   const targetServerId = diracS2SIdV206(input && input.targetServerId || '');
   const keyVersion = diracS2SKeyVersionV206(diracS2STextV206('DIRAC_S2S_KEY_VERSION'));
-  if (!serverId || !targetServerId || !keyVersion || !action) throw new Error('DIRAC_S2S_SIGNING_IDENTITY_INVALID');
+  const networkId = diracS2STextV206('DIRAC_S2S_NETWORK_ID');
+  if (!serverId || !targetServerId || !keyVersion || !action || !/^[A-Za-z0-9_-]{43,256}$/.test(networkId)) throw new Error('DIRAC_S2S_SIGNING_IDENTITY_INVALID');
   const timestamp = String(Date.now());
   const nonce = crypto.randomBytes(32).toString('base64url');
   const requestId = crypto.randomBytes(24).toString('base64url');
   const bodyHash = diracS2SBodyHashV206(body);
-  const message = diracS2SCanonicalV206({ serverId, targetServerId, keyVersion, method: 'POST', path: diracS2SPathV206(target), action, timestamp, nonce, requestId, bodyHash });
+  const message = diracS2SCanonicalV206({ networkId, serverId, targetServerId, keyVersion, method: 'POST', path: diracS2SPathV206(target), action, timestamp, nonce, requestId, bodyHash });
   const headers = {
     'X-Dirac-S2S-Version': DIRAC_S2S_VERSION_V206,
     'X-Dirac-S2S-Policy': DIRAC_S2S_POLICY_V206,
@@ -11591,8 +11648,7 @@ function diracS2SSignHeadersV206(input) {
     'X-Dirac-Request-Id': requestId,
     'X-Dirac-Body-SHA512': bodyHash
   };
-  const networkId = diracS2STextV206('DIRAC_S2S_NETWORK_ID');
-  if (networkId) headers['X-Dirac-Network-Id'] = networkId;
+  headers['X-Dirac-Network-Id'] = networkId;
   try {
     for (const spec of diracS2SSignatureSpecsV206()) {
       const key = diracS2SKeyObjectV206(diracS2STextV206(spec.privateEnv), 'private', spec.type);
@@ -11706,6 +11762,9 @@ async function diracS2SFlushPendingReportsV206() {
 }
 
 async function diracS2SCheckCentralRevocationV206(serverId, keyVersion) {
+  const envStatus = diracS2SEnvRevocationStatusV207(serverId, keyVersion);
+  if (!envStatus.ok) return { ok: false, unavailable: true };
+  if (envStatus.revoked === true) return { ok: true, revoked: true, source: 'environment' };
   const result = await diracS2SSendSecurityReportV206({
     action: 'security_report',
     event: 'revocation_check',
@@ -11713,13 +11772,15 @@ async function diracS2SCheckCentralRevocationV206(serverId, keyVersion) {
     offender_key_version: keyVersion
   });
   if (!result.ok || !result.data || result.data.event !== 'revocation_check') return { ok: false, unavailable: true };
-  return { ok: true, revoked: result.data.revoked === true };
+  return { ok: true, revoked: result.data.revoked === true, source: 'server1' };
 }
 
 async function diracS2SVerifyInboundV206(req, ctx, body) {
   const serverId = diracS2SIdV206(diracS2SHeaderV206(req, 'x-dirac-server-id'));
   const targetServerId = diracS2SIdV206(diracS2SHeaderV206(req, 'x-dirac-target-server-id'));
   const localServerId = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
+  const suppliedNetworkId = diracS2SHeaderV206(req, 'x-dirac-network-id');
+  const expectedNetworkId = diracS2STextV206('DIRAC_S2S_NETWORK_ID');
   const keyVersion = diracS2SKeyVersionV206(diracS2SHeaderV206(req, 'x-dirac-key-version'));
   const timestampText = diracS2SHeaderV206(req, 'x-dirac-timestamp');
   const timestamp = Number(timestampText);
@@ -11728,6 +11789,9 @@ async function diracS2SVerifyInboundV206(req, ctx, body) {
   const suppliedBodyHash = diracS2SHeaderV206(req, 'x-dirac-body-sha512').toLowerCase();
   const base = { ok: false, serverId, targetServerId, keyVersion, timestamp: timestampText, nonce, requestId, bodyHash: suppliedBodyHash, failures: [], validCount: 0 };
   if (diracS2SHeaderV206(req, 'x-dirac-s2s-version') !== DIRAC_S2S_VERSION_V206 || diracS2SHeaderV206(req, 'x-dirac-s2s-policy') !== DIRAC_S2S_POLICY_V206) return { ...base, reason: 's2s_version_or_policy_invalid' };
+  if (!/^[A-Za-z0-9_-]{43,256}$/.test(expectedNetworkId)
+      || !/^[A-Za-z0-9_-]{43,256}$/.test(suppliedNetworkId)
+      || !(typeof safeEqual === 'function' ? safeEqual(suppliedNetworkId, expectedNetworkId) : suppliedNetworkId === expectedNetworkId)) return { ...base, reason: 's2s_network_id_invalid' };
   if (!serverId || !targetServerId || !localServerId || targetServerId !== localServerId || !keyVersion) return { ...base, reason: 's2s_identity_binding_invalid' };
   if (!Number.isSafeInteger(timestamp) || Math.abs(Date.now() - timestamp) > DIRAC_S2S_MAX_CLOCK_SKEW_MS_V206) return { ...base, reason: 's2s_timestamp_invalid' };
   if (!/^[A-Za-z0-9_-]{32,160}$/.test(nonce) || !/^[A-Za-z0-9_-]{24,160}$/.test(requestId) || !/^[a-f0-9]{128}$/.test(suppliedBodyHash)) return { ...base, reason: 's2s_request_binding_invalid' };
@@ -11741,7 +11805,7 @@ async function diracS2SVerifyInboundV206(req, ctx, body) {
   const allowedActions = Array.isArray(entry.allowed_actions) ? entry.allowed_actions.map((item) => String(item || '').trim().toLowerCase()) : [];
   if (!allowedTargets.includes(localServerId) || !allowedActions.includes(String(ctx && ctx.action || '').toLowerCase())) return { ...base, reason: 's2s_scope_not_allowed' };
   const publicKeys = entry.public_keys && typeof entry.public_keys === 'object' ? entry.public_keys : {};
-  const message = diracS2SCanonicalV206({ serverId, targetServerId, keyVersion, method: ctx.method, path: diracS2SPathV206(req), action: ctx.action, timestamp: timestampText, nonce, requestId, bodyHash: suppliedBodyHash });
+  const message = diracS2SCanonicalV206({ networkId: expectedNetworkId, serverId, targetServerId, keyVersion, method: ctx.method, path: diracS2SPathV206(req), action: ctx.action, timestamp: timestampText, nonce, requestId, bodyHash: suppliedBodyHash });
   let validCount = 0;
   const failures = [];
   try {
@@ -11958,6 +12022,9 @@ module.exports = async function diracRecoveryOnlyServer2HandlerV201(req, res) {
   }
   if (!DIRAC_CENTRAL_ACTIVE_ACTIONS_V146.has(action)) {
     return diracRecoveryGuardRejectV201(req, res, action, 'action_not_allowlisted', 403, identity.key);
+  }
+  if (!DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.has(action)) {
+    return diracRecoveryGuardRejectV201(req, res, action, 'action_not_enabled_by_environment', 403, identity.key);
   }
 
   let deploymentRoleChecked = false;
