@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-YhCe7nmw/GkGunrhorDdwxBN2MitXeQRNgnLv7c3Gc+CGchcpJRKY56siEuscyyrMNuD8ykRFjT+DdJQn1oO8g=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-EoeZJ0TA5MMuoeg69UfTeGlBpDZJIJj6xVtlwxv0hQUtzrwf4EuX9Xe2uzS9+RYO4/dU98g24k78K6YXg+PmQQ=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -29,7 +29,7 @@
     X-DNS-Prefetch-Control: off
     X-Permitted-Cross-Domain-Policies: none
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-YhCe7nmw/GkGunrhorDdwxBN2MitXeQRNgnLv7c3Gc+CGchcpJRKY56siEuscyyrMNuD8ykRFjT+DdJQn1oO8g=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-EoeZJ0TA5MMuoeg69UfTeGlBpDZJIJj6xVtlwxv0hQUtzrwf4EuX9Xe2uzS9+RYO4/dU98g24k78K6YXg+PmQQ=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 atau ML-DSA-87 public key belum diisi.
@@ -545,6 +545,32 @@
       var safePayload = renderSafeDebug(payload);
       try { console.error('[dirac-lost-passkey-client-v177]', safePayload); } catch (_) {}
       return safePayload;
+    }
+
+    function rootCauseClientTrace(event, extra) {
+      var payload = {
+        diagnostic_version: 'lost-passkey-root-cause-debug-v205',
+        event: String(event || 'unknown').slice(0, 100),
+        time: new Date().toISOString(),
+        elapsed_ms: Number(extra && extra.elapsed_ms || 0),
+        http_status: Number(extra && extra.http_status || 0) || null,
+        timeout_ms: Number(extra && extra.timeout_ms || 0) || null,
+        csrf_present: Boolean(extra && extra.csrf_present),
+        page_nonce_present: Boolean(extra && extra.page_nonce_present),
+        response_ok: Boolean(extra && extra.response_ok),
+        online: navigator.onLine !== false,
+        action: CONFIG.verifyApiAction,
+        note: safeDiagnosticText(extra && extra.note, 180)
+      };
+      try {
+        if (el.debugOutput) el.debugOutput.textContent = JSON.stringify(payload, null, 2);
+        if (el.debugPanel) {
+          el.debugPanel.hidden = false;
+          el.debugPanel.open = true;
+        }
+        console.log('[dirac-lost-passkey-root-debug-v205]', payload);
+      } catch (_) {}
+      return payload;
     }
 
     function setLockNotice(visible) {
@@ -1917,8 +1943,10 @@
     }
 
     async function obtainCentralGuardTokens() {
+      var startedAt = Date.now();
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.verifyApiAction);
+      rootCauseClientTrace('head_bootstrap_start', { elapsed_ms: 0, timeout_ms: CONFIG.verifyTimeoutMs });
       var response = await fetch(url.toString(), {
         method: 'HEAD',
         credentials: 'same-origin',
@@ -1930,21 +1958,56 @@
       });
       var csrf = String(response.headers.get('x-csrf-token') || response.headers.get('x-dirac-csrf-token') || '').trim();
       var pageNonce = String(response.headers.get('x-dirac-page-nonce') || '').trim();
+      rootCauseClientTrace('head_bootstrap_response', {
+        elapsed_ms: Date.now() - startedAt,
+        http_status: Number(response.status || 0),
+        response_ok: response.ok,
+        csrf_present: Boolean(csrf),
+        page_nonce_present: Boolean(pageNonce)
+      });
       if (!csrf || !pageNonce) throw new Error('CENTRAL_GUARD_BOOTSTRAP_TOKEN_MISSING');
       return { csrf: csrf, pageNonce: pageNonce };
     }
 
     async function submitHybridEnvelope(envelope) {
+      var overallStartedAt = Date.now();
       var tokens = await obtainCentralGuardTokens();
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.verifyApiAction);
       var controller = new AbortController();
-      var timeoutId = setTimeout(function () { controller.abort(); }, CONFIG.verifyTimeoutMs);
+      var timeoutTriggered = false;
+      var elapsedTimer = null;
+      var timeoutId = setTimeout(function () {
+        timeoutTriggered = true;
+        rootCauseClientTrace('verify_client_timeout_abort', {
+          elapsed_ms: Date.now() - overallStartedAt,
+          timeout_ms: CONFIG.verifyTimeoutMs,
+          note: 'Browser membatalkan POST karena batas waktu frontend tercapai.'
+        });
+        controller.abort();
+      }, CONFIG.verifyTimeoutMs);
       try {
+        elapsedTimer = setInterval(function () {
+          var elapsed = Date.now() - overallStartedAt;
+          rootCauseClientTrace('verify_post_waiting', {
+            elapsed_ms: elapsed,
+            timeout_ms: CONFIG.verifyTimeoutMs,
+            csrf_present: Boolean(tokens.csrf),
+            page_nonce_present: Boolean(tokens.pageNonce),
+            note: 'POST masih menunggu respons Server 2. Periksa log queue_acquire dan queue_release.'
+          });
+          try { writeStatusText('Memverifikasi permintaan pemulihan · ' + Math.floor(elapsed / 1000) + ' detik'); } catch (_) {}
+        }, 5000);
         await new Promise(function (resolve) { setTimeout(resolve, 1000); });
         assertNotPermanentlyLocked();
         assertNotExpired();
         if (!browserIsOnline()) throw new Error('ONLINE_CONNECTION_NOT_STABLE');
+        rootCauseClientTrace('verify_post_fetch_start', {
+          elapsed_ms: Date.now() - overallStartedAt,
+          timeout_ms: CONFIG.verifyTimeoutMs,
+          csrf_present: Boolean(tokens.csrf),
+          page_nonce_present: Boolean(tokens.pageNonce)
+        });
         var response = await fetch(url.toString(), {
           method: 'POST',
           credentials: 'same-origin',
@@ -1962,15 +2025,37 @@
           body: JSON.stringify(envelope.body),
           signal: controller.signal
         });
+        rootCauseClientTrace('verify_post_response_headers', {
+          elapsed_ms: Date.now() - overallStartedAt,
+          timeout_ms: CONFIG.verifyTimeoutMs,
+          http_status: Number(response.status || 0),
+          response_ok: response.ok
+        });
         var data = await readJsonResponseLimited(response, 128 * 1024);
+        rootCauseClientTrace('verify_post_body_read', {
+          elapsed_ms: Date.now() - overallStartedAt,
+          timeout_ms: CONFIG.verifyTimeoutMs,
+          http_status: Number(response.status || 0),
+          response_ok: response.ok,
+          note: String(data && data.code || 'response_without_code').slice(0, 120)
+        });
         if (!response.ok || !data || data.ok !== true) {
           var error = new Error(String(data && data.code || 'RECOVERY_HYBRID_VERIFY_FAILED'));
           error.httpStatus = Number(response.status || 0);
           throw error;
         }
         return data;
+      } catch (error) {
+        rootCauseClientTrace('verify_post_failed', {
+          elapsed_ms: Date.now() - overallStartedAt,
+          timeout_ms: CONFIG.verifyTimeoutMs,
+          http_status: Number(error && error.httpStatus || 0),
+          note: timeoutTriggered ? 'AbortController timeout' : String(error && (error.name || error.message) || 'unknown').slice(0, 160)
+        });
+        throw error;
       } finally {
         clearTimeout(timeoutId);
+        if (elapsedTimer) clearInterval(elapsedTimer);
         tokens.csrf = '';
         tokens.pageNonce = '';
       }
