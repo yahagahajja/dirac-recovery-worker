@@ -2830,30 +2830,6 @@ const DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164 = globalThis.__DIRAC_LOST_PA
 /* source 7284-7284 */
 globalThis.__DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164__ = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164;
 
-
-/* DIRAC ROOT-CAUSE DEBUG v205: diagnostic-only, no secret values, no policy changes. */
-function diracRecoveryRootDebugEnabledV205() {
-  return /^(1|true|yes|on|enabled)$/i.test(String(process.env.DIRAC_RECOVERY_ROOT_CAUSE_DEBUG || '').trim());
-}
-
-function diracRecoveryRootDebugHashV205(value) {
-  return crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex').slice(0, 24);
-}
-
-function diracRecoveryRootDebugV205(event, fields = {}, level = 'log') {
-  if (!diracRecoveryRootDebugEnabledV205()) return;
-  try {
-    const payload = {
-      diagnostic_version: 'dirac-recovery-root-cause-debug-v205',
-      event: String(event || 'unknown').slice(0, 100),
-      time: new Date().toISOString(),
-      ...fields
-    };
-    const writer = level === 'error' ? console.error : console.log;
-    writer('[dirac-recovery-root-debug-v205]', JSON.stringify(payload));
-  } catch (_) {}
-}
-
 /* source 7286-7290 */
 function customerSecurityLostPasskeyQueueIntV164(name, fallback, min, max) {
   const raw = Number(process.env[name] || fallback);
@@ -2878,7 +2854,7 @@ function customerSecurityLostPasskeyQueueMaxWaitMsV164() {
 
 /* source 7307-7311 */
 function customerSecurityLostPasskeyQueueMaxWaitForTaskMsV191(queueTask) {
-  return String(queueTask || '') === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
+  return [DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165, DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159].includes(String(queueTask || ''))
     ? 5000
     : customerSecurityLostPasskeyQueueMaxWaitMsV164();
 }
@@ -3098,14 +3074,6 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
     workerAction: queueTask,
     lockedAtMs: startMs
   };
-  diracRecoveryRootDebugV205('queue_acquire_start', {
-    queue_task: queueTask,
-    request_hash: diracRecoveryRootDebugHashV205(body && (body.request_id || body.nonce || '')),
-    lock_ttl_ms: customerSecurityLostPasskeyQueueTtlMsV164(),
-    max_wait_ms: Math.max(0, deadlineMs - startMs),
-    poll_ms: customerSecurityLostPasskeyQueuePollMsV164(),
-    may_wait: mayWaitForExistingArgon2
-  });
   let attempts = 0;
   let lastReason = 'queue_lock_busy';
 
@@ -3145,14 +3113,6 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
           lockUntilMs: Date.now() + customerSecurityLostPasskeyQueueTtlMsV164()
         });
         const heartbeat = customerSecurityLostPasskeyQueueHeartbeatV188(ownerId, context);
-        diracRecoveryRootDebugV205('queue_acquired', {
-          queue_task: queueTask,
-          request_hash: diracRecoveryRootDebugHashV205(body && (body.request_id || body.nonce || '')),
-          owner_hash: diracRecoveryRootDebugHashV205(ownerId),
-          attempts,
-          waited_ms: Date.now() - startMs,
-          claim_mode: claimed.claimed || 'fast_claim'
-        });
         return {
           ok: true,
           ownerId,
@@ -3191,13 +3151,6 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
       }
     }).catch(() => null);
   } catch (_) {}
-  diracRecoveryRootDebugV205('queue_acquire_failed', {
-    queue_task: queueTask,
-    request_hash: diracRecoveryRootDebugHashV205(body && (body.request_id || body.nonce || '')),
-    attempts,
-    waited_ms: Date.now() - startMs,
-    reason: lastReason
-  }, 'error');
   return {
     ok: false,
     status: 429,
@@ -3211,21 +3164,11 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
 /* source 7666-7698 */
 async function customerSecurityLostPasskeyQueueReleaseV164(ownerId) {
   const cleanOwner = String(ownerId || '');
-  const releaseStartedAt = Date.now();
-  diracRecoveryRootDebugV205('queue_release_start', {
-    owner_hash: diracRecoveryRootDebugHashV205(cleanOwner)
-  });
-  if (!cleanOwner) {
-    diracRecoveryRootDebugV205('queue_release_skipped', { reason: 'owner_missing' }, 'error');
-    return false;
-  }
+  if (!cleanOwner) return false;
   const memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
   if (memory && String(memory.ownerId || '') === cleanOwner) DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
   const table = customerSecurityLostPasskeyQueueTableV164();
-  if (!table) {
-    diracRecoveryRootDebugV205('queue_release_skipped', { reason: 'table_missing' }, 'error');
-    return false;
-  }
+  if (!table) return false;
   const nowMs = Date.now();
   const releasedRecord = {
     type: 'lost_passkey_generate_argon2id_queue_lock_v164',
@@ -3250,14 +3193,7 @@ async function customerSecurityLostPasskeyQueueReleaseV164(ownerId) {
       expires_at: new Date(nowMs + 60_000).toISOString()
     }
   }).catch(() => null);
-  const released = !!(result && result.ok);
-  diracRecoveryRootDebugV205(released ? 'queue_release_success' : 'queue_release_failed', {
-    owner_hash: diracRecoveryRootDebugHashV205(cleanOwner),
-    elapsed_ms: Date.now() - releaseStartedAt,
-    supabase_status: Number(result && result.status || 0),
-    response_already_sent: false
-  }, released ? 'log' : 'error');
-  return released;
+  return !!(result && result.ok);
 }
 
 /* source 7700-7703 */
@@ -4992,18 +4928,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     return res.status(sent.status || 503).json({ ok: false, code: sent.code || 'RECOVERY_EMAIL_SEND_FAILED', message: sent.message || 'Link recovery belum bisa dikirim ke email resmi.' });
   }
 
-  diracRecoveryRootDebugV205('generate_response_about_to_commit', {
-    request_hash: diracRecoveryRootDebugHashV205(requestId),
-    headers_sent_before: Boolean(res.headersSent),
-    writable_ended_before: Boolean(res.writableEnded)
-  });
   const committedResponse = res.status(200).json(successPayload);
-  diracRecoveryRootDebugV205('generate_response_committed_before_cleanup', {
-    request_hash: diracRecoveryRootDebugHashV205(requestId),
-    headers_sent_after: Boolean(res.headersSent),
-    writable_ended_after: Boolean(res.writableEnded),
-    note: 'outer_worker_finally_releases_queue_after_this_point'
-  }, 'error');
   await customerSecurityWriteGuardEvent(access.customerId, {
     event_type: 'lost_passkey_recovery_link_sent',
     status: 'success',
@@ -8795,10 +8720,6 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
     if (!activePasskeys.length) {
       return res.status(409).json({ ok: false, code: 'ACTIVE_PASSKEY_NOT_FOUND', message: 'Passkey aktif untuk akun ini belum ditemukan.' });
     }
-    diracRecoveryRootDebugV205('worker_generate_queue_wait_start', {
-      request_hash: diracRecoveryRootDebugHashV205(body && (body.request_id || body.nonce || '')),
-      response_headers_sent: Boolean(res.headersSent)
-    });
     const queueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, body);
     if (!queueTicket || !queueTicket.ok) {
       return res.status(queueTicket && queueTicket.status || 503).json({
@@ -8813,10 +8734,6 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
       });
     }
     try {
-      diracRecoveryRootDebugV205('worker_generate_handler_start', {
-        queue_owner_hash: diracRecoveryRootDebugHashV205(queueTicket && queueTicket.ownerId),
-        waited_ms: Number(queueTicket && queueTicket.waited_ms || 0)
-      });
       return await customerSecurityGenerateRecoveryCodes(req, res, 'customer_security_recovery_codes_generate', {
         localWorker: true,
         access: { customerId: owner.customerId },
@@ -8827,19 +8744,7 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
         passwordLatestMaterial: String(body.password_latest_material || body.password_latest_proof || body.account_password || '')
       });
     } finally {
-      diracRecoveryRootDebugV205('worker_generate_finally_enter', {
-        queue_owner_hash: diracRecoveryRootDebugHashV205(queueTicket && queueTicket.ownerId),
-        headers_sent: Boolean(res.headersSent),
-        writable_ended: Boolean(res.writableEnded)
-      }, (res.headersSent || res.writableEnded) ? 'error' : 'log');
-      let releaseOk = false;
-      try { releaseOk = await queueTicket.release(); } catch (_) { releaseOk = false; }
-      diracRecoveryRootDebugV205('worker_generate_finally_release_done', {
-        queue_owner_hash: diracRecoveryRootDebugHashV205(queueTicket && queueTicket.ownerId),
-        release_ok: Boolean(releaseOk),
-        headers_sent: Boolean(res.headersSent),
-        writable_ended: Boolean(res.writableEnded)
-      }, releaseOk ? 'log' : 'error');
+      try { await queueTicket.release(); } catch (_) {}
     }
   }
 
@@ -10582,22 +10487,13 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
   let recoveryCode = '';
   let argon2GateClaimed = false;
   let argonQueueTicket = null;
-  const verifyStartedAtV205 = Date.now();
-  const verifyRequestHashV205 = diracRecoveryRootDebugHashV205(body && body.request_id);
-  diracRecoveryRootDebugV205('verify_handler_start', {
-    request_hash: verifyRequestHashV205,
-    method: String(req.method || ''),
-    headers_sent: Boolean(res.headersSent)
-  });
   try {
     const env = diracRecoveryHpkeEnvGuardV159();
     if (!env.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_ENVIRONMENT_INVALID');
     DIRAC_RECOVERY_CRYPTO_V2.assertRuntimePolicy();
     if (String(body.action || '') !== DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_ACTION_INVALID');
 
-    diracRecoveryRootDebugV205('verify_request_read_start', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205 });
     const request = await diracRecoveryHpkeReadRequestV159(String(body.request_id || ''));
-    diracRecoveryRootDebugV205('verify_request_read_done', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205, storage_ok: Boolean(request && request.ok), row_found: Boolean(request && request.row) });
     if (!request.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_REQUEST_STORAGE_UNAVAILABLE');
     const row = request.row;
     if (!diracRecoveryHpkeRequestActiveV159(row)) {
@@ -10610,7 +10506,6 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
 
     DIRAC_RECOVERY_CRYPTO_V2.validateEnvelope(body, env.keyId, bundle.transport.mlkem_key_id);
 
-    diracRecoveryRootDebugV205('verify_hybrid_open_start', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205 });
     hybrid = DIRAC_RECOVERY_CRYPTO_V2.openHybridEnvelope({
       body,
       bundle,
@@ -10618,7 +10513,6 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
       x25519PrivateKey: diracRecoveryHpkePrivateKeyV159()
     });
     parsedHybrid = DIRAC_RECOVERY_CRYPTO_V2.parseHybridPlaintext(hybrid.plaintext, row.request_id);
-    diracRecoveryRootDebugV205('verify_hybrid_open_done', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205 });
 
     const submittedManifest = parsedHybrid.parsed.signed_manifest;
     const manifestPayload = DIRAC_RECOVERY_CRYPTO_V2.verifySignedManifestContainer(submittedManifest);
@@ -10630,73 +10524,71 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
       throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_MANIFEST_BINDING_INVALID');
     }
 
-    diracRecoveryRootDebugV205('verify_vault_open_start', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205 });
     recovered = await DIRAC_RECOVERY_CRYPTO_V2.openVaultPayload({
       bundle,
       dek: parsedHybrid.dek
     });
-    diracRecoveryRootDebugV205('verify_vault_open_done', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205 });
     recoveryCode = String(recovered.recovery_code || '');
-
-    // Claim only after the envelope, signatures, bundle binding, wrapped DEK,
-    // and AES-GCM payload have all authenticated successfully. This keeps
-    // malformed traffic from consuming durable replay rows while preserving
-    // first-valid-request-wins atomicity before any server-1 proof is sent.
-    diracRecoveryRootDebugV205('verify_atomic_claim_start', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205 });
-    await DIRAC_RECOVERY_CRYPTO_V2.atomicClaim(supabaseFetch, body, bundle, row);
-    diracRecoveryRootDebugV205('verify_atomic_claim_done_before_queue', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205, note: 'retry_is_now_consumed_before_queue_acquisition' }, 'error');
 
     const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
     if (!vaultSecrets.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail(String(vaultSecrets.code || 'RECOVERY_VAULT_SECRET_INVALID'));
     const argon2Policy = diracRecoveryHpkeArgon2PolicyV159(row.recovery_code_hash, env.minimumMemory, env.minimumTime);
     if (!argon2Policy.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_ARGON2_POLICY_INVALID');
 
-    diracRecoveryRootDebugV205('verify_queue_wait_start', {
-      request_hash: verifyRequestHashV205,
-      elapsed_ms: Date.now() - verifyStartedAtV205,
-      configured_max_wait_ms: customerSecurityLostPasskeyQueueMaxWaitForTaskMsV191(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159),
-      lock_ttl_ms: customerSecurityLostPasskeyQueueTtlMsV164()
-    });
     argonQueueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, {
       nonce: row.request_id,
       caller_id: 'browser_hybrid_v2',
       queue_task: DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159
     });
     if (!argonQueueTicket || !argonQueueTicket.ok) {
-      diracRecoveryRootDebugV205('verify_queue_wait_failed_after_atomic_claim', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205 }, 'error');
       return res.status(429).json({ ok: false, code: 'RECOVERY_ARGON2_BUSY', message: 'Verifikasi recovery sedang diproses. Silakan coba kembali.' });
     }
-    diracRecoveryRootDebugV205('verify_queue_acquired', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205, waited_ms: Number(argonQueueTicket.waited_ms || 0) });
     if (!diracRecoveryHpkeArgon2ClaimV187()) {
+      try { await argonQueueTicket.release(); } catch (_) {}
+      argonQueueTicket = null;
       return res.status(429).json({ ok: false, code: 'RECOVERY_ARGON2_BUSY', message: 'Verifikasi recovery sedang diproses. Silakan coba kembali.' });
     }
     argon2GateClaimed = true;
 
-    const bindings = metadata.binding_hashes && typeof metadata.binding_hashes === 'object' && !Array.isArray(metadata.binding_hashes)
-      ? metadata.binding_hashes
-      : null;
-    if (!bindings || !metadata.binding_hash_commitment) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_BINDING_INVALID');
-    diracRecoveryRootDebugV205('verify_argon_binding_start', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205 });
-    const bindingOk = await customerSecurityLostPasskeyArgon2VerifyHashV157(
-      'binding',
-      customerSecurityLostPasskeyCanonical(bindings),
-      metadata.binding_hash_commitment,
-      vaultSecrets.pepper,
-      vaultSecrets.rootSecret
-    ).catch(() => false);
-    diracRecoveryRootDebugV205('verify_argon_binding_done', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205, ok: Boolean(bindingOk) });
-    if (!bindingOk) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_BINDING_INVALID');
+    let codeOk = false;
+    try {
+      // Claim only after every Central Guard and cryptographic envelope check,
+      // and only after both Argon2id gates are available. A busy queue therefore
+      // cannot consume the one-time replay claim.
+      await DIRAC_RECOVERY_CRYPTO_V2.atomicClaim(supabaseFetch, body, bundle, row);
 
-    diracRecoveryRootDebugV205('verify_argon_code_start', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205 });
-    const codeOk = await customerSecurityLostPasskeyArgon2VerifyHashV157(
-      'recovery_code',
-      recoveryCode,
-      row.recovery_code_hash,
-      vaultSecrets.pepper,
-      vaultSecrets.rootSecret
-    ).catch(() => false);
-    diracRecoveryRootDebugV205('verify_argon_code_done', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205, ok: Boolean(codeOk) });
-    if (!customerSecurityLostPasskeyQueueLeaseHealthyV188(argonQueueTicket)) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_ARGON2_LEASE_LOST');
+      const bindings = metadata.binding_hashes && typeof metadata.binding_hashes === 'object' && !Array.isArray(metadata.binding_hashes)
+        ? metadata.binding_hashes
+        : null;
+      if (!bindings || !metadata.binding_hash_commitment) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_BINDING_INVALID');
+      const bindingOk = await customerSecurityLostPasskeyArgon2VerifyHashV157(
+        'binding',
+        customerSecurityLostPasskeyCanonical(bindings),
+        metadata.binding_hash_commitment,
+        vaultSecrets.pepper,
+        vaultSecrets.rootSecret
+      ).catch(() => false);
+      if (!bindingOk) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_BINDING_INVALID');
+
+      codeOk = await customerSecurityLostPasskeyArgon2VerifyHashV157(
+        'recovery_code',
+        recoveryCode,
+        row.recovery_code_hash,
+        vaultSecrets.pepper,
+        vaultSecrets.rootSecret
+      ).catch(() => false);
+      if (!customerSecurityLostPasskeyQueueLeaseHealthyV188(argonQueueTicket)) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_ARGON2_LEASE_LOST');
+    } finally {
+      if (argon2GateClaimed) {
+        diracRecoveryHpkeArgon2ReleaseV187();
+        argon2GateClaimed = false;
+      }
+      if (argonQueueTicket && typeof argonQueueTicket.release === 'function') {
+        try { await argonQueueTicket.release(); } catch (_) {}
+        argonQueueTicket = null;
+      }
+    }
+
     if (!codeOk) {
       const failed = await diracRecoveryHpkeRegisterCodeFailureV159(req, row, row.request_id);
       return res.status(failed.locked ? 423 : 403).json({
@@ -10707,9 +10599,7 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
     }
 
     const proofBody = diracRecoveryHpkeProofBodyV159(env, row);
-    diracRecoveryRootDebugV205('verify_server1_proof_start', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205 });
     const server1 = await diracRecoveryHpkeSendProofV159(env, proofBody);
-    diracRecoveryRootDebugV205('verify_server1_proof_done', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205, ok: Boolean(server1 && server1.ok), status: Number(server1 && server1.status || 0), code: String(server1 && server1.code || '').slice(0, 100) }, server1 && server1.ok ? 'log' : 'error');
     if (!server1.ok) {
       const deliveryStatus = server1.status === 429
         || server1.code === 'RECOVERY_SERVER1_VERCEL_MITIGATED'
@@ -10750,7 +10640,6 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
       }
     }).catch(() => null);
 
-    diracRecoveryRootDebugV205('verify_response_about_to_commit', { request_hash: verifyRequestHashV205, elapsed_ms: Date.now() - verifyStartedAtV205, headers_sent_before: Boolean(res.headersSent), writable_ended_before: Boolean(res.writableEnded) });
     return res.status(200).json({
       ok: true,
       active: true,
@@ -10764,13 +10653,6 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
     });
   } catch (error) {
     const code = String(error && error.code || 'RECOVERY_HYBRID_V2_FAILED');
-    diracRecoveryRootDebugV205('verify_handler_failed', {
-      request_hash: verifyRequestHashV205,
-      elapsed_ms: Date.now() - verifyStartedAtV205,
-      code: code.slice(0, 100),
-      headers_sent: Boolean(res.headersSent),
-      writable_ended: Boolean(res.writableEnded)
-    }, 'error');
     const status = code === 'ATOMIC_REPLAY_REJECTED' ? 409
       : code === 'ATOMIC_REPLAY_STORAGE_UNAVAILABLE' ? 503
       : /INVALID|FAILED|REJECTED|EXPIRED|BINDING/.test(code) ? 403
@@ -10783,24 +10665,9 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
     } catch (_) {}
     return res.status(status).json({ ok: false, code, message: 'Recovery maksimum tidak dapat diverifikasi.' });
   } finally {
-    diracRecoveryRootDebugV205('verify_finally_enter', {
-      request_hash: verifyRequestHashV205,
-      elapsed_ms: Date.now() - verifyStartedAtV205,
-      queue_ticket_present: Boolean(argonQueueTicket),
-      headers_sent: Boolean(res.headersSent),
-      writable_ended: Boolean(res.writableEnded)
-    }, (res.headersSent || res.writableEnded) ? 'error' : 'log');
     if (argon2GateClaimed) diracRecoveryHpkeArgon2ReleaseV187();
     if (argonQueueTicket && typeof argonQueueTicket.release === 'function') {
-      let verifyReleaseOkV205 = false;
-      try { verifyReleaseOkV205 = await argonQueueTicket.release(); } catch (_) { verifyReleaseOkV205 = false; }
-      diracRecoveryRootDebugV205('verify_finally_queue_release_done', {
-        request_hash: verifyRequestHashV205,
-        elapsed_ms: Date.now() - verifyStartedAtV205,
-        release_ok: Boolean(verifyReleaseOkV205),
-        headers_sent: Boolean(res.headersSent),
-        writable_ended: Boolean(res.writableEnded)
-      }, verifyReleaseOkV205 ? 'log' : 'error');
+      try { await argonQueueTicket.release(); } catch (_) {}
     }
     try { if (hybrid && hybrid.plaintext) hybrid.plaintext.fill(0); } catch (_) {}
     try { if (hybrid && hybrid.responseKey) hybrid.responseKey.fill(0); } catch (_) {}
