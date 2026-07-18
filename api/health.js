@@ -10251,7 +10251,13 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
         'Referer': target.origin + '/',
         'X-Dirac-HPKE-Caller': caller,
         'X-Dirac-HPKE-Timestamp': timestamp,
-        'X-Dirac-HPKE-Signature': signature
+        'X-Dirac-HPKE-Signature': signature,
+        ...diracS2SSignHeadersV206({
+          target,
+          action: DIRAC_RECOVERY_HPKE_ACTION_V159,
+          body: proofBody,
+          targetServerId: diracS2SIdV206(process.env.DIRAC_RECOVERY_SERVER1_SERVER_ID || 'vercel1-main')
+        })
       },
       body: JSON.stringify(proofBody),
       redirect: 'error',
@@ -11417,22 +11423,385 @@ async function diracRecoveryLinkOpenV202(req, res, ctx, body) {
   }
 }
 
+/* ============================================================
+   DIRAC INTERNAL SERVER MESH v206 - SERVER 2 NARROW PATCH
+   - Seven independent asymmetric signatures are mandatory for the
+     authenticated Server 1 -> Server 2 recovery-worker channel.
+   - Signature failure rejects before recovery/Argon2id business logic.
+   - Attributed failures are persisted locally and reported to Server 1.
+   - Server 2 checks the central revocation registry on every valid request.
+   - Existing recovery cryptography, Argon2id costs, endpoints, and handlers
+     remain unchanged.
+   ============================================================ */
+const DIRAC_S2S_VERSION_V206 = 'dirac-s2s-seven-signatures-v1';
+const DIRAC_S2S_POLICY_V206 = 'all-seven-required-fail-closed';
+const DIRAC_S2S_MAX_CLOCK_SKEW_MS_V206 = 15_000;
+const DIRAC_S2S_MLDSA_CONTEXT_V206 = Buffer.from('DIRAC-S2S-SEVEN-SIGNATURES-V1', 'utf8');
+
+function diracS2SStableJsonV206(value) {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return '[' + value.map(diracS2SStableJsonV206).join(',') + ']';
+  return '{' + Object.keys(value).sort().map((key) => JSON.stringify(key) + ':' + diracS2SStableJsonV206(value[key])).join(',') + '}';
+}
+
+function diracS2STextV206(name) {
+  return String(process.env[name] || '').trim();
+}
+
+function diracS2SIdV206(value) {
+  const clean = String(value || '').trim().toLowerCase();
+  return /^[a-z0-9](?:[a-z0-9_.-]{0,78}[a-z0-9])?$/.test(clean) ? clean : '';
+}
+
+function diracS2SKeyVersionV206(value) {
+  const clean = String(value || '').trim();
+  return /^[A-Za-z0-9_.-]{1,80}$/.test(clean) ? clean : '';
+}
+
+function diracS2SHeaderV206(req, name) {
+  const value = req && req.headers && req.headers[String(name || '').toLowerCase()];
+  return Array.isArray(value) ? String(value[0] || '').trim() : String(value || '').trim();
+}
+
+function diracS2SPathV206(input) {
+  try {
+    if (input instanceof URL) return input.pathname.replace(/\/+$/, '') || '/';
+    return new URL(String(input && input.url || input || '/api/health'), 'https://dirac.invalid').pathname.replace(/\/+$/, '') || '/';
+  } catch (_) { return '/api/health'; }
+}
+
+function diracS2SBodyHashV206(body) {
+  return crypto.createHash('sha512').update(diracS2SStableJsonV206(body && typeof body === 'object' ? body : {}), 'utf8').digest('hex');
+}
+
+function diracS2SCanonicalV206(meta) {
+  return Buffer.from([
+    DIRAC_S2S_VERSION_V206,
+    String(meta.serverId || ''),
+    String(meta.targetServerId || ''),
+    String(meta.keyVersion || ''),
+    String(meta.method || '').toUpperCase(),
+    String(meta.path || ''),
+    String(meta.action || ''),
+    String(meta.timestamp || ''),
+    String(meta.nonce || ''),
+    String(meta.requestId || ''),
+    String(meta.bodyHash || '')
+  ].join('\n'), 'utf8');
+}
+
+function diracS2SKeyObjectV206(raw, kind, expectedType) {
+  const clean = String(raw || '').trim();
+  if (!clean) throw new Error('DIRAC_S2S_KEY_MISSING_' + kind);
+  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : Buffer.from(clean, 'base64');
+  const key = kind === 'private' ? crypto.createPrivateKey(material) : crypto.createPublicKey(material);
+  if (expectedType && key.asymmetricKeyType !== expectedType) throw new Error('DIRAC_S2S_KEY_TYPE_INVALID_' + expectedType);
+  return key;
+}
+
+function diracS2SSignatureSpecsV206() {
+  return Object.freeze([
+    Object.freeze({ index: 1, name: 'ed25519', type: 'ed25519', privateEnv: 'DIRAC_S2S_ED25519_PRIVATE_KEY_PEM', sign: (message, key) => crypto.sign(null, message, key), verify: (message, key, signature) => crypto.verify(null, message, key, signature) }),
+    Object.freeze({ index: 2, name: 'ed448', type: 'ed448', privateEnv: 'DIRAC_S2S_ED448_PRIVATE_KEY_PEM', sign: (message, key) => crypto.sign(null, message, key), verify: (message, key, signature) => crypto.verify(null, message, key, signature) }),
+    Object.freeze({ index: 3, name: 'ecdsa_p256', type: 'ec', privateEnv: 'DIRAC_S2S_ECDSA_P256_PRIVATE_KEY_PEM', curve: 'prime256v1', sign: (message, key) => crypto.sign('sha256', message, { key, dsaEncoding: 'ieee-p1363' }), verify: (message, key, signature) => crypto.verify('sha256', message, { key, dsaEncoding: 'ieee-p1363' }, signature) }),
+    Object.freeze({ index: 4, name: 'ecdsa_p384', type: 'ec', privateEnv: 'DIRAC_S2S_ECDSA_P384_PRIVATE_KEY_PEM', curve: 'secp384r1', sign: (message, key) => crypto.sign('sha384', message, { key, dsaEncoding: 'ieee-p1363' }), verify: (message, key, signature) => crypto.verify('sha384', message, { key, dsaEncoding: 'ieee-p1363' }, signature) }),
+    Object.freeze({ index: 5, name: 'ecdsa_p521', type: 'ec', privateEnv: 'DIRAC_S2S_ECDSA_P521_PRIVATE_KEY_PEM', curve: 'secp521r1', sign: (message, key) => crypto.sign('sha512', message, { key, dsaEncoding: 'ieee-p1363' }), verify: (message, key, signature) => crypto.verify('sha512', message, { key, dsaEncoding: 'ieee-p1363' }, signature) }),
+    Object.freeze({ index: 6, name: 'rsa_pss_sha512', type: 'rsa', privateEnv: 'DIRAC_S2S_RSA_PSS_PRIVATE_KEY_PEM', sign: (message, key) => crypto.sign('sha512', message, { key, padding: crypto.constants.RSA_PKCS1_PSS_PADDING, saltLength: 64 }), verify: (message, key, signature) => crypto.verify('sha512', message, { key, padding: crypto.constants.RSA_PKCS1_PSS_PADDING, saltLength: 64 }, signature) }),
+    Object.freeze({ index: 7, name: 'ml_dsa_87', type: 'ml-dsa-87', privateEnv: 'DIRAC_S2S_MLDSA87_PRIVATE_KEY_PEM', sign: (message, key) => crypto.sign(null, message, { key, context: DIRAC_S2S_MLDSA_CONTEXT_V206 }), verify: (message, key, signature) => crypto.verify(null, message, { key, context: DIRAC_S2S_MLDSA_CONTEXT_V206 }, signature) })
+  ]);
+}
+
+function diracS2SAssertEcCurveV206(key, expectedCurve) {
+  if (!expectedCurve) return true;
+  const curve = String(key && key.asymmetricKeyDetails && key.asymmetricKeyDetails.namedCurve || '').toLowerCase();
+  const accepted = expectedCurve === 'prime256v1' ? new Set(['prime256v1', 'secp256r1']) : new Set([expectedCurve]);
+  if (!accepted.has(curve)) throw new Error('DIRAC_S2S_EC_CURVE_INVALID_' + expectedCurve);
+  return true;
+}
+
+function diracS2SAssertConfigurationV206() {
+  const serverId = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
+  const keyVersion = diracS2SKeyVersionV206(diracS2STextV206('DIRAC_S2S_KEY_VERSION'));
+  if (!serverId || !keyVersion) throw new Error('DIRAC_S2S_CONFIGURATION_IDENTITY_INVALID');
+  if (process.env.NODE_ENV === 'production' && !String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim()) {
+    throw new Error('DIRAC_S2S_PERSISTENT_REGISTRY_REQUIRED');
+  }
+  const registryRaw = diracS2STextV206('DIRAC_S2S_SERVER_REGISTRY_JSON');
+  if (registryRaw) {
+    let registry;
+    try { registry = JSON.parse(registryRaw); } catch (_) { throw new Error('DIRAC_S2S_REGISTRY_JSON_INVALID'); }
+    if (!registry || typeof registry !== 'object' || Array.isArray(registry)) throw new Error('DIRAC_S2S_REGISTRY_JSON_INVALID');
+  }
+  for (const spec of diracS2SSignatureSpecsV206()) {
+    const key = diracS2SKeyObjectV206(diracS2STextV206(spec.privateEnv), 'private', spec.type);
+    diracS2SAssertEcCurveV206(key, spec.curve);
+  }
+  return true;
+}
+
+async function diracS2SRegistryEntryV206(serverId) {
+  const cleanServerId = diracS2SIdV206(serverId);
+  if (!cleanServerId) return { ok: true, found: false, entry: null };
+  if (process.env.NODE_ENV !== 'production') {
+    const raw = diracS2STextV206('DIRAC_S2S_SERVER_REGISTRY_JSON');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false, found: false, entry: null, unavailable: true };
+        const entry = parsed[cleanServerId];
+        const validEntry = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : null;
+        return { ok: true, found: Boolean(validEntry), entry: validEntry, source: 'development_env' };
+      } catch (_) { return { ok: false, found: false, entry: null, unavailable: true }; }
+    }
+  }
+  if (!String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim() || typeof readPersistentSecurityJsonStrictV194 !== 'function') {
+    return { ok: false, found: false, entry: null, unavailable: true };
+  }
+  const lookup = await readPersistentSecurityJsonStrictV194('s2s-server-registry:' + cleanServerId);
+  if (!lookup || lookup.ok !== true) return { ok: false, found: false, entry: null, unavailable: true };
+  if (!lookup.found) return { ok: true, found: false, entry: null, source: 'persistent_registry' };
+  const record = lookup.record && typeof lookup.record === 'object' && !Array.isArray(lookup.record) ? lookup.record : null;
+  const entry = record && record.entry && typeof record.entry === 'object' && !Array.isArray(record.entry) ? record.entry : record;
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return { ok: true, found: false, entry: null, source: 'persistent_registry' };
+  return { ok: true, found: true, entry, source: 'persistent_registry' };
+}
+
+function diracS2SSignHeadersV206(input) {
+  const target = input && input.target instanceof URL ? input.target : new URL(String(input && input.target || ''));
+  const action = String(input && input.action || '').trim().toLowerCase();
+  const body = input && input.body && typeof input.body === 'object' ? input.body : {};
+  const serverId = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
+  const targetServerId = diracS2SIdV206(input && input.targetServerId || '');
+  const keyVersion = diracS2SKeyVersionV206(diracS2STextV206('DIRAC_S2S_KEY_VERSION'));
+  if (!serverId || !targetServerId || !keyVersion || !action) throw new Error('DIRAC_S2S_SIGNING_IDENTITY_INVALID');
+  const timestamp = String(Date.now());
+  const nonce = crypto.randomBytes(32).toString('base64url');
+  const requestId = crypto.randomBytes(24).toString('base64url');
+  const bodyHash = diracS2SBodyHashV206(body);
+  const message = diracS2SCanonicalV206({ serverId, targetServerId, keyVersion, method: 'POST', path: diracS2SPathV206(target), action, timestamp, nonce, requestId, bodyHash });
+  const headers = {
+    'X-Dirac-S2S-Version': DIRAC_S2S_VERSION_V206,
+    'X-Dirac-S2S-Policy': DIRAC_S2S_POLICY_V206,
+    'X-Dirac-Server-Id': serverId,
+    'X-Dirac-Target-Server-Id': targetServerId,
+    'X-Dirac-Key-Version': keyVersion,
+    'X-Dirac-Timestamp': timestamp,
+    'X-Dirac-Nonce': nonce,
+    'X-Dirac-Request-Id': requestId,
+    'X-Dirac-Body-SHA512': bodyHash
+  };
+  const networkId = diracS2STextV206('DIRAC_S2S_NETWORK_ID');
+  if (networkId) headers['X-Dirac-Network-Id'] = networkId;
+  try {
+    for (const spec of diracS2SSignatureSpecsV206()) {
+      const key = diracS2SKeyObjectV206(diracS2STextV206(spec.privateEnv), 'private', spec.type);
+      diracS2SAssertEcCurveV206(key, spec.curve);
+      const signature = spec.sign(message, key);
+      headers['X-Dirac-Signature-' + spec.index] = Buffer.from(signature).toString('base64url');
+      if (Buffer.isBuffer(signature)) signature.fill(0);
+    }
+    return headers;
+  } finally { message.fill(0); }
+}
+
+function diracS2SEvidenceV206(ctx, verification, failureCode) {
+  const evidence = {
+    version: DIRAC_S2S_VERSION_V206,
+    incident_id: 'S2S-' + crypto.randomBytes(18).toString('base64url'),
+    reporter_server_id: diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID')),
+    reporter_key_version: diracS2SKeyVersionV206(diracS2STextV206('DIRAC_S2S_KEY_VERSION')),
+    offender_server_id: diracS2SIdV206(verification && verification.serverId),
+    offender_key_version: diracS2SKeyVersionV206(verification && verification.keyVersion),
+    target_server_id: diracS2SIdV206(verification && verification.targetServerId),
+    original_request_id: String(verification && verification.requestId || '').slice(0, 160),
+    original_nonce: String(verification && verification.nonce || '').slice(0, 160),
+    original_body_sha512: String(verification && verification.bodyHash || '').slice(0, 128),
+    failure_code: String(failureCode || verification && verification.reason || 'seven_signature_invalid').slice(0, 120),
+    failed_signature_indexes: Array.isArray(verification && verification.failures) ? verification.failures.slice(0, 7).map(Number) : [],
+    attributed_valid_signature_count: Math.max(0, Math.min(7, Number(verification && verification.validCount || 0))),
+    detected_at_ms: Date.now(),
+    action: String(ctx && ctx.action || '').slice(0, 80),
+    method: String(ctx && ctx.method || '').slice(0, 12),
+    path: diracS2SPathV206(ctx && ctx.req)
+  };
+  evidence.evidence_hash = crypto.createHash('sha512').update(diracS2SStableJsonV206(evidence), 'utf8').digest('hex');
+  return evidence;
+}
+
+function diracS2SServer1TargetV206() {
+  const raw = diracS2STextV206('DIRAC_RECOVERY_SERVER1_URL');
+  if (!raw) return null;
+  try {
+    const target = new URL(raw);
+    if (target.protocol !== 'https:' || target.username || target.password || target.hash) return null;
+    target.search = '';
+    target.searchParams.set('action', 'security_report');
+    return target;
+  } catch (_) { return null; }
+}
+
+async function diracS2SSendSecurityReportV206(payload) {
+  const target = diracS2SServer1TargetV206();
+  const targetServerId = diracS2SIdV206(diracS2STextV206('DIRAC_RECOVERY_SERVER1_SERVER_ID') || 'vercel1-main');
+  if (!target || !targetServerId) return { ok: false, unavailable: true };
+  let signedHeaders;
+  try { signedHeaders = diracS2SSignHeadersV206({ target, action: 'security_report', body: payload, targetServerId }); }
+  catch (_) { return { ok: false, unavailable: true }; }
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 12_000) : null;
+  try {
+    const response = await fetch(target.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...signedHeaders },
+      body: JSON.stringify(payload),
+      redirect: 'error',
+      signal: controller ? controller.signal : undefined
+    });
+    const text = await response.text().catch(() => '');
+    if (Buffer.byteLength(text, 'utf8') > 32 * 1024) return { ok: false, unavailable: true };
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch (_) { data = {}; }
+    return { ok: response.ok && data && data.ok === true, status: response.status, data };
+  } catch (_) {
+    return { ok: false, unavailable: true };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function diracS2SQueueAndReportFailureV206(ctx, verification, failureCode) {
+  const evidence = diracS2SEvidenceV206(ctx, verification, failureCode);
+  if (evidence.attributed_valid_signature_count < 1 || !evidence.offender_server_id || !evidence.offender_key_version) return { ok: false, attributed: false, evidence };
+  const queueKey = 's2s-report-queue:' + evidence.incident_id;
+  const pending = { type: 'dirac_s2s_report_queue_v206', state: 'pending', event: 'signature_failure', evidence, created_at: new Date().toISOString() };
+  const persisted = typeof writePersistentSecurityJsonRequiredV194 === 'function'
+    ? await writePersistentSecurityJsonRequiredV194(queueKey, pending, Date.now() + DIRAC_RECOVERY_PERMANENT_BAN_MS_V201, Math.ceil(DIRAC_RECOVERY_PERMANENT_BAN_MS_V201 / 1000))
+    : false;
+  const sent = await diracS2SSendSecurityReportV206({ action: 'security_report', event: 'signature_failure', evidence });
+  if (sent.ok && persisted) {
+    await writePersistentSecurityJsonRequiredV194(queueKey, { ...pending, state: 'delivered', delivered_at: new Date().toISOString() }, 0, 24 * 60 * 60).catch(() => false);
+  }
+  return { ok: sent.ok, attributed: true, queued: persisted, evidence };
+}
+
+async function diracS2SFlushPendingReportsV206() {
+  if (!LOGIN_SECURITY_PERSIST_TABLE || typeof supabaseFetch !== 'function') return false;
+  try {
+    const path = '/rest/v1/' + encodeURIComponent(LOGIN_SECURITY_PERSIST_TABLE)
+      + '?select=security_key,record_json&security_key=like.' + encodeURIComponent('s2s-report-queue:*')
+      + '&limit=10';
+    const result = await supabaseFetch(path, { method: 'GET', auth: 'service' });
+    if (!result.ok || !Array.isArray(result.data)) return false;
+    for (const row of result.data) {
+      const record = row && row.record_json && typeof row.record_json === 'object' ? row.record_json : null;
+      if (!record || record.state !== 'pending' || !record.evidence) continue;
+      const sent = await diracS2SSendSecurityReportV206({ action: 'security_report', event: 'signature_failure', evidence: record.evidence });
+      if (sent.ok) {
+        await writePersistentSecurityJsonRequiredV194(String(row.security_key || ''), { ...record, state: 'delivered', delivered_at: new Date().toISOString() }, 0, 24 * 60 * 60).catch(() => false);
+      }
+    }
+    return true;
+  } catch (_) { return false; }
+}
+
+async function diracS2SCheckCentralRevocationV206(serverId, keyVersion) {
+  const result = await diracS2SSendSecurityReportV206({
+    action: 'security_report',
+    event: 'revocation_check',
+    offender_server_id: serverId,
+    offender_key_version: keyVersion
+  });
+  if (!result.ok || !result.data || result.data.event !== 'revocation_check') return { ok: false, unavailable: true };
+  return { ok: true, revoked: result.data.revoked === true };
+}
+
+async function diracS2SVerifyInboundV206(req, ctx, body) {
+  const serverId = diracS2SIdV206(diracS2SHeaderV206(req, 'x-dirac-server-id'));
+  const targetServerId = diracS2SIdV206(diracS2SHeaderV206(req, 'x-dirac-target-server-id'));
+  const localServerId = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
+  const keyVersion = diracS2SKeyVersionV206(diracS2SHeaderV206(req, 'x-dirac-key-version'));
+  const timestampText = diracS2SHeaderV206(req, 'x-dirac-timestamp');
+  const timestamp = Number(timestampText);
+  const nonce = diracS2SHeaderV206(req, 'x-dirac-nonce');
+  const requestId = diracS2SHeaderV206(req, 'x-dirac-request-id');
+  const suppliedBodyHash = diracS2SHeaderV206(req, 'x-dirac-body-sha512').toLowerCase();
+  const base = { ok: false, serverId, targetServerId, keyVersion, timestamp: timestampText, nonce, requestId, bodyHash: suppliedBodyHash, failures: [], validCount: 0 };
+  if (diracS2SHeaderV206(req, 'x-dirac-s2s-version') !== DIRAC_S2S_VERSION_V206 || diracS2SHeaderV206(req, 'x-dirac-s2s-policy') !== DIRAC_S2S_POLICY_V206) return { ...base, reason: 's2s_version_or_policy_invalid' };
+  if (!serverId || !targetServerId || !localServerId || targetServerId !== localServerId || !keyVersion) return { ...base, reason: 's2s_identity_binding_invalid' };
+  if (!Number.isSafeInteger(timestamp) || Math.abs(Date.now() - timestamp) > DIRAC_S2S_MAX_CLOCK_SKEW_MS_V206) return { ...base, reason: 's2s_timestamp_invalid' };
+  if (!/^[A-Za-z0-9_-]{32,160}$/.test(nonce) || !/^[A-Za-z0-9_-]{24,160}$/.test(requestId) || !/^[a-f0-9]{128}$/.test(suppliedBodyHash)) return { ...base, reason: 's2s_request_binding_invalid' };
+  const actualBodyHash = diracS2SBodyHashV206(body || {});
+  if (!(typeof safeEqual === 'function' ? safeEqual(suppliedBodyHash, actualBodyHash) : suppliedBodyHash === actualBodyHash)) return { ...base, reason: 's2s_body_hash_invalid' };
+  const registryLookup = await diracS2SRegistryEntryV206(serverId);
+  if (!registryLookup || registryLookup.ok !== true) return { ...base, reason: 's2s_registry_store_unavailable', unavailable: true };
+  const entry = registryLookup.found ? registryLookup.entry : null;
+  if (!entry || String(entry.status || '').toLowerCase() !== 'active' || diracS2SKeyVersionV206(entry.key_version) !== keyVersion) return { ...base, reason: 's2s_registry_or_key_version_invalid' };
+  const allowedTargets = Array.isArray(entry.allowed_targets) ? entry.allowed_targets.map(diracS2SIdV206) : [];
+  const allowedActions = Array.isArray(entry.allowed_actions) ? entry.allowed_actions.map((item) => String(item || '').trim().toLowerCase()) : [];
+  if (!allowedTargets.includes(localServerId) || !allowedActions.includes(String(ctx && ctx.action || '').toLowerCase())) return { ...base, reason: 's2s_scope_not_allowed' };
+  const publicKeys = entry.public_keys && typeof entry.public_keys === 'object' ? entry.public_keys : {};
+  const message = diracS2SCanonicalV206({ serverId, targetServerId, keyVersion, method: ctx.method, path: diracS2SPathV206(req), action: ctx.action, timestamp: timestampText, nonce, requestId, bodyHash: suppliedBodyHash });
+  let validCount = 0;
+  const failures = [];
+  try {
+    for (const spec of diracS2SSignatureSpecsV206()) {
+      let valid = false;
+      try {
+        const rawSignature = diracS2SHeaderV206(req, 'x-dirac-signature-' + spec.index);
+        if (!/^[A-Za-z0-9_-]{40,22000}$/.test(rawSignature)) throw new Error('signature_format');
+        const key = diracS2SKeyObjectV206(String(publicKeys[spec.name] || ''), 'public', spec.type);
+        diracS2SAssertEcCurveV206(key, spec.curve);
+        valid = spec.verify(message, key, Buffer.from(rawSignature, 'base64url')) === true;
+      } catch (_) { valid = false; }
+      if (valid) validCount += 1;
+      else failures.push(spec.index);
+    }
+  } finally { message.fill(0); }
+  const verification = { ...base, validCount, failures, reason: failures.length ? 's2s_seven_signature_invalid' : '', ok: failures.length === 0 };
+  if (!verification.ok) return verification;
+  const central = await diracS2SCheckCentralRevocationV206(serverId, keyVersion);
+  if (!central.ok) return { ...verification, ok: false, unavailable: true, reason: 's2s_central_revocation_unavailable' };
+  if (central.revoked) return { ...verification, ok: false, revoked: true, reason: 's2s_key_revoked' };
+  if (typeof claimPersistentSecurityKeyOnceV194 !== 'function') return { ...verification, ok: false, unavailable: true, reason: 's2s_replay_store_unavailable' };
+  const replayKey = 's2s-replay:' + serverId + ':' + keyVersion + ':' + requestId + ':' + nonce;
+  const claimed = await claimPersistentSecurityKeyOnceV194(replayKey, { type: 'dirac_s2s_replay_claim_v206', server_id: serverId, key_version: keyVersion, request_id: requestId, nonce, created_at: new Date().toISOString() }, 180);
+  if (!claimed) return { ...verification, ok: false, reason: 's2s_replay_detected' };
+  await diracS2SFlushPendingReportsV206().catch(() => false);
+  return verification;
+}
+
+async function diracS2SLegacyRejectV206(req, res, ctx, verification, reason, status, identityKey) {
+  await diracS2SQueueAndReportFailureV206(ctx, verification, reason).catch(() => null);
+  return diracRecoveryGuardRejectV201(req, res, ctx.action, reason, status, identityKey);
+}
+
+if (process.env.NODE_ENV === 'production') diracS2SAssertConfigurationV206();
+
+
 async function diracRecoveryWorkerGuardV201(req, res, ctx, body, identityKey) {
   if (req.method !== 'POST') return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_method_invalid', 405, identityKey);
   if (diracRecoveryHeaderV201(req, 'origin')) return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_origin_forbidden', 403, identityKey);
+  const sevenSignatureVerification = await diracS2SVerifyInboundV206(req, ctx, body);
+  ctx.__diracS2SSevenSignatureVerificationV206 = sevenSignatureVerification;
+  if (!sevenSignatureVerification.ok) {
+    await diracS2SQueueAndReportFailureV206(ctx, sevenSignatureVerification, sevenSignatureVerification.reason).catch(() => null);
+    return diracRecoveryGuardRejectV201(req, res, ctx.action, sevenSignatureVerification.reason, sevenSignatureVerification.unavailable ? 503 : 403, identityKey);
+  }
+  ctx.guardPassport.seven_signatures_checked = true;
   const caller = diracRecoveryHeaderV201(req, 'x-dirac-worker-caller');
   const allowedCaller = customerSecurityRecoveryWorkerAllowedCaller();
   if (!caller || !allowedCaller || !safeEqual(caller, allowedCaller)) {
-    return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_caller_invalid', 403, identityKey);
+    return diracS2SLegacyRejectV206(req, res, ctx, sevenSignatureVerification, 'worker_caller_invalid', 403, identityKey);
   }
   const timestampText = diracRecoveryHeaderV201(req, 'x-dirac-worker-timestamp');
   const timestamp = Number(timestampText);
   if (!Number.isSafeInteger(timestamp) || timestamp <= 0 || Math.abs(Date.now() - timestamp) > customerSecurityRecoveryWorkerClockSkewMs()) {
-    return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_timestamp_invalid', 403, identityKey);
+    return diracS2SLegacyRejectV206(req, res, ctx, sevenSignatureVerification, 'worker_timestamp_invalid', 403, identityKey);
   }
   const signature = diracRecoveryHeaderV201(req, 'x-dirac-worker-signature');
   if (!/^[A-Za-z0-9_-]{86}$/.test(signature)) {
-    return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_signature_format_invalid', 403, identityKey);
+    return diracS2SLegacyRejectV206(req, res, ctx, sevenSignatureVerification, 'worker_signature_format_invalid', 403, identityKey);
   }
   const outerKeys = Object.keys(body).sort();
   const expectedKeys = [
@@ -11453,7 +11822,7 @@ async function diracRecoveryWorkerGuardV201(req, res, ctx, body, identityKey) {
   const canonical = customerSecurityLostPasskeyCanonical(body);
   const expected = customerSecurityRecoveryWorkerSign(caller, timestampText, canonical);
   if (!expected || !safeEqual(signature, expected)) {
-    return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_hmac_invalid', 403, identityKey);
+    return diracS2SLegacyRejectV206(req, res, ctx, sevenSignatureVerification, 'worker_hmac_invalid', 403, identityKey);
   }
   let transportContext;
   try {
@@ -11620,6 +11989,7 @@ module.exports = async function diracRecoveryOnlyServer2HandlerV201(req, res) {
       deployment_role_checked: deploymentRoleChecked,
       environment_partition_checked: environmentPartitionChecked,
       body_checked: true,
+      seven_signatures_checked: !isRecoveryWorkerAction,
       action_guard_checked: false,
       integrity_checked: false,
       version: 'dirac-recovery-central-guard-v204'
