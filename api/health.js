@@ -11460,6 +11460,11 @@ async function diracRecoveryLinkOpenV202(req, res, ctx, body) {
       action: DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165,
       centralGuard: DIRAC_CENTRAL_SECURITY_GUARD_V146
     });
+    const argonQueueReleased = await argonQueueTicket.release();
+    if (argonQueueReleased !== true) {
+      return diracRecoveryLinkOpenJsonV202(res, 503, 'RECOVERY_ARGON2_LEASE_LOST', 'Layanan recovery belum siap.');
+    }
+    argonQueueTicket = null;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('X-Dirac-Central-Security-Guard', DIRAC_CENTRAL_SECURITY_GUARD_V146);
     res.setHeader('X-Dirac-Recovery-Signed-Envelope', DIRAC_RECOVERY_CRYPTO_V2.VERSION);
