@@ -1660,6 +1660,11 @@ const DIRAC_SUPABASE_TARGET_ENVS = Object.freeze({
     anonKey: 'DOMAIN_SUPABASE_ANON_KEY',
     serviceKey: 'DOMAIN_SUPABASE_SERVICE_ROLE_KEY'
   },
+  security: {
+    url: 'DIRAC_SECURITY_SUPABASE_URL',
+    anonKey: 'DIRAC_SECURITY_SUPABASE_ANON_KEY',
+    serviceKey: 'DIRAC_SECURITY_SUPABASE_SERVICE_ROLE_KEY'
+  },
   core: {
     url: 'DIRAC_CORE_SUPABASE_URL',
     anonKey: 'DIRAC_CORE_SUPABASE_ANON_KEY',
@@ -1782,9 +1787,14 @@ function resolveDiracSupabaseTargetKey(path, options = {}) {
   const forced = String(options.db || options.database || '').trim();
   if (forced && DIRAC_SUPABASE_TARGET_ENVS[forced]) return forced;
 
-  if (!shouldUseDiracMultiDbRouter()) return 'legacy';
-
   const tableName = getDiracRestTableFromPath(path);
+  const dedicatedSecurityTables = new Set([
+    String(LOGIN_SECURITY_PERSIST_TABLE || '').trim(),
+    String(typeof DOMAIN_LOGIN_RATE_TABLE !== 'undefined' ? DOMAIN_LOGIN_RATE_TABLE : '').trim()
+  ].filter(Boolean));
+  if (tableName && dedicatedSecurityTables.has(tableName)) return 'security';
+
+  if (!shouldUseDiracMultiDbRouter()) return 'legacy';
   return DIRAC_TABLE_DB_MAP[tableName] || 'legacy';
 }
 
@@ -5290,8 +5300,8 @@ function diracV107Hmac(value) {
 /* source 19985-20003 */
 async function diracV107DirectFetch(method, suffix, body) {
   const table = diracV107Table();
-  const supabaseUrl = String(process.env.DOMAIN_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/\/$/, '');
-  const serviceKey = String(process.env.DOMAIN_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '').trim();
+  const supabaseUrl = String(process.env.DIRAC_SECURITY_SUPABASE_URL || '').replace(/\/$/, '');
+  const serviceKey = String(process.env.DIRAC_SECURITY_SUPABASE_SERVICE_ROLE_KEY || '').trim();
   if (!table || !supabaseUrl || !serviceKey || typeof fetch !== 'function') return { ok: false, data: null };
 
   const url = supabaseUrl + '/rest/v1/' + encodeURIComponent(table) + String(suffix || '');
@@ -6788,6 +6798,10 @@ function readDiracSupabaseCredentials(targetKey) {
   const url = String(process.env[envs.url] || '').trim();
   const anonKey = String(process.env[envs.anonKey] || '').trim();
   const serviceKey = String(process.env[envs.serviceKey] || '').trim();
+
+  if (key === 'security' && (!url || !anonKey || !serviceKey)) {
+    throw new Error(`Missing dedicated security Supabase ENV: ${envs.url}, ${envs.anonKey}, ${envs.serviceKey}`);
+  }
 
   if (url && anonKey && serviceKey) {
     return {
@@ -11593,8 +11607,8 @@ function diracS2SAssertConfigurationV206() {
   const networkId = diracS2STextV206('DIRAC_S2S_NETWORK_ID');
   if (!serverId || !keyVersion) throw new Error('DIRAC_S2S_CONFIGURATION_IDENTITY_INVALID');
   if (!/^[A-Za-z0-9_-]{43,256}$/.test(networkId)) throw new Error('DIRAC_S2S_NETWORK_ID_INVALID');
-  const registry = diracS2SEnvJsonObjectV207('DIRAC_S2S_SERVER_REGISTRY_JSON', true);
-  if (!registry.ok || !diracS2SValidateEnvRegistryV207(registry.value)) throw new Error('DIRAC_S2S_REGISTRY_JSON_INVALID');
+  if (!String(LOGIN_SECURITY_PERSIST_TABLE || '').trim()) throw new Error('DIRAC_S2S_SECURITY_TABLE_REQUIRED');
+  readDiracSupabaseCredentials('security');
   const revoked = diracS2SEnvJsonObjectV207('DIRAC_S2S_REVOKED_KEYS_JSON', false);
   if (!revoked.ok) throw new Error('DIRAC_S2S_REVOKED_KEYS_JSON_INVALID');
   for (const [revokedServerId, versions] of Object.entries(revoked.value)) {
@@ -11613,14 +11627,23 @@ function diracS2SAssertConfigurationV206() {
 
 async function diracS2SRegistryEntryV206(serverId) {
   const cleanServerId = diracS2SIdV206(serverId);
-  if (!cleanServerId) return { ok: true, found: false, entry: null, source: 'environment_registry' };
-  const registry = diracS2SEnvJsonObjectV207('DIRAC_S2S_SERVER_REGISTRY_JSON', true);
-  if (!registry.ok || !diracS2SValidateEnvRegistryV207(registry.value)) {
-    return { ok: false, found: false, entry: null, unavailable: true, source: 'environment_registry' };
+  if (!cleanServerId) return { ok: true, found: false, entry: null, source: 'security_database_registry' };
+  if (typeof readPersistentSecurityJsonStrictV194 !== 'function') {
+    return { ok: false, found: false, entry: null, unavailable: true, source: 'security_database_registry' };
   }
-  const entry = registry.value[cleanServerId];
-  const validEntry = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : null;
-  return { ok: true, found: Boolean(validEntry), entry: validEntry, source: 'environment_registry' };
+  const lookup = await readPersistentSecurityJsonStrictV194('s2s-server-registry:' + cleanServerId);
+  if (!lookup || lookup.ok !== true) {
+    return { ok: false, found: false, entry: null, unavailable: true, source: 'security_database_registry' };
+  }
+  if (!lookup.found) return { ok: true, found: false, entry: null, source: 'security_database_registry' };
+  const record = lookup.record && typeof lookup.record === 'object' && !Array.isArray(lookup.record) ? lookup.record : null;
+  const entry = record && record.entry && typeof record.entry === 'object' && !Array.isArray(record.entry)
+    ? record.entry
+    : record;
+  if (!entry || !diracS2SValidateEnvRegistryV207({ [cleanServerId]: entry })) {
+    return { ok: false, found: false, entry: null, unavailable: true, source: 'security_database_registry' };
+  }
+  return { ok: true, found: true, entry, source: 'security_database_registry' };
 }
 
 function diracS2SSignHeadersV206(input) {
