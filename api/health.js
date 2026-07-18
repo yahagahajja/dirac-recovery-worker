@@ -1265,11 +1265,24 @@ const CUSTOMER_MFA_SESSION_TYPE = 'dirac-customer-mfa-session-v1';
 /* source 1411-1411 */
 const DOMAIN_SIGNED_SESSION_TYPE = 'dirac-domain-signed-session-v1';
 
-/* source 1468-1468 */
-const LOGIN_SECURITY_PERSIST_TABLE = String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim();
+/* Dedicated security database tables. Names are fixed to the hardened schema. */
+const DIRAC_PERSISTENT_BAN_TABLE = 'dirac_persistent_bans';
+const DIRAC_S2S_SECURITY_TABLE = 'dirac_s2s_security';
+const LOGIN_SECURITY_PERSIST_TABLE = DIRAC_PERSISTENT_BAN_TABLE;
 
 /* source 1469-1469 */
 const LOGIN_SECURITY_PERSIST_TTL_SECONDS = 10 * 365 * 24 * 60 * 60;
+
+function diracPersistentSecurityTableForKeyV209(securityKey) {
+  const key = String(securityKey || '').trim();
+  if (/^(?:s2s-|recovery-worker-nonce-v183:)/.test(key)) return DIRAC_S2S_SECURITY_TABLE;
+  return DIRAC_PERSISTENT_BAN_TABLE;
+}
+
+function diracPersistentSecurityTableForKeysV209(securityKeys) {
+  const tables = new Set((securityKeys || []).map(diracPersistentSecurityTableForKeyV209));
+  return tables.size === 1 ? Array.from(tables)[0] : '';
+}
 
 /* source 1906-1912 */
 function isStrictDomainLoginEmail(email) {
@@ -1296,10 +1309,11 @@ function getLoginSecurityIp(req) {
 /* source 2091-2107 */
 async function readPersistentSecurityJson(securityKey) {
   const key = String(securityKey || '').trim();
-  if (!LOGIN_SECURITY_PERSIST_TABLE || !key) return null;
+  const table = diracPersistentSecurityTableForKeyV209(key);
+  if (!table || !key) return null;
 
   try {
-    const path = `/rest/v1/${encodeURIComponent(LOGIN_SECURITY_PERSIST_TABLE)}?select=security_key,record_json,blocked_until_ms,expires_at&security_key=eq.${encodeURIComponent(key)}&limit=1`;
+    const path = `/rest/v1/${encodeURIComponent(table)}?select=security_key,record_json,blocked_until_ms,expires_at&security_key=eq.${encodeURIComponent(key)}&limit=1`;
     const result = await supabaseFetch(path, { method: 'GET', auth: 'service' });
     if (!result.ok || !Array.isArray(result.data) || !result.data.length) return null;
 
@@ -1315,7 +1329,8 @@ async function readPersistentSecurityJson(securityKey) {
 /* source 2109-2135 */
 async function writePersistentSecurityJson(securityKey, record, blockedUntilMs = 0, ttlSeconds = LOGIN_SECURITY_PERSIST_TTL_SECONDS) {
   const key = String(securityKey || '').trim();
-  if (!LOGIN_SECURITY_PERSIST_TABLE || !key) return false;
+  const table = diracPersistentSecurityTableForKeyV209(key);
+  if (!table || !key) return false;
 
   try {
     const now = Date.now();
@@ -1329,7 +1344,7 @@ async function writePersistentSecurityJson(securityKey, record, blockedUntilMs =
       expires_at: expiresAt
     }];
 
-    const result = await supabaseFetch(`/rest/v1/${encodeURIComponent(LOGIN_SECURITY_PERSIST_TABLE)}?on_conflict=security_key`, {
+    const result = await supabaseFetch(`/rest/v1/${encodeURIComponent(table)}?on_conflict=security_key`, {
       method: 'POST',
       auth: 'service',
       prefer: 'resolution=merge-duplicates',
@@ -1344,9 +1359,10 @@ async function writePersistentSecurityJson(securityKey, record, blockedUntilMs =
 /* source 2140-2162 */
 async function readPersistentSecurityJsonStrictV194(securityKey) {
   const key = String(securityKey || '').trim();
-  if (!LOGIN_SECURITY_PERSIST_TABLE || !key) return { ok: false, found: false, record: null };
+  const table = diracPersistentSecurityTableForKeyV209(key);
+  if (!table || !key) return { ok: false, found: false, record: null };
   try {
-    const path = `/rest/v1/${encodeURIComponent(LOGIN_SECURITY_PERSIST_TABLE)}?select=security_key,record_json,blocked_until_ms,expires_at&security_key=eq.${encodeURIComponent(key)}&limit=1`;
+    const path = `/rest/v1/${encodeURIComponent(table)}?select=security_key,record_json,blocked_until_ms,expires_at&security_key=eq.${encodeURIComponent(key)}&limit=1`;
     const result = await supabaseFetch(path, { method: 'GET', auth: 'service' });
     if (!result || result.ok !== true || !Array.isArray(result.data)) {
       return { ok: false, found: false, record: null };
@@ -1368,7 +1384,7 @@ async function readPersistentSecurityJsonStrictV194(securityKey) {
 
 /* source 2187-2194 */
 async function writePersistentSecurityJsonRequiredV194(securityKey, record, blockedUntilMs, ttlSeconds) {
-  if (!LOGIN_SECURITY_PERSIST_TABLE || typeof writePersistentSecurityJson !== 'function') return false;
+  if (!diracPersistentSecurityTableForKeyV209(securityKey) || typeof writePersistentSecurityJson !== 'function') return false;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const wrote = await writePersistentSecurityJson(securityKey, record, blockedUntilMs, ttlSeconds).catch(() => false);
     if (wrote === true) return true;
@@ -1379,7 +1395,8 @@ async function writePersistentSecurityJsonRequiredV194(securityKey, record, bloc
 /* source 2196-2220 */
 async function claimPersistentSecurityKeyOnceV194(securityKey, record, ttlSeconds) {
   const key = String(securityKey || '').trim();
-  if (!LOGIN_SECURITY_PERSIST_TABLE || !key) return false;
+  const table = diracPersistentSecurityTableForKeyV209(key);
+  if (!table || !key) return false;
   const now = Date.now();
   const ttl = Math.max(60, Number(ttlSeconds || 60));
   const payload = [{
@@ -1390,7 +1407,7 @@ async function claimPersistentSecurityKeyOnceV194(securityKey, record, ttlSecond
     expires_at: new Date(now + ttl * 1000).toISOString()
   }];
   try {
-    const result = await supabaseFetch(`/rest/v1/${encodeURIComponent(LOGIN_SECURITY_PERSIST_TABLE)}?on_conflict=security_key`, {
+    const result = await supabaseFetch(`/rest/v1/${encodeURIComponent(table)}?on_conflict=security_key`, {
       method: 'POST',
       auth: 'service',
       prefer: 'resolution=ignore-duplicates,return=representation',
@@ -1789,7 +1806,8 @@ function resolveDiracSupabaseTargetKey(path, options = {}) {
 
   const tableName = getDiracRestTableFromPath(path);
   const dedicatedSecurityTables = new Set([
-    String(LOGIN_SECURITY_PERSIST_TABLE || '').trim(),
+    DIRAC_PERSISTENT_BAN_TABLE,
+    DIRAC_S2S_SECURITY_TABLE,
     String(typeof DOMAIN_LOGIN_RATE_TABLE !== 'undefined' ? DOMAIN_LOGIN_RATE_TABLE : '').trim()
   ].filter(Boolean));
   if (tableName && dedicatedSecurityTables.has(tableName)) return 'security';
@@ -2821,7 +2839,7 @@ function customerSecurityLostPasskeyQueueIntV164(name, fallback, min, max) {
 
 /* source 7292-7294 */
 function customerSecurityLostPasskeyQueueTableV164() {
-  return String(process.env.LOGIN_SECURITY_PERSIST_TABLE || process.env.DOMAIN_LOGIN_RATE_TABLE || 'dirac_security_rate_limits').trim();
+  return DIRAC_PERSISTENT_BAN_TABLE;
 }
 
 /* source 7296-7298 */
@@ -5320,7 +5338,7 @@ async function diracV107DirectFetch(method, suffix, body) {
 
 /* source 20005-20007 */
 function diracV107Table() {
-  return String(process.env.LOGIN_SECURITY_PERSIST_TABLE || process.env.DOMAIN_LOGIN_RATE_TABLE || 'dirac_security_rate_limits').trim();
+  return DIRAC_PERSISTENT_BAN_TABLE;
 }
 
 /* source 20367-20367 */
@@ -8980,8 +8998,8 @@ function diracCentralEnvTrueV150(name) {
 
 /* source 30636-30667 */
 async function diracCentralRecoveryWorkerClaimNonceV183(caller, nonce, usedUntilMs) {
-  const table = String(LOGIN_SECURITY_PERSIST_TABLE || '').trim();
-  if (!table) return { ok: false, reason: 'recovery_worker_nonce_table_missing' };
+  const table = DIRAC_S2S_SECURITY_TABLE;
+  if (table !== 'dirac_s2s_security') return { ok: false, reason: 'recovery_worker_nonce_table_missing' };
   const nonceDigest = customerSecurityLostPasskeySha256HexV157(String(caller || '') + ':' + String(nonce || ''));
   const securityKey = 'recovery-worker-nonce-v183:' + nonceDigest;
   const now = Date.now();
@@ -10891,9 +10909,10 @@ async function readBody(req) {
 }
 
 function diracRecoverySupabaseAllowedTableV201(table) {
-  const configuredGuard = String(process.env.LOGIN_SECURITY_PERSIST_TABLE || process.env.DOMAIN_LOGIN_RATE_TABLE || 'dirac_security_rate_limits').trim();
+  const configuredGuard = DIRAC_PERSISTENT_BAN_TABLE;
   const allowed = new Set([
     configuredGuard,
+    DIRAC_S2S_SECURITY_TABLE,
     'dirac_security_rate_limits',
     'security_customer_access_blocks',
     'security_customer_auth_links',
@@ -11162,7 +11181,7 @@ function diracRecoveryAssertServer2EnvironmentV201() {
   if (process.env.NODE_ENV === 'production' && forbidden.some((name) => String(process.env[name] || '').trim())) {
     throw new Error('DIRAC_SERVER2_ENV_PARTITION_FAILED');
   }
-  if (process.env.NODE_ENV === 'production' && !String(process.env.LOGIN_SECURITY_PERSIST_TABLE || '').trim()) {
+  if (process.env.NODE_ENV === 'production' && DIRAC_PERSISTENT_BAN_TABLE !== 'dirac_persistent_bans') {
     throw new Error('DIRAC_SERVER2_PERSISTENT_BAN_TABLE_REQUIRED');
   }
   if (process.env.NODE_ENV === 'production') {
@@ -11607,7 +11626,7 @@ function diracS2SAssertConfigurationV206() {
   const networkId = diracS2STextV206('DIRAC_S2S_NETWORK_ID');
   if (!serverId || !keyVersion) throw new Error('DIRAC_S2S_CONFIGURATION_IDENTITY_INVALID');
   if (!/^[A-Za-z0-9_-]{43,256}$/.test(networkId)) throw new Error('DIRAC_S2S_NETWORK_ID_INVALID');
-  if (!String(LOGIN_SECURITY_PERSIST_TABLE || '').trim()) throw new Error('DIRAC_S2S_SECURITY_TABLE_REQUIRED');
+  if (DIRAC_S2S_SECURITY_TABLE !== 'dirac_s2s_security') throw new Error('DIRAC_S2S_SECURITY_TABLE_REQUIRED');
   readDiracSupabaseCredentials('security');
   const revoked = diracS2SEnvJsonObjectV207('DIRAC_S2S_REVOKED_KEYS_JSON', false);
   if (!revoked.ok) throw new Error('DIRAC_S2S_REVOKED_KEYS_JSON_INVALID');
@@ -11765,9 +11784,9 @@ async function diracS2SQueueAndReportFailureV206(ctx, verification, failureCode)
 }
 
 async function diracS2SFlushPendingReportsV206() {
-  if (!LOGIN_SECURITY_PERSIST_TABLE || typeof supabaseFetch !== 'function') return false;
+  if (DIRAC_S2S_SECURITY_TABLE !== 'dirac_s2s_security' || typeof supabaseFetch !== 'function') return false;
   try {
-    const path = '/rest/v1/' + encodeURIComponent(LOGIN_SECURITY_PERSIST_TABLE)
+    const path = '/rest/v1/' + encodeURIComponent(DIRAC_S2S_SECURITY_TABLE)
       + '?select=security_key,record_json&security_key=like.' + encodeURIComponent('s2s-report-queue:*')
       + '&limit=10';
     const result = await supabaseFetch(path, { method: 'GET', auth: 'service' });
