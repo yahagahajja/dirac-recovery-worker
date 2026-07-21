@@ -3377,11 +3377,15 @@ function customerSecurityRecoveryWorkerSign(caller, timestamp, canonicalBody) {
 
 /* source 8215-8225 */
 function customerSecurityRecoveryWorkerLocalEnabled() {
-  const server2Enabled = diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')
-    || diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED')
-    || diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') === 'vercel2'
-    || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE') === 'vercel2';
-  return server2Enabled
+  const role = String(
+    diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE')
+      || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE')
+      || ''
+  ).trim().toLowerCase();
+  const enabled = diracCentralEnvTrueV150('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED')
+    || diracCentralEnvTrueV150('DIRAC_VERCEL2_ACTIONS_ENABLED');
+  return role === 'vercel2'
+    && enabled
     && !customerSecurityRecoveryWorkerUrl()
     && !customerSecurityRecoveryWorkerCaller()
     && Boolean(customerSecurityRecoveryWorkerSecret())
@@ -4697,12 +4701,10 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     });
   }
 
-  if (!localWorker) {
-    const verifiedPassword = await customerSecurityVerifyAccountPasswordForPdfV156(owner.email, passwordMaterial);
-    if (!verifiedPassword.ok) {
-      await customerSecurityRegisterFailedVerification(req, action, 'recovery_account_password_invalid', access.customerId);
-      return res.status(403).json({ ok: false, code: 'ACCOUNT_PASSWORD_INVALID', message: 'Password akun belum sesuai.' });
-    }
+  const verifiedPassword = await customerSecurityVerifyAccountPasswordForPdfV156(owner.email, passwordMaterial);
+  if (!verifiedPassword.ok) {
+    await customerSecurityRegisterFailedVerification(req, action, 'recovery_account_password_invalid', access.customerId);
+    return res.status(403).json({ ok: false, code: 'ACCOUNT_PASSWORD_INVALID', message: 'Password akun belum sesuai.' });
   }
 
   const activePasskeys = localWorker && override && Array.isArray(override.activePasskeys)
@@ -11299,6 +11301,11 @@ function diracRecoveryAssertServer2EnvironmentV201() {
     diracCentralRootSecretV146();
     const workerSecret = customerSecurityRecoveryWorkerSecret();
     if (!workerSecret) throw new Error('DIRAC_SERVER2_WORKER_SECRET_REQUIRED');
+    if (!customerSecurityRecoveryWorkerAllowedCaller()) throw new Error('DIRAC_SERVER2_ALLOWED_CALLER_REQUIRED');
+    customerSecurityRecoveryWorkerPrivateKeyV190('DIRAC_RECOVERY_WORKER_X25519_PRIVATE_KEY', 'x25519');
+    customerSecurityRecoveryWorkerPrivateKeyV190('DIRAC_RECOVERY_WORKER_MLKEM1024_PRIVATE_KEY', 'ml-kem-1024');
+    DIRAC_RECOVERY_CRYPTO_V2.assertRuntimePolicy();
+    if (!customerSecurityRecoveryWorkerLocalEnabled()) throw new Error('DIRAC_SERVER2_RECOVERY_WORKER_BOUNDARY_INVALID');
     const explicitPepper = String(process.env.DIRAC_LOST_PASSKEY_DB_PEPPER || '').normalize('NFC');
     if (Buffer.byteLength(explicitPepper, 'utf8') < LOST_PASSKEY_DB_PEPPER_MIN_BYTES_V157) {
       throw new Error('DIRAC_SERVER2_DB_PEPPER_REQUIRED');
@@ -12340,3 +12347,15 @@ module.exports = async function diracRecoveryOnlyServer2HandlerV201(req, res) {
 };
 Object.defineProperty(module.exports, '__diracCentralSecurityGuardV146', { value: true, enumerable: false });
 Object.defineProperty(module.exports, '__diracRecoveryOnlyServer2V201', { value: true, enumerable: false });
+
+
+/* ============================================================
+   DIRAC SERVER 2 RECOVERY-ONLY INVARIANT v220
+   Narrow invariant only; no non-recovery route is introduced.
+   ============================================================ */
+if (typeof module.exports !== 'function'
+    || module.exports.__diracCentralSecurityGuardV146 !== true
+    || module.exports.__diracRecoveryOnlyServer2V201 !== true) {
+  throw new Error('DIRAC_SERVER2_RECOVERY_ONLY_EXPORT_INVARIANT_FAILED_V220');
+}
+Object.defineProperty(module.exports, '__diracServer2RecoveryOnlyV220', { value: true, enumerable: false });
