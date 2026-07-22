@@ -9917,6 +9917,7 @@ const DIRAC_RECOVERY_HPKE_SUITE_V159 = 'DHKEM-X25519-HKDF-SHA256+HKDF-SHA384+AES
 
 /* source 33237-33237 */
 const DIRAC_RECOVERY_HPKE_ARGON2_PROFILE_V159 = 'argon2id-salt-pepper-v1';
+const DIRAC_RECOVERY_HPKE_S2S_CROSS_BINDING_PATCH_V227 = 'dirac-recovery-hpke-s2s-cross-binding-v227';
 
 /* source 33241-33241 */
 const DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187 = globalThis.__DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187__ || { running: 0 };
@@ -10163,7 +10164,7 @@ function diracRecoveryHpkeProofBodyV159(env, row) {
 }
 
 /* source 33766-33783 */
-function diracRecoveryHpkeProofSignatureV159(caller, timestamp, body) {
+function diracRecoveryHpkeProofSignatureV159(caller, timestamp, body, s2sCrossBinding) {
   const secretText = customerSecurityRecoveryWorkerSecret();
   if (!secretText) return '';
   const secret = Buffer.from(secretText, 'utf8');
@@ -10176,6 +10177,10 @@ function diracRecoveryHpkeProofSignatureV159(caller, timestamp, body) {
       .update(timestamp)
       .update('\n')
       .update(customerSecurityLostPasskeyCanonical(body))
+      .update('\n')
+      .update(DIRAC_RECOVERY_HPKE_S2S_CROSS_BINDING_PATCH_V227)
+      .update('\n')
+      .update(String(s2sCrossBinding || ''))
       .digest('base64url');
   } finally {
     secret.fill(0);
@@ -10273,9 +10278,23 @@ function diracRecoveryHpkeOpenProofResponseV190(data, body, status) {
 async function diracRecoveryHpkeSendProofV159(env, proofBody) {
   const target = new URL(env.server1Url);
   target.searchParams.set('action', DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159);
-  const caller = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
+  const caller = 'vercel2';
   const timestamp = String(Date.now());
-  const signature = diracRecoveryHpkeProofSignatureV159(caller, timestamp, proofBody);
+  const s2sHeaders = diracS2SSignHeadersV206({
+    target,
+    action: DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159,
+    body: proofBody,
+    targetServerId: diracS2SIdV206(process.env.DIRAC_RECOVERY_SERVER1_SERVER_ID || 'vercel1-main')
+  });
+  const s2sCrossBinding = [
+    DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159,
+    'X-Dirac-S2S-Version', 'X-Dirac-S2S-Policy', 'X-Dirac-Network-Id',
+    'X-Dirac-Server-Id', 'X-Dirac-Target-Server-Id', 'X-Dirac-Key-Version',
+    'X-Dirac-Timestamp', 'X-Dirac-Nonce', 'X-Dirac-Request-Id', 'X-Dirac-Body-SHA512',
+    'X-Dirac-Signature-1', 'X-Dirac-Signature-2', 'X-Dirac-Signature-3', 'X-Dirac-Signature-4',
+    'X-Dirac-Signature-5', 'X-Dirac-Signature-6', 'X-Dirac-Signature-7'
+  ].map((name, index) => index === 0 ? name : String(s2sHeaders[name] || '')).join('\n');
+  const signature = diracRecoveryHpkeProofSignatureV159(caller, timestamp, proofBody, s2sCrossBinding);
   const diagnosticStartedAt = Date.now();
   const requestIdHash = crypto.createHash('sha256')
     .update(String(proofBody && proofBody.request_id || ''))
@@ -10332,12 +10351,7 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
         'X-Dirac-HPKE-Caller': caller,
         'X-Dirac-HPKE-Timestamp': timestamp,
         'X-Dirac-HPKE-Signature': signature,
-        ...diracS2SSignHeadersV206({
-          target,
-          action: DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159,
-          body: proofBody,
-          targetServerId: diracS2SIdV206(process.env.DIRAC_RECOVERY_SERVER1_SERVER_ID || 'vercel1-main')
-        })
+        ...s2sHeaders
       },
       body: JSON.stringify(proofBody),
       redirect: 'error',
