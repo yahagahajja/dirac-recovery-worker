@@ -12359,3 +12359,71 @@ if (typeof module.exports !== 'function'
   throw new Error('DIRAC_SERVER2_RECOVERY_ONLY_EXPORT_INVARIANT_FAILED_V220');
 }
 Object.defineProperty(module.exports, '__diracServer2RecoveryOnlyV220', { value: true, enumerable: false });
+
+/* ============================================================
+   DIRAC SERVER 2 STRICT RECOVERY BOUNDARY v221
+   Insert-only outer invariant. Existing recovery/lost-passkey handler bytes
+   and Central Guard bytes remain unchanged.
+   ============================================================ */
+const DIRAC_SERVER2_STRICT_RECOVERY_BOUNDARY_V221 = 'dirac-server2-strict-recovery-boundary-v221';
+const DIRAC_SERVER2_FORBIDDEN_SECURITY_DISABLE_ENVS_V221 = Object.freeze([
+  'DIRAC_LOST_PASSKEY_QUEUE_DISABLED',
+  'DIRAC_GLOBAL_API_THREAT_GUARD_DISABLED',
+  'DIRAC_BOLA_IDOR_GLOBAL_BAN_DISABLED',
+  'DIRAC_BOLA_IDOR_SERVICE_SCOPE_DISABLED',
+  'DIRAC_SECURITY_WRITE_COALESCER_DISABLED',
+  'DIRAC_CSRF_ALL_WEBSITE_ACTIONS_DISABLED'
+]);
+
+function diracServer2StrictEnvTrueV221(name) {
+  return /^(?:1|true|yes|on|enabled)$/i.test(String(process.env[String(name || '')] || '').trim());
+}
+
+function diracServer2StrictAssertV221() {
+  const disabled = DIRAC_SERVER2_FORBIDDEN_SECURITY_DISABLE_ENVS_V221.filter(diracServer2StrictEnvTrueV221);
+  if (disabled.length) throw new Error('DIRAC_SERVER2_SECURITY_DISABLE_FLAG_FORBIDDEN_V221');
+  if (typeof customerSecurityLostPasskeyQueueEnabledV164 !== 'function'
+      || customerSecurityLostPasskeyQueueEnabledV164() !== true) {
+    throw new Error('DIRAC_SERVER2_LOST_PASSKEY_QUEUE_REQUIRED_V221');
+  }
+  if (typeof customerSecurityLostPasskeyQueueTableV164 !== 'function'
+      || String(customerSecurityLostPasskeyQueueTableV164() || '').trim() !== String(DIRAC_PERSISTENT_BAN_TABLE || '').trim()
+      || !String(DIRAC_PERSISTENT_BAN_TABLE || '').trim()) {
+    throw new Error('DIRAC_SERVER2_QUEUE_PERSISTENCE_TABLE_INVALID_V221');
+  }
+  if (typeof readPersistentSecurityJsonStrictV194 !== 'function'
+      || typeof writePersistentSecurityJsonRequiredV194 !== 'function'
+      || typeof claimPersistentSecurityKeyOnceV194 !== 'function') {
+    throw new Error('DIRAC_SERVER2_SECURITY_PERSISTENCE_BINDING_MISSING_V221');
+  }
+  return true;
+}
+
+diracServer2StrictAssertV221();
+const __diracServer2RecoveryOnlyBeforeV221 = module.exports;
+module.exports = async function diracServer2StrictRecoveryBoundaryV221(req, res) {
+  try {
+    diracServer2StrictAssertV221();
+  } catch (_) {
+    if (res && typeof res.status === 'function' && typeof res.json === 'function') {
+      return res.status(503).json({
+        ok: false,
+        code: 'DIRAC_SERVER2_SECURITY_BOUNDARY_UNAVAILABLE_V221',
+        message: 'Sistem keamanan recovery belum tersedia.'
+      });
+    }
+    throw _;
+  }
+  return __diracServer2RecoveryOnlyBeforeV221(req, res);
+};
+Object.defineProperty(module.exports, '__diracCentralSecurityGuardV146', { value: true, enumerable: false });
+Object.defineProperty(module.exports, '__diracRecoveryOnlyServer2V201', { value: true, enumerable: false });
+Object.defineProperty(module.exports, '__diracServer2RecoveryOnlyV220', { value: true, enumerable: false });
+Object.defineProperty(module.exports, '__diracServer2StrictRecoveryBoundaryV221', { value: true, enumerable: false });
+if (module.exports.__diracCentralSecurityGuardV146 !== true
+    || module.exports.__diracRecoveryOnlyServer2V201 !== true
+    || module.exports.__diracServer2RecoveryOnlyV220 !== true
+    || module.exports.__diracServer2StrictRecoveryBoundaryV221 !== true) {
+  throw new Error('DIRAC_SERVER2_STRICT_EXPORT_INVARIANT_FAILED_V221');
+}
+
