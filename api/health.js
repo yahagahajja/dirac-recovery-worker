@@ -9917,7 +9917,6 @@ const DIRAC_RECOVERY_HPKE_SUITE_V159 = 'DHKEM-X25519-HKDF-SHA256+HKDF-SHA384+AES
 
 /* source 33237-33237 */
 const DIRAC_RECOVERY_HPKE_ARGON2_PROFILE_V159 = 'argon2id-salt-pepper-v1';
-const DIRAC_RECOVERY_HPKE_S2S_CROSS_BINDING_PATCH_V227 = 'dirac-recovery-hpke-s2s-cross-binding-v227';
 
 /* source 33241-33241 */
 const DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187 = globalThis.__DIRAC_RECOVERY_HPKE_ARGON2_GATE_V187__ || { running: 0 };
@@ -10164,7 +10163,7 @@ function diracRecoveryHpkeProofBodyV159(env, row) {
 }
 
 /* source 33766-33783 */
-function diracRecoveryHpkeProofSignatureV159(caller, timestamp, body, s2sCrossBinding) {
+function diracRecoveryHpkeProofSignatureV159(caller, timestamp, body) {
   const secretText = customerSecurityRecoveryWorkerSecret();
   if (!secretText) return '';
   const secret = Buffer.from(secretText, 'utf8');
@@ -10177,10 +10176,6 @@ function diracRecoveryHpkeProofSignatureV159(caller, timestamp, body, s2sCrossBi
       .update(timestamp)
       .update('\n')
       .update(customerSecurityLostPasskeyCanonical(body))
-      .update('\n')
-      .update(DIRAC_RECOVERY_HPKE_S2S_CROSS_BINDING_PATCH_V227)
-      .update('\n')
-      .update(String(s2sCrossBinding || ''))
       .digest('base64url');
   } finally {
     secret.fill(0);
@@ -10280,21 +10275,7 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
   target.searchParams.set('action', DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159);
   const caller = 'vercel2';
   const timestamp = String(Date.now());
-  const s2sHeaders = diracS2SSignHeadersV206({
-    target,
-    action: DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159,
-    body: proofBody,
-    targetServerId: diracS2SIdV206(process.env.DIRAC_RECOVERY_SERVER1_SERVER_ID || 'vercel1-main')
-  });
-  const s2sCrossBinding = [
-    DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159,
-    'X-Dirac-S2S-Version', 'X-Dirac-S2S-Policy', 'X-Dirac-Network-Id',
-    'X-Dirac-Server-Id', 'X-Dirac-Target-Server-Id', 'X-Dirac-Key-Version',
-    'X-Dirac-Timestamp', 'X-Dirac-Nonce', 'X-Dirac-Request-Id', 'X-Dirac-Body-SHA512',
-    'X-Dirac-Signature-1', 'X-Dirac-Signature-2', 'X-Dirac-Signature-3', 'X-Dirac-Signature-4',
-    'X-Dirac-Signature-5', 'X-Dirac-Signature-6', 'X-Dirac-Signature-7'
-  ].map((name, index) => index === 0 ? name : String(s2sHeaders[name] || '')).join('\n');
-  const signature = diracRecoveryHpkeProofSignatureV159(caller, timestamp, proofBody, s2sCrossBinding);
+  const signature = diracRecoveryHpkeProofSignatureV159(caller, timestamp, proofBody);
   const diagnosticStartedAt = Date.now();
   const requestIdHash = crypto.createHash('sha256')
     .update(String(proofBody && proofBody.request_id || ''))
@@ -10351,7 +10332,12 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
         'X-Dirac-HPKE-Caller': caller,
         'X-Dirac-HPKE-Timestamp': timestamp,
         'X-Dirac-HPKE-Signature': signature,
-        ...s2sHeaders
+        ...diracS2SSignHeadersV206({
+          target,
+          action: DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159,
+          body: proofBody,
+          targetServerId: diracS2SIdV206(process.env.DIRAC_RECOVERY_SERVER1_SERVER_ID || 'vercel1-main')
+        })
       },
       body: JSON.stringify(proofBody),
       redirect: 'error',
@@ -12373,71 +12359,3 @@ if (typeof module.exports !== 'function'
   throw new Error('DIRAC_SERVER2_RECOVERY_ONLY_EXPORT_INVARIANT_FAILED_V220');
 }
 Object.defineProperty(module.exports, '__diracServer2RecoveryOnlyV220', { value: true, enumerable: false });
-
-/* ============================================================
-   DIRAC SERVER 2 STRICT RECOVERY BOUNDARY v221
-   Insert-only outer invariant. Existing recovery/lost-passkey handler bytes
-   and Central Guard bytes remain unchanged.
-   ============================================================ */
-const DIRAC_SERVER2_STRICT_RECOVERY_BOUNDARY_V221 = 'dirac-server2-strict-recovery-boundary-v221';
-const DIRAC_SERVER2_FORBIDDEN_SECURITY_DISABLE_ENVS_V221 = Object.freeze([
-  'DIRAC_LOST_PASSKEY_QUEUE_DISABLED',
-  'DIRAC_GLOBAL_API_THREAT_GUARD_DISABLED',
-  'DIRAC_BOLA_IDOR_GLOBAL_BAN_DISABLED',
-  'DIRAC_BOLA_IDOR_SERVICE_SCOPE_DISABLED',
-  'DIRAC_SECURITY_WRITE_COALESCER_DISABLED',
-  'DIRAC_CSRF_ALL_WEBSITE_ACTIONS_DISABLED'
-]);
-
-function diracServer2StrictEnvTrueV221(name) {
-  return /^(?:1|true|yes|on|enabled)$/i.test(String(process.env[String(name || '')] || '').trim());
-}
-
-function diracServer2StrictAssertV221() {
-  const disabled = DIRAC_SERVER2_FORBIDDEN_SECURITY_DISABLE_ENVS_V221.filter(diracServer2StrictEnvTrueV221);
-  if (disabled.length) throw new Error('DIRAC_SERVER2_SECURITY_DISABLE_FLAG_FORBIDDEN_V221');
-  if (typeof customerSecurityLostPasskeyQueueEnabledV164 !== 'function'
-      || customerSecurityLostPasskeyQueueEnabledV164() !== true) {
-    throw new Error('DIRAC_SERVER2_LOST_PASSKEY_QUEUE_REQUIRED_V221');
-  }
-  if (typeof customerSecurityLostPasskeyQueueTableV164 !== 'function'
-      || String(customerSecurityLostPasskeyQueueTableV164() || '').trim() !== String(DIRAC_PERSISTENT_BAN_TABLE || '').trim()
-      || !String(DIRAC_PERSISTENT_BAN_TABLE || '').trim()) {
-    throw new Error('DIRAC_SERVER2_QUEUE_PERSISTENCE_TABLE_INVALID_V221');
-  }
-  if (typeof readPersistentSecurityJsonStrictV194 !== 'function'
-      || typeof writePersistentSecurityJsonRequiredV194 !== 'function'
-      || typeof claimPersistentSecurityKeyOnceV194 !== 'function') {
-    throw new Error('DIRAC_SERVER2_SECURITY_PERSISTENCE_BINDING_MISSING_V221');
-  }
-  return true;
-}
-
-diracServer2StrictAssertV221();
-const __diracServer2RecoveryOnlyBeforeV221 = module.exports;
-module.exports = async function diracServer2StrictRecoveryBoundaryV221(req, res) {
-  try {
-    diracServer2StrictAssertV221();
-  } catch (_) {
-    if (res && typeof res.status === 'function' && typeof res.json === 'function') {
-      return res.status(503).json({
-        ok: false,
-        code: 'DIRAC_SERVER2_SECURITY_BOUNDARY_UNAVAILABLE_V221',
-        message: 'Sistem keamanan recovery belum tersedia.'
-      });
-    }
-    throw _;
-  }
-  return __diracServer2RecoveryOnlyBeforeV221(req, res);
-};
-Object.defineProperty(module.exports, '__diracCentralSecurityGuardV146', { value: true, enumerable: false });
-Object.defineProperty(module.exports, '__diracRecoveryOnlyServer2V201', { value: true, enumerable: false });
-Object.defineProperty(module.exports, '__diracServer2RecoveryOnlyV220', { value: true, enumerable: false });
-Object.defineProperty(module.exports, '__diracServer2StrictRecoveryBoundaryV221', { value: true, enumerable: false });
-if (module.exports.__diracCentralSecurityGuardV146 !== true
-    || module.exports.__diracRecoveryOnlyServer2V201 !== true
-    || module.exports.__diracServer2RecoveryOnlyV220 !== true
-    || module.exports.__diracServer2StrictRecoveryBoundaryV221 !== true) {
-  throw new Error('DIRAC_SERVER2_STRICT_EXPORT_INVARIANT_FAILED_V221');
-}
-
