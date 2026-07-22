@@ -12427,3 +12427,121 @@ if (module.exports.__diracCentralSecurityGuardV146 !== true
   throw new Error('DIRAC_SERVER2_STRICT_EXPORT_INVARIANT_FAILED_V221');
 }
 
+
+/* ============================================================
+   DIRAC SERVER 2 RECOVERY AUTH DIAGNOSTIC v227
+   Observability only. No guard decision, comparison, ban, signature,
+   encryption, replay, response, or Central Guard behavior is changed.
+   Secret values and key material are never logged.
+   ============================================================ */
+const DIRAC_SERVER2_RECOVERY_AUTH_DIAGNOSTIC_V227 = 'dirac-server2-recovery-auth-diagnostic-v227';
+
+function diracRecoveryDiagnosticLikelyAreaV227(reason) {
+  const code = String(reason || 'unknown');
+  if (code === 'worker_caller_invalid') return 'DIRAC_RECOVERY_WORKER_ALLOWED_CALLER versus X-Dirac-Worker-Caller';
+  if (code === 'worker_hmac_invalid') return 'DIRAC_RECOVERY_WORKER_SECRET differs between Server 1 and Server 2';
+  if (code === 'worker_timestamp_invalid') return 'server clock or DIRAC_RECOVERY_WORKER_CLOCK_SKEW_SECONDS';
+  if (code === 's2s_network_id_invalid') return 'DIRAC_S2S_NETWORK_ID differs between Server 1 and Server 2';
+  if (code === 's2s_identity_binding_invalid') return 'Server 1 target ID versus Server 2 DIRAC_S2S_SERVER_ID';
+  if (code === 's2s_registry_or_key_version_invalid') return 'Server 1 registry entry or DIRAC_S2S_KEY_VERSION';
+  if (code === 's2s_scope_not_allowed') return 'Server 1 registry allowed_targets or allowed_actions';
+  if (code === 's2s_seven_signature_invalid') return 'Server 1 private keys versus registry public keys';
+  if (code === 's2s_key_revoked') return 'DIRAC_S2S_REVOKED_KEYS_JSON or central revocation record';
+  if (code === 'worker_signature_format_invalid') return 'X-Dirac-Worker-Signature transport header';
+  if (code === 'worker_envelope_binding_invalid') return 'encrypted envelope caller, action, task, or nonce binding';
+  if (/transport|receiver_key|x25519|mlkem/i.test(code)) return 'Server 1 transport public keys versus Server 2 transport private keys';
+  return 'see exact_reason and sanitized environment state';
+}
+
+function diracRecoveryDiagnosticSnapshotV227(req, reason, status) {
+  const role = String(process.env.DIRAC_CENTRAL_DEPLOYMENT_ROLE || process.env.DIRAC_DEPLOYMENT_ROLE || '').trim().toLowerCase();
+  const actionsEnabled = /^(?:1|true|yes|on|enabled)$/i.test(String(process.env.DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED || process.env.DIRAC_VERCEL2_ACTIONS_ENABLED || ''));
+  const allowedCallerRaw = String(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER || '').trim();
+  const allowedCaller = customerSecurityRecoveryWorkerAsciiToken(allowedCallerRaw);
+  const workerSecretRaw = String(process.env.DIRAC_RECOVERY_WORKER_SECRET || '').trim();
+  const localServerId = diracS2SIdV206(process.env.DIRAC_S2S_SERVER_ID);
+  const expectedServer1Id = diracS2SIdV206(process.env.DIRAC_RECOVERY_SERVER1_SERVER_ID);
+  const networkId = String(process.env.DIRAC_S2S_NETWORK_ID || '').trim();
+  const keyVersion = diracS2SKeyVersionV206(process.env.DIRAC_S2S_KEY_VERSION);
+  const requestCaller = diracRecoveryHeaderV201(req, 'x-dirac-worker-caller');
+  const requestServerId = diracS2SIdV206(diracRecoveryHeaderV201(req, 'x-dirac-server-id'));
+  const requestTargetId = diracS2SIdV206(diracRecoveryHeaderV201(req, 'x-dirac-target-server-id'));
+  const requestNetworkId = diracRecoveryHeaderV201(req, 'x-dirac-network-id');
+  const requestKeyVersion = diracS2SKeyVersionV206(diracRecoveryHeaderV201(req, 'x-dirac-key-version'));
+  const requestTimestampText = diracRecoveryHeaderV201(req, 'x-dirac-worker-timestamp');
+  const requestTimestamp = Number(requestTimestampText);
+  const workerSignature = diracRecoveryHeaderV201(req, 'x-dirac-worker-signature');
+  const forbiddenServer1Env = [
+    'DIRAC_RECOVERY_WORKER_URL',
+    'DIRAC_RECOVERY_WORKER_EXPECTED_HOST',
+    'DIRAC_RECOVERY_WORKER_CALLER',
+    'DIRAC_RECOVERY_HPKE_ALLOWED_CALLER'
+  ].filter((name) => String(process.env[name] || '').trim());
+  const missingRequiredEnv = [];
+  const invalidRequiredEnv = [];
+  if (!role) missingRequiredEnv.push('DIRAC_CENTRAL_DEPLOYMENT_ROLE or DIRAC_DEPLOYMENT_ROLE');
+  else if (role !== 'vercel2') invalidRequiredEnv.push('DIRAC_CENTRAL_DEPLOYMENT_ROLE or DIRAC_DEPLOYMENT_ROLE');
+  if (!actionsEnabled) invalidRequiredEnv.push('DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED or DIRAC_VERCEL2_ACTIONS_ENABLED');
+  if (!allowedCallerRaw) missingRequiredEnv.push('DIRAC_RECOVERY_WORKER_ALLOWED_CALLER');
+  else if (!allowedCaller) invalidRequiredEnv.push('DIRAC_RECOVERY_WORKER_ALLOWED_CALLER');
+  if (!workerSecretRaw) missingRequiredEnv.push('DIRAC_RECOVERY_WORKER_SECRET');
+  else if (Buffer.byteLength(workerSecretRaw, 'utf8') < 64) invalidRequiredEnv.push('DIRAC_RECOVERY_WORKER_SECRET');
+  if (!localServerId) invalidRequiredEnv.push('DIRAC_S2S_SERVER_ID');
+  if (!networkId) missingRequiredEnv.push('DIRAC_S2S_NETWORK_ID');
+  else if (!/^[A-Za-z0-9_-]{43,256}$/.test(networkId)) invalidRequiredEnv.push('DIRAC_S2S_NETWORK_ID');
+  if (!keyVersion) invalidRequiredEnv.push('DIRAC_S2S_KEY_VERSION');
+  if (!String(process.env.DIRAC_RECOVERY_WORKER_X25519_PRIVATE_KEY || '').trim()) missingRequiredEnv.push('DIRAC_RECOVERY_WORKER_X25519_PRIVATE_KEY');
+  if (!String(process.env.DIRAC_RECOVERY_WORKER_MLKEM1024_PRIVATE_KEY || '').trim()) missingRequiredEnv.push('DIRAC_RECOVERY_WORKER_MLKEM1024_PRIVATE_KEY');
+  let signatureHeadersPresent = 0;
+  for (let index = 1; index <= 7; index += 1) {
+    if (diracRecoveryHeaderV201(req, 'x-dirac-signature-' + index)) signatureHeadersPresent += 1;
+  }
+  return {
+    patch: DIRAC_SERVER2_RECOVERY_AUTH_DIAGNOSTIC_V227,
+    exact_reason: String(reason || 'unknown').slice(0, 160),
+    likely_configuration_area: diracRecoveryDiagnosticLikelyAreaV227(reason),
+    status: Number(status || 403),
+    action: String(req && req.query && req.query.action || '').slice(0, 100),
+    method: String(req && req.method || '').slice(0, 12),
+    missing_required_env: missingRequiredEnv,
+    invalid_required_env: invalidRequiredEnv,
+    forbidden_server1_env_present_on_server2: forbiddenServer1Env,
+    env_state: {
+      deployment_role_is_vercel2: role === 'vercel2',
+      vercel2_actions_enabled: actionsEnabled,
+      worker_allowed_caller_present_and_valid: Boolean(allowedCaller),
+      worker_secret_present: Boolean(workerSecretRaw),
+      worker_secret_minimum_64_bytes: Buffer.byteLength(workerSecretRaw, 'utf8') >= 64,
+      local_s2s_server_id_present_and_valid: Boolean(localServerId),
+      expected_server1_id_present_and_valid: Boolean(expectedServer1Id),
+      s2s_network_id_present_and_valid: /^[A-Za-z0-9_-]{43,256}$/.test(networkId),
+      s2s_key_version_present_and_valid: Boolean(keyVersion),
+      x25519_private_key_present: Boolean(String(process.env.DIRAC_RECOVERY_WORKER_X25519_PRIVATE_KEY || '').trim()),
+      mlkem1024_private_key_present: Boolean(String(process.env.DIRAC_RECOVERY_WORKER_MLKEM1024_PRIVATE_KEY || '').trim())
+    },
+    request_binding_state: {
+      worker_caller_header_present_and_valid: Boolean(customerSecurityRecoveryWorkerAsciiToken(requestCaller)),
+      worker_caller_matches_allowed_caller: Boolean(requestCaller && allowedCaller && requestCaller === allowedCaller),
+      s2s_source_server_id_present_and_valid: Boolean(requestServerId),
+      s2s_source_matches_expected_server1_id: Boolean(requestServerId && expectedServer1Id && requestServerId === expectedServer1Id),
+      s2s_target_server_id_present_and_valid: Boolean(requestTargetId),
+      s2s_target_matches_local_server_id: Boolean(requestTargetId && localServerId && requestTargetId === localServerId),
+      s2s_network_header_present_and_valid: /^[A-Za-z0-9_-]{43,256}$/.test(requestNetworkId),
+      s2s_network_matches_local_env: Boolean(requestNetworkId && networkId && requestNetworkId === networkId),
+      s2s_key_version_header_present_and_valid: Boolean(requestKeyVersion),
+      worker_timestamp_valid_and_fresh: Number.isSafeInteger(requestTimestamp) && requestTimestamp > 0 && Math.abs(Date.now() - requestTimestamp) <= customerSecurityRecoveryWorkerClockSkewMs(),
+      worker_signature_format_valid: /^[A-Za-z0-9_-]{86}$/.test(workerSignature),
+      seven_signature_headers_present: signatureHeadersPresent,
+      origin_header_absent: !diracRecoveryHeaderV201(req, 'origin')
+    }
+  };
+}
+
+const __diracRecoveryGuardRejectBeforeDiagnosticV227 = diracRecoveryGuardRejectV201;
+diracRecoveryGuardRejectV201 = async function diracRecoveryGuardRejectDiagnosticV227(req, res, action, reason, status = 403, identityKey = '') {
+  try {
+    console.error('[dirac-server2-recovery-auth-debug-v227]', JSON.stringify(diracRecoveryDiagnosticSnapshotV227(req, reason, status)));
+  } catch (_) {}
+  return __diracRecoveryGuardRejectBeforeDiagnosticV227(req, res, action, reason, status, identityKey);
+};
+Object.defineProperty(module.exports, '__diracServer2RecoveryAuthDiagnosticV227', { value: true, enumerable: false });
