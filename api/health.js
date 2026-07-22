@@ -10273,7 +10273,7 @@ function diracRecoveryHpkeOpenProofResponseV190(data, body, status) {
 async function diracRecoveryHpkeSendProofV159(env, proofBody) {
   const target = new URL(env.server1Url);
   target.searchParams.set('action', DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159);
-  const caller = 'vercel2';
+  const caller = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
   const timestamp = String(Date.now());
   const signature = diracRecoveryHpkeProofSignatureV159(caller, timestamp, proofBody);
   const diagnosticStartedAt = Date.now();
