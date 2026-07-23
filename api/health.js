@@ -10271,6 +10271,7 @@ function diracRecoveryHpkeOpenProofResponseV190(data, body, status) {
 
 /* source 33868-34084 */
 async function diracRecoveryHpkeSendProofV159(env, proofBody) {
+  const proofDeliveryTimeoutMs = 20000;
   const target = new URL(env.server1Url);
   target.searchParams.set('action', DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159);
   const caller = diracS2SIdV206(process.env.DIRAC_S2S_SERVER_ID);
@@ -10287,7 +10288,7 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
     target_origin: target.origin,
     target_path: target.pathname,
     request_id_hash: requestIdHash,
-    timeout_ms: 12000,
+    timeout_ms: proofDeliveryTimeoutMs,
     redirect_mode: 'error'
   };
   const diagnosticLog = (event, extra = {}, level = 'log') => {
@@ -10314,7 +10315,7 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
   const timeout = setTimeout(() => {
     timeoutTriggered = true;
     controller.abort();
-  }, 12000);
+  }, proofDeliveryTimeoutMs);
 
   diagnosticLog('server1_fetch_start', {
     proof_version: String(proofBody && proofBody.version || ''),
