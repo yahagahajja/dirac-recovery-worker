@@ -4007,6 +4007,11 @@ function customerSecurityLostPasskeyRootCauseDebugEnabledV173() {
     && (value === '1' || value === 'true' || value === 'yes' || value === 'on');
 }
 
+function customerSecurityLostPasskeyRootCauseLogEnabledV173() {
+  const value = String(process.env.DIRAC_RECOVERY_WORKER_ROOT_CAUSE_DEBUG || '').trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on';
+}
+
 /* source 9337-9348 */
 function customerSecurityLostPasskeyCompareHashV173(field, stored, incoming) {
   const storedText = String(stored || '').trim();
@@ -4145,6 +4150,18 @@ function customerSecurityLostPasskeyGenericWorkerErrorV157(res, status, reason, 
       time: securityReportPayload.time
     }));
   } catch (_) {}
+  if (customerSecurityLostPasskeyRootCauseLogEnabledV173()
+      && debugContext
+      && typeof debugContext === 'object') {
+    try {
+      const diagnostic = customerSecurityLostPasskeyWorkerRootCauseDebugV173(reason, { ...debugContext, body });
+      const {
+        request_id_hash: omittedRequestIdHash,
+        ...sanitizedDiagnostic
+      } = diagnostic;
+      console.error('[dirac-recovery-worker-root-cause-v173]', JSON.stringify(sanitizedDiagnostic));
+    } catch (_) {}
+  }
   const responseBody = {
     ok: false,
     code: 'RECOVERY_WORKER_REJECTED',
