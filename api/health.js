@@ -2854,7 +2854,18 @@ function customerSecurityLostPasskeyQueueMaxWaitMsV164() {
 
 /* source 7307-7311 */
 function customerSecurityLostPasskeyQueueMaxWaitForTaskMsV191(queueTask) {
-  return [DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165, DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159].includes(String(queueTask || ''))
+  const task = String(queueTask || '');
+
+  if (task === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165) {
+    return customerSecurityLostPasskeyQueueIntV164(
+      'DIRAC_LOST_PASSKEY_LINK_OPEN_QUEUE_MAX_WAIT_SECONDS',
+      240,
+      15,
+      240
+    ) * 1000;
+  }
+
+  return task === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159
     ? 5000
     : customerSecurityLostPasskeyQueueMaxWaitMsV164();
 }
@@ -11661,7 +11672,22 @@ async function diracRecoveryLinkOpenV202(req, res, ctx, body) {
       queue_task: DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
     });
     if (!argonQueueTicket || !argonQueueTicket.ok) {
-      try { res.setHeader('Retry-After', String(Math.max(1, Math.ceil(customerSecurityLostPasskeyQueuePollMsV164() / 1000)))); } catch (_) {}
+      try {
+        res.setHeader(
+          'Retry-After',
+          String(
+            Math.max(
+              15,
+              Math.ceil(
+                customerSecurityLostPasskeyQueueMaxWaitForTaskMsV191(
+                  DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
+                ) / 1000
+              )
+            )
+          )
+        );
+      } catch (_) {}
+
       return diracRecoveryLinkOpenJsonV202(res, 429, 'RECOVERY_ARGON2_BUSY', 'Verifikasi recovery sedang diproses. Silakan coba kembali.');
     }
 
