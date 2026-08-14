@@ -1,1256 +1,1959 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Alto Studio creates refined luxury interiors for private residences, penthouses, and hospitality spaces."
-    />
-    <title>Alto Studio | Luxury Interior Design</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Playfair+Display:ital,wght@0,300;0,400;0,500;1,400&display=swap"
-      rel="stylesheet"
-    />
-    <style>
-      :root {
-        --cream: #faf8f4;
-        --charcoal: #111111;
-        --graphite: #222222;
-        --muted: #555555;
-        --soft: #6e6e6e;
-        --gold: #c9a56a;
-        --gold-dark: #a8813d;
-        --ease: cubic-bezier(0.22, 1, 0.36, 1);
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html {
-        scroll-behavior: smooth;
-      }
-
-      body {
-        margin: 0;
-        min-width: 320px;
-        background-color: var(--cream);
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.022'/%3E%3C/svg%3E");
-        color: var(--graphite);
-        font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
-        font-synthesis: none;
-        text-rendering: geometricPrecision;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
-
-      img,
-      video {
-        -webkit-user-drag: none;
-        user-select: none;
-      }
-
-      a {
-        color: inherit;
-        text-decoration: none;
-      }
-
-      button {
-        font: inherit;
-      }
-
-      .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
-
-      .no-scrollbar::-webkit-scrollbar {
-        display: none;
-      }
-
-      .intro {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        overflow: hidden;
-        background: #080808;
-        transition:
-          opacity 1.2s var(--ease),
-          transform 1.2s var(--ease),
-          visibility 1.2s var(--ease);
-      }
-
-      .intro.is-hidden {
-        opacity: 0;
-        transform: scale(1.05);
-        visibility: hidden;
-        pointer-events: none;
-      }
-
-      .intro video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
-      .intro::before,
-      .intro::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 0;
-        pointer-events: none;
-      }
-
-      .intro::before {
-        top: 0;
-        height: 15%;
-        background: linear-gradient(to bottom, rgba(8, 8, 8, 0.6), transparent);
-      }
-
-      .intro::after {
-        bottom: 0;
-        height: 35%;
-        background: linear-gradient(to top, #080808, transparent);
-      }
-
-      .navbar {
-        position: fixed;
-        inset: 0 0 auto;
-        z-index: 50;
-        transition:
-          background-color 700ms ease,
-          box-shadow 700ms ease,
-          backdrop-filter 700ms ease;
-      }
-
-      .navbar.is-scrolled {
-        background: rgba(250, 248, 244, 0.95);
-        backdrop-filter: blur(20px);
-        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
-      }
-
-      .nav-inner {
-        width: 100%;
-        max-width: 1440px;
-        height: 72px;
-        margin: 0 auto;
-        padding: 0 24px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-
-      .logo {
-        display: flex;
-        align-items: baseline;
-        gap: 2px;
-      }
-
-      .logo-a {
-        font-family: "Playfair Display", Georgia, serif;
-        font-size: 26px;
-        font-weight: 300;
-        line-height: 1;
-        letter-spacing: -0.02em;
-        color: var(--gold);
-      }
-
-      .logo-rest {
-        font-size: 16px;
-        font-weight: 500;
-        letter-spacing: 0.22em;
-        color: var(--charcoal);
-      }
-
-      .nav-links {
-        display: none;
-        align-items: center;
-        gap: 40px;
-      }
-
-      .nav-links a {
-        position: relative;
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--muted);
-        transition: color 300ms ease;
-      }
-
-      .nav-links a:hover {
-        color: var(--charcoal);
-      }
-
-      .nav-links a::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        bottom: -8px;
-        width: 0;
-        height: 1px;
-        background: var(--gold);
-        transition: width 500ms var(--ease);
-      }
-
-      .nav-links a:hover::after {
-        width: 100%;
-      }
-
-      .nav-cta {
-        display: none;
-        border: 1px solid rgba(0, 0, 0, 0.12);
-        border-radius: 999px;
-        padding: 12px 20px;
-        font-size: 13px;
-        font-weight: 500;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--charcoal);
-        transition: all 300ms ease;
-      }
-
-      .nav-cta:hover {
-        transform: translateY(-1px);
-        background: var(--charcoal);
-        border-color: var(--charcoal);
-        color: #ffffff;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-      }
-
-      .hamburger {
-        position: relative;
-        z-index: 60;
-        width: 40px;
-        height: 40px;
-        border: 0;
-        background: transparent;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-      }
-
-      .hamburger span {
-        position: absolute;
-        width: 28px;
-        height: 1px;
-        background: var(--charcoal);
-        transition:
-          transform 300ms ease,
-          opacity 300ms ease;
-      }
-
-      .hamburger span:nth-child(1) {
-        transform: translateY(-10px);
-      }
-
-      .hamburger span:nth-child(3) {
-        transform: translateY(10px);
-      }
-
-      .hamburger.is-open span:nth-child(1) {
-        transform: rotate(45deg);
-      }
-
-      .hamburger.is-open span:nth-child(2) {
-        opacity: 0;
-      }
-
-      .hamburger.is-open span:nth-child(3) {
-        transform: rotate(-45deg);
-      }
-
-      .mobile-menu {
-        position: fixed;
-        inset: 0;
-        z-index: 40;
-        height: 0;
-        overflow: hidden;
-        background: var(--cream);
-        transition: height 500ms var(--ease);
-      }
-
-      .mobile-menu.is-open {
-        height: 100vh;
-      }
-
-      .mobile-menu-content {
-        min-height: 100vh;
-        padding: 112px 24px 40px;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-      }
-
-      .mobile-links {
-        display: flex;
-        flex-direction: column;
-        gap: 24px;
-      }
-
-      .mobile-links a {
-        opacity: 0;
-        transform: translateX(-20px);
-        font-family: "Playfair Display", Georgia, serif;
-        font-size: 36px;
-        line-height: 1.1;
-        color: var(--charcoal);
-        transition:
-          opacity 500ms ease,
-          transform 500ms var(--ease);
-      }
-
-      .mobile-menu.is-open .mobile-links a {
-        opacity: 1;
-        transform: translateX(0);
-      }
-
-      .mobile-menu.is-open .mobile-links a:nth-child(1) {
-        transition-delay: 120ms;
-      }
-
-      .mobile-menu.is-open .mobile-links a:nth-child(2) {
-        transition-delay: 180ms;
-      }
-
-      .mobile-menu.is-open .mobile-links a:nth-child(3) {
-        transition-delay: 240ms;
-      }
-
-      .mobile-menu.is-open .mobile-links a:nth-child(4) {
-        transition-delay: 300ms;
-      }
-
-      .mobile-menu.is-open .mobile-links a:nth-child(5) {
-        transition-delay: 360ms;
-      }
-
-      .mobile-cta {
-        display: inline-flex;
-        justify-content: center;
-        border-radius: 999px;
-        padding: 16px 24px;
-        background: var(--charcoal);
-        color: #ffffff;
-        font-size: 14px;
-        font-weight: 500;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        opacity: 0;
-        transform: translateY(18px);
-        transition:
-          opacity 500ms ease 420ms,
-          transform 500ms var(--ease) 420ms;
-      }
-
-      .mobile-menu.is-open .mobile-cta {
-        opacity: 1;
-        transform: translateY(0);
-      }
-
-      .hero {
-        position: relative;
-        min-height: 100vh;
-        overflow: hidden;
-      }
-
-      .hero-bg,
-      .hero-bg img,
-      .hero-bg video,
-      .hero-overlay {
-        position: absolute;
-        inset: 0;
-      }
-
-      .hero-bg img,
-      .hero-bg video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
-      .hero-outline {
-        filter: invert(100%);
-        opacity: 0;
-      }
-
-      .hero-video {
-        opacity: 1;
-        transition: opacity 1000ms ease;
-      }
-
-      .hero-video.is-ended {
-        opacity: 0;
-      }
-
-      .top-strip {
-        pointer-events: none;
-        position: absolute;
-        inset: 0 0 auto;
-        height: 250px;
-        background: linear-gradient(to bottom, #ffffff 30%, transparent);
-      }
-
-      .content-grade {
-        background: linear-gradient(
-          to right,
-          rgba(250, 248, 244, 0.93) 0%,
-          rgba(250, 248, 244, 0.78) 28%,
-          rgba(250, 248, 244, 0.42) 52%,
-          rgba(250, 248, 244, 0.06) 72%,
-          rgba(250, 248, 244, 0) 88%
-        );
-      }
-
-      .warm-grade {
-        mix-blend-mode: multiply;
-        background: linear-gradient(
-          155deg,
-          rgba(201, 165, 106, 0.08) 0%,
-          rgba(180, 120, 60, 0.05) 40%,
-          rgba(20, 14, 6, 0.18) 100%
-        );
-      }
-
-      .bottom-vignette {
-        background: linear-gradient(to top, rgba(0, 0, 0, 0.12) 0%, transparent 35%);
-      }
-
-      .sunrise-bloom {
-        position: absolute;
-        top: -5%;
-        right: 5%;
-        width: 45%;
-        height: 55%;
-        background: radial-gradient(circle, rgba(255, 220, 150, 0.1), transparent 68%);
-        filter: blur(40px);
-      }
-
-      .hero-overlay {
-        pointer-events: none;
-      }
-
-      .hero-inner {
-        position: relative;
-        z-index: 10;
-        width: 100%;
-        max-width: 1440px;
-        min-height: 100vh;
-        margin: 0 auto;
-        padding: 112px 24px 96px;
-        display: flex;
-        align-items: center;
-      }
-
-      .hero-copy {
-        width: 100%;
-        max-width: 900px;
-        padding-top: 32px;
-      }
-
-      .hero-copy.is-changing .fade-item {
-        opacity: 0;
-        transform: translateY(-20px);
-        transition:
-          opacity 500ms ease,
-          transform 500ms var(--ease);
-      }
-
-      .fade-item {
-        opacity: 0;
-        transform: translateY(40px);
-        animation: fadeUp 1.2s var(--ease) forwards;
-      }
-
-      .fade-item:nth-child(1) {
-        animation-delay: 120ms;
-      }
-
-      .fade-item:nth-child(2) {
-        animation-delay: 250ms;
-      }
-
-      .fade-item:nth-child(3) {
-        animation-delay: 380ms;
-      }
-
-      .fade-item:nth-child(4) {
-        animation-delay: 510ms;
-      }
-
-      @keyframes fadeUp {
-        to {
-          opacity: 1;
-          transform: translateY(0);
+<!DOCTYPE html>
+
+<html lang="id">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<meta content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" name="robots"/>
+<link href="https://diracgroup.store/" rel="canonical"/>
+<link href="https://diracgroup.store/" hreflang="id-ID" rel="alternate"/>
+<link href="https://diracgroup.store/" hreflang="x-default" rel="alternate"/>
+<meta content="Dirac Parfum" name="application-name"/>
+<meta content="Dirac Parfum" name="author"/>
+<meta content="Dirac Parfum" name="publisher"/>
+<meta content="Dirac Parfum, diracgroup.store, toko parfum original, parfum original Indonesia, parfum niche original, parfum designer original, parfum timteng, parfum lokal premium, reseller parfum, grosir parfum, parfum Malang, parfum original siap kirim" name="keywords"/>
+<meta content="Dirac Parfum" property="og:site_name"/>
+<meta content="id_ID" property="og:locale"/>
+<meta content="Dirac Parfum, toko parfum original Indonesia" property="og:image:alt"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="Dirac Parfum | Toko Parfum Original" name="twitter:title"/>
+<meta content="Dirac Parfum menyediakan parfum original niche, designer, timteng, dan lokal untuk retail, reseller, grosir, dan pelanggan yang mencari aroma premium terpercaya." name="twitter:description"/>
+<meta content="https://diracgroup.store/logo.webp" name="twitter:image"/>
+<!-- Google Search Console: paste your verification meta tag here when available -->
+<title>Dirac Parfum | Toko Parfum Original</title>
+<meta content="Dirac Parfum adalah toko parfum original untuk parfum niche, designer, timteng, dan lokal. Melayani pembelian retail, reseller, grosir, serta pengiriman ke seluruh Indonesia." name="description"/>
+<!-- Open Graph -->
+<meta content="Dirac Parfum | Toko Parfum Original" property="og:title"/>
+<meta content="Dirac Parfum menyediakan parfum original niche, designer, timteng, dan lokal untuk retail, reseller, grosir, dan pelanggan yang mencari aroma premium terpercaya." property="og:description"/>
+<meta content="website" property="og:type"/>
+<meta content="https://diracgroup.store/logo.webp" property="og:image"/>
+<meta content="1200" property="og:image:width"/>
+<meta content="630" property="og:image:height"/>
+<meta content="https://diracgroup.store/" property="og:url"/>
+<meta content="#0a0a0a" name="theme-color"/>
+<link href="/favicon.webp?v=3" rel="icon"/>
+<link href="/favicon.webp?v=3" rel="shortcut icon"/>
+<link href="/favicon.webp" rel="apple-touch-icon"/>
+<style>
+    /* Reset & base */
+    :root{
+      --bg:#070707;
+      --panel:#0f1720;
+      --muted:#cbd5e1;
+      --text:#eef2f7;
+      --accent:#1E90FF; /* primary blue */
+      --accent-2:#0d6efd; /* secondary blue */
+      --card-bg: rgba(255,255,255,0.03);
+      --glass: rgba(255,255,255,0.02);
+      --max-width: 1100px;
+      --radius:12px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background:var(--bg);
+      color:var(--text);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      line-height:1.5;
+      font-size:16px;
+    }
+    a{color:var(--accent); text-decoration:none}
+    a:hover{text-decoration:underline}
+    header.site-header{
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+      position:sticky;
+      top:0;
+      z-index:60;
+      backdrop-filter: blur(6px);
+      border-bottom:1px solid rgba(255,255,255,0.02);
+    }
+    .container{
+      max-width:var(--max-width);
+      margin:0 auto;
+      padding:1rem;
+    }
+    /* Top nav */
+    .topbar{
+      display:flex;
+      align-items:center;
+      gap:1rem;
+      justify-content:space-between;
+      padding:0.6rem 0;
+    }
+    .brand{
+      display:flex;
+      gap:0.75rem;
+      align-items:center;
+    }
+    .brand-logo{
+      width:48px;
+      height:48px;
+      background:linear-gradient(135deg,var(--accent),var(--accent-2));
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:10px;
+      box-shadow: 0 4px 18px rgba(14,28,50,0.45);
+      color:#001;
+      font-weight:700;
+      font-size:18px;
+    }
+    .brand h1{
+      font-size:1rem;
+      margin:0;
+      line-height:1;
+    }
+    .brand p{margin:0;font-size:0.82rem;color:var(--muted)}
+    nav.main-nav{
+      display:flex;
+      gap:0.75rem;
+      align-items:center;
+    }
+    nav.main-nav a{
+      padding:0.45rem 0.65rem;
+      border-radius:8px;
+      color:var(--muted);
+      font-weight:600;
+      font-size:0.92rem;
+    }
+    nav.main-nav a.cta{
+      background:linear-gradient(90deg,var(--accent),var(--accent-2));
+      color:#02102a;
+      box-shadow:0 8px 30px rgba(30,144,255,0.14);
+      border-radius:14px;
+    }
+    /* Hero slider */
+    .hero{
+      padding:0.5rem 0 1rem 0;
+    }
+    .slider{
+      position:relative;
+      width:100%;
+      max-width:var(--max-width);
+      margin:0 auto;
+      overflow:hidden;
+      border-radius:var(--radius);
+      background:var(--card-bg);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    }
+    .slides{
+      display:flex;
+      transition:transform 500ms cubic-bezier(.22,.9,.35,1);
+      will-change:transform;
+    }
+    .slide{
+      min-width:100%;
+      display:block;
+      position:relative;
+      user-select:none;
+    }
+    .slide .media{
+      width:100%;
+      height:0;
+      padding-top:56.25%; /* 16:9 */
+      position:relative;
+      overflow:hidden;
+      background:linear-gradient(90deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));
+    }
+    .slide img{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .slide figcaption{
+      position:absolute;
+      left:1rem;
+      bottom:1rem;
+      right:1rem;
+      background:linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.25));
+      padding:0.8rem 1rem;
+      border-radius:10px;
+      color:var(--text);
+      box-shadow:0 6px 18px rgba(0,0,0,0.6);
+      font-size:0.95rem;
+      backdrop-filter: blur(2px);
+    }
+    .slider-controls{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+    }
+    .arrow{
+      position:absolute;
+      top:50%;
+      transform:translateY(-50%);
+      background:rgba(0,0,0,0.45);
+      border:none;
+      color:var(--text);
+      width:44px;
+      height:44px;
+      display:inline-grid;
+      place-items:center;
+      border-radius:10px;
+      cursor:pointer;
+      pointer-events:all;
+      box-shadow:0 6px 18px rgba(0,0,0,0.6);
+    }
+    .arrow.left{left:10px}
+    .arrow.right{right:10px}
+    .arrow:focus{outline:2px solid var(--accent)}
+    .dots{
+      position:absolute;
+      left:50%;
+      transform:translateX(-50%);
+      bottom:10px;
+      display:flex;
+      gap:0.5rem;
+      pointer-events:all;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:50%;
+      background:rgba(255,255,255,0.12);
+      border:1px solid rgba(255,255,255,0.04);
+    }
+    .dot[aria-pressed="true"]{background:var(--accent)}
+    /* Highlights */
+    .highlights{
+      display:grid;
+      grid-template-columns:repeat(1,1fr);
+      gap:0.8rem;
+      margin-top:1rem;
+    }
+    .card{
+      background:var(--glass);
+      padding:1rem;
+      border-radius:12px;
+      box-shadow:0 8px 24px rgba(0,0,0,0.6);
+      border:1px solid rgba(255,255,255,0.02);
+    }
+    .card h3{margin:0 0 0.6rem 0}
+    .icon{
+      width:56px;height:56px;
+      display:inline-flex;align-items:center;justify-content:center;
+      border-radius:10px;margin-bottom:0.6rem;
+      background:linear-gradient(135deg, rgba(30,144,255,0.12), rgba(13,110,253,0.08));
+      box-shadow:0 6px 20px rgba(13,110,253,0.08);
+    }
+    .cta-row{
+      display:flex;
+      gap:0.6rem;
+      margin-top:1rem;
+      flex-wrap:wrap;
+    }
+    .btn{
+      padding:0.65rem 1rem;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.06);
+      background:transparent;
+      color:var(--text);
+      cursor:pointer;
+      font-weight:700;
+    }
+    .btn.primary{
+      background:linear-gradient(90deg,var(--accent),var(--accent-2));
+      color:#02102a;
+      box-shadow:0 10px 32px rgba(13,110,253,0.14);
+    }
+    .btn.secondary{
+      background:transparent;
+      border:1px solid rgba(255,255,255,0.06);
+    }
+    /* About & layananeline */
+    .two-col{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:1rem;
+    }
+    .layananeline{
+      list-style:none;
+      padding:0;
+      margin:0;
+      display:flex;
+      flex-direction:column;
+      gap:0.6rem;
+    }
+    .layananeline li{
+      padding:0.8rem;
+      border-radius:10px;
+      background:rgba(255,255,255,0.015);
+      border-left:3px solid var(--accent);
+    }
+    .vision{
+      display:flex;
+      gap:0.75rem;
+      flex-direction:column;
+    }
+    ul.values{padding-left:1.2rem}
+    /* Gallery grid */
+    .gallery-grid{
+      display:grid;
+      grid-template-columns:repeat(2, 1fr);
+      gap:0.6rem;
+    }
+    .thumb{
+      position:relative;
+      cursor:pointer;
+      border-radius:10px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,0.03);
+    }
+    .thumb img{width:100%;height:auto;display:block;object-fit:cover}
+    .thumb .caption{
+      position:absolute;left:0;right:0;bottom:0;padding:0.5rem;background:linear-gradient(180deg,transparent,rgba(0,0,0,0.6));
+      color:var(--text);font-size:0.9rem;
+    }
+    /* Testimoni slider */
+    .testimonial-list{
+      margin-top:0.5rem;
+    }
+    .test-slide{
+      padding:1rem;
+      min-width:100%;
+    }
+    .rating{color:var(--accent-2);font-weight:700}
+    /* Team cards */
+    .team-grid{
+      display:grid;
+      grid-template-columns:repeat(1,1fr);
+      gap:0.8rem;
+    }
+    .team-card{
+      display:flex;gap:0.75rem;align-items:center;
+      padding:0.8rem;border-radius:10px;background:var(--card-bg);
+    }
+    .team-card img{
+      width:72px;height:72px;border-radius:12px;object-fit:cover;border:1px solid rgba(255,255,255,0.03);
+    }
+    /* Blog */
+    .blog-list{display:grid;gap:0.8rem}
+    .article{padding:0.8rem;border-radius:10px;background:rgba(255,255,255,0.02)}
+    .article h4{margin:0 0 0.4rem 0}
+    /* FAQ */
+    .faq{display:flex;flex-direction:column;gap:0.6rem}
+    details{background:rgba(255,255,255,0.02);padding:0.8rem;border-radius:10px}
+    details summary{cursor:pointer;font-weight:700}
+    /* Contact form */
+    form.contact-form{
+      display:grid;gap:0.6rem;
+      grid-template-columns:1fr;
+    }
+    input, textarea, select{
+      background:transparent;border:1px solid rgba(255,255,255,0.06);
+      color:var(--text);padding:0.6rem;border-radius:8px;
+    }
+    input:focus, textarea:focus{outline:2px solid rgba(30,144,255,0.12);box-shadow:0 6px 18px rgba(30,144,255,0.06)}
+    .muted{color:var(--muted);font-size:0.95rem}
+    footer.site-footer{
+      margin-top:2rem;padding:1.2rem 0;border-top:1px solid rgba(255,255,255,0.02)
+    }
+    .footer-grid{display:flex;flex-direction:column;gap:0.8rem}
+    .socials{display:flex;gap:0.6rem}
+    /* Responsive */
+    @media(min-width:700px){
+      .highlights{grid-template-columns:repeat(3,1fr)}
+      .two-col{grid-template-columns:1fr 360px}
+      .gallery-grid{grid-template-columns:repeat(4,1fr)}
+      .team-grid{grid-template-columns:repeat(3,1fr)}
+      .blog-list{grid-template-columns:repeat(3,1fr)}
+    }
+    @media(min-width:1000px){
+      .container{padding:1.5rem}
+    }
+    /* small accessibility helpers */
+    .sr-only{
+      position:absolute!important;height:1px;width:1px;overflow:hidden;clip:rect(1px,1px,1px,1px);white-space:nowrap;
+    }
+    /* Lightbox modal */
+    .modal{
+      position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+      background:rgba(0,0,0,0.8);z-index:120;padding:1rem;
+    }
+    .modal.open{display:flex}
+    .modal .figure{
+      width:100%;max-width:1100px;border-radius:12px;overflow:hidden;background:transparent;
+    }
+    .modal .figure .media{
+      width:100%;height:0;padding-top:56.25%;position:relative;
+    }
+    .modal .figure img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .close-modal{
+      position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.4);border:none;color:var(--text);padding:0.6rem;border-radius:8px;cursor:pointer;
+    }
+  
+/* Additional mobile tweaks: prevent header overlap, allow nav scrolling and reduce sizes */
+@media(max-width:700px){
+  /* Make topbar wrap so nav moves under brand and doesn't overlap hero */
+  .topbar{flex-wrap:wrap;align-items:center;gap:0.45rem;padding:0.4rem 0;}
+  .brand-logo{width:40px;height:40px;font-size:15px;border-radius:8px;}
+  .brand h1{font-size:0.95rem;margin:0;line-height:1;}
+  .brand p{font-size:0.72rem;margin:0;}
+  /* Make nav full width and horizontally scrollable instead of wrapping into multiple lines */
+  nav.main-nav{order:3;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;display:flex;gap:0.45rem;padding:0.25rem 0;}
+  nav.main-nav a{font-size:0.86rem;padding:0.35rem 0.55rem;white-space:nowrap;flex:0 0 auto;}
+  /* Reduce header height visual impact on hero */
+  header.site-header{backdrop-filter:blur(6px);}
+  /* Ensure hero content not hidden under sticky header */
+  .hero{padding-top:0.6rem;}
+  /* Slightly smaller hero texts for small screens */
+  .hero h2{font-size:1.25rem !important;line-height:1.25;}
+  .hero p{font-size:0.9rem !important;}
+  .slider{border-radius:10px;overflow:hidden;}
+  .slide figcaption{font-size:0.82rem !important;padding:0.55rem 0.7rem !important;left:0.6rem;right:0.6rem;bottom:0.9rem}
+  .arrow{width:36px !important;height:36px !important;}
+  /* Make dots a little smaller to fit */
+  .dots{gap:0.3rem}
+  .dot{width:9px;height:9px}
+  /* Reduce padding of container to maximize visible area */
+  .container{padding-left:0.9rem;padding-right:0.9rem}
+}
+
+/* Fixes for mobile scrolling and touch interactions on hero slider */
+.slider, .slides { touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+.slide img { -webkit-transform: translateZ(0); transform: translateZ(0); will-change: transform; object-position: center center; }
+.slide .media { min-height: 160px; }
+@media(max-width:420px){
+  .slide .media { min-height: 140px; padding-top:56.25%; }
+}
+
+/* video support for hero - ensure full cover like images */
+.slide video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% center;display:block}
+
+
+/* Scoped testimonial alignment fix: prevents partial adjacent cards on mobile and desktop */
+.testimonials{
+  overflow:hidden;
+  width:100%;
+}
+.testimonials #testSlides{
+  display:block;
+  width:100%;
+  transform:none !important;
+  transition:none !important;
+}
+.testimonials .test-slide{
+  display:none;
+  width:100%;
+  min-width:100%;
+  padding:1rem;
+  margin:0;
+}
+.testimonials .test-slide.active{
+  display:block;
+}
+.testimonials .test-slide .card{
+  width:100%;
+  margin:0;
+}
+@media(max-width:700px){
+  .testimonials .test-slide{
+    padding:0.8rem;
+  }
+}
+</style>
+<!-- Enhanced wow animations -->
+<style>
+  /*
+    Additional animation rules to bring the site to life.  These
+    enhancements stay purely within CSS and do not alter any of the
+    existing content or structure.  Elements will subtly rise and scale
+    into view when scrolled into the viewport, icons will pulse
+    continuously, and hover interactions will cause cards, team
+    members, gallery thumbs and buttons to lift off the page with a
+    shadow.  Everything remains responsive and respects the current
+    design language.
+  */
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 0 rgba(30,144,255,0.4); }
+    50% { box-shadow: 0 0 20px rgba(30,144,255,0.7); }
+  }
+  /* Apply a gentle glow to service icons */
+  .icon {
+    animation: pulseGlow 3s infinite;
+  }
+  /* Base state for items that will be animated as they enter view */
+  .card, .team-card, .thumb, .article, details {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+  /* Smooth transitions on transform and shadow for hover interactions */
+  .card, .team-card, .thumb, .btn {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  /* Reveal items with a smooth rise and scale */
+  .card.animate-item, .team-card.animate-item, .thumb.animate-item, .article.animate-item, details.animate-item {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    transition: transform 0.7s cubic-bezier(.22,1,.36,1), opacity 0.7s ease-out;
+  }
+  /* Hover effects that add depth and motion */
+  .card:hover, .team-card:hover, .thumb:hover, .btn:hover {
+    transform: translateY(-8px) scale(1.03);
+    box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+  }
+  .btn:active {
+    transform: translateY(-4px) scale(1.01);
+  }
+</style>
+<style>
+/* Force video not rotated and nudge position on mobile */
+
+/* Ganti semua rule .slide video yang ada dengan ini (letakkan di akhir <head>) */
+.slide video {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: 50% 50% !important; /* pusatkan isi video */
+  transform: none !important;
+  left: 0 !important;
+  right: 0 !important;
+  margin: 0 auto !important;
+}
+
+/* Pastikan tidak ada override mobile yang mengubah object-position kembali */
+@media (max-width: 820px) {
+  .slide video {
+    object-position: 50% 50% !important;
+    transform: none !important;
+  }
+}
+
+/* Extra safety for possible wrappers that rotate or scale */
+.slide, .slide > div, .carousel, .hero, .hero .slide {
+  transform: none !important;
+  -webkit-transform: none !important;
+}
+
+#heroPrev, #heroNext, #heroDots, .slider-controls {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.video-unmute{
+  position:absolute;
+  right:12px;
+  bottom:12px;
+  z-index:40;
+  width:44px;
+  height:44px;
+  border-radius:50%;
+  background:rgba(0,0,0,0.6);
+  color:#fff;
+  border:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  font-size:20px;
+  backdrop-filter:blur(6px);
+}
+.video-unmute.hidden{ display:none !important; }
+/* Stronger mobile-only rules */
+@media (max-width: 820px) {
+  .slide video {
+    object-position: 60% center !important;
+    transform: none !important;
+  }
+  /* ensure the video keeps proper orientation and size */
+  .slide video, .slide video img {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+  }
+}
+</style>
+<!-- Animation styles -->
+<style>
+  /* Fade‑up animation for each section when it enters the viewport */
+  /*
+    Improve the base animation by adding a subtle scale and using a more
+    dynamic easing curve.  When a [data‑animate] element scrolls into view
+    (the script adds the .animated class), it will fade in and gently
+    grow from 95% to full size.  This creates a smoother “wow” effect
+    compared to a simple translation alone.  The cubic‑bezier layananing
+    function adds a touch of spring without relying on external libraries.
+  */
+  [data-animate] {
+    opacity: 0;
+    transform: translateY(60px) scale(0.95);
+    transition: transform 0.8s cubic-bezier(.22,.61,.36,1), opacity 0.8s ease-out;
+  }
+  [data-animate].animated {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+</style>
+<style>
+  /* Utility: 16:9 media wrapper for promo image */
+  .media-16x9{position:relative;width:100%;height:0;padding-top:56.25%;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));}
+  .media-16x9 > img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  /* Center CTA below the image */
+  .center-cta{display:flex;justify-content:center;padding:0.8rem 1rem 1rem 1rem}
+</style>
+<style>
+/* Promo 16:9 – Ken Burns Crossfade (5s cadence), slim frame */
+#promo-xerjoff{ --hold:5s; --n:9; --dur:calc(var(--hold) * var(--n)); }
+#promo-xerjoff .promo16x9{ background:transparent!important; box-shadow:none!important; border:0!important; }
+#promo-xerjoff .stage{ position:relative; width:100%; overflow:hidden; border-radius:10px; }
+#promo-xerjoff .stage::before{ content:""; display:block; padding-top:56.25%; } /* 16:9 */
+#promo-xerjoff .slide{ position:absolute; inset:0; margin:0; opacity:0; }
+#promo-xerjoff .slide .media, 
+#promo-xerjoff .slide img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+#promo-xerjoff .slide{ animation:promoShow var(--dur) infinite; animation-delay:calc(var(--i) * var(--hold)); will-change:opacity, transform; transform-origin:center; }
+@keyframes promoShow{
+  0%{ opacity:0; transform:scale(1) translate3d(0,0,0); }
+  2%{ opacity:1; }               /* quick fade in */
+  10%{ opacity:1; transform:scale(1.07) translate3d(var(--tx,0), var(--ty,0), 0);} /* slow zoom/pan */
+  12%{ opacity:0; }              /* crossfade out */
+  100%{ opacity:0; }
+}
+/* subtle pan direction variety */
+#promo-xerjoff .slide:nth-child(3n+1){ --tx: 1.5%; --ty: 1.5%; }
+#promo-xerjoff .slide:nth-child(3n+2){ --tx:-1.5%; --ty: 1.0%; }
+#promo-xerjoff .slide:nth-child(3n){   --tx: 0.5%; --ty:-1.2%; }
+
+/* Hover pause (optional quality-of-life) */
+#promo-xerjoff:hover .slide{ animation-play-state:paused; }
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  #promo-xerjoff .slide{ animation:none; opacity:0; }
+  #promo-xerjoff .slide:first-child{ opacity:1; }
+}
+</style>
+<style>
+/* === Promo 16:9 Advanced Animations (scoped) === */
+#promo-xerjoff .promo16x9 { background: transparent !important; box-shadow: none !important; border: 0 !important; }
+#promo-xerjoff .slides { position: relative; overflow: hidden; border-radius: 10px; }
+#promo-xerjoff .slide { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+#promo-xerjoff .slide.active { opacity: 1; pointer-events: auto; }
+#promo-xerjoff .slide, #promo-xerjoff .slide * { transition: opacity .9s ease; }
+#promo-xerjoff .slide .media { position: relative; width: 100%; padding-top: 56.25% !important; overflow: hidden; }
+#promo-xerjoff .slide img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  transform: scale(1.08) translate3d(var(--dx,0), var(--dy,0), 0) rotate(.001deg);
+  transition: transform 5s ease-in-out, filter 5s ease-in-out;
+  will-change: transform, filter;
+}
+/* Subtle depth + vignette */
+#promo-xerjoff .slide.active img { filter: saturate(1.05) contrast(1.03); }
+/* Decorative reveal mask using pseudo element */
+#promo-xerjoff .slide.active::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(120deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,0) 40%);
+  transform: translateX(-40%);
+  animation: promoSweep 1.2s ease-out forwards;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+@keyframes promoSweep {
+  to { transform: translateX(120%); opacity: 0; }
+}
+/* Responsive tweak: keep frame slim on small screens */
+@media (max-width: 480px){
+  #promo-xerjoff .slides { border-radius: 8px; }
+}
+</style>
+<style id="shine-sweep">
+:root{ --shine-duration: 1.8s; --shine-alpha: .32; }
+.shine-sweep{ position: relative; }
+.shine-sweep::before{
+  content:""; position:absolute; inset:-12% -30%;
+  background: linear-gradient(120deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,var(--shine-alpha)) 18%,
+    rgba(255,255,255,0) 42%);
+  transform: translateX(-120%) skewX(-12deg);
+  mix-blend-mode: screen;
+  filter: blur(.5px);
+  pointer-events:none;
+  animation: shineSweep var(--shine-duration) ease-out both;
+}
+@keyframes shineSweep{
+  to{ transform: translateX(220%) skewX(-12deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce){
+  .shine-sweep::before{ animation: none !important; opacity: 0 !important; }
+}
+</style>
+<!-- START: Replaced - Button idle + simple shimmer-on-press effects -->
+<style>
+/* Idle animation (kept subtle): gradient move + gentle float + soft glow */
+@media (prefers-reduced-motion: no-preference){
+  .btn.primary {
+    background: linear-gradient(90deg, #6a11cb, #2575fc, #00d2ff);
+    background-size: 200% 200%;
+    animation: btnGrad 5s linear infinite, btnFloat 6s ease-in-out infinite;
+    will-change: transform, background-position, box-shadow;
+    position: relative;
+    overflow: visible;
+    display: inline-block;
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  @keyframes btnGrad{
+    0%{ background-position: 0% 50% }
+    50%{ background-position: 100% 50% }
+    100%{ background-position: 0% 50% }
+  }
+  @keyframes btnFloat{
+    0%{ transform: translateY(0) }
+    50%{ transform: translateY(-4px) }
+    100%{ transform: translateY(0) }
+  }
+
+  /* Shimmer overlay: invisible by default, visible when .pressed is added */
+  .btn.primary::after{
+    content: '';
+    position: absolute;
+    left: -40%;
+    top: 0;
+    width: 40%;
+    height: 100%;
+    background: linear-gradient(120deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0) 100%);
+    transform: skewX(-20deg) translateX(0);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* When pressed, animate the shimmer once */
+  .btn.primary.pressed::after{
+    opacity: 1;
+    animation: shimmerMove 640ms cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  @keyframes shimmerMove {
+    0% { left: -40%; opacity:1; }
+    80% { left: 120%; opacity:0.9; }
+    100% { left: 120%; opacity:0; }
+  }
+
+  /* small tactile feedback (very subtle) */
+  .btn.primary.pressed {
+    transform: translateY(3px) scale(.998);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.24);
+  }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  .btn.primary { animation: none !important; transition: none !important; }
+  .btn.primary::after { display:none; }
+}
+</style>
+<!-- END: Replaced - Button idle + simple shimmer-on-press effects -->
+<!-- Google Analytics -->
+<script async="" src="https://www.googletagmanager.com/gtag/js?id=G-XW0NP8W7Z4"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XW0NP8W7Z4');
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"OnlineStore","@id":"https://diracgroup.store/#store","name":"Dirac Parfum","url":"https://diracgroup.store/","logo":"https://diracgroup.store/logo.webp","image":"https://diracgroup.store/logo.webp","telephone":"+6287892523968","priceRange":"Rp100000 - Rp5000000","description":"Dirac Parfum adalah toko parfum original yang menyediakan parfum niche, designer, timteng, dan lokal original untuk retail, reseller, grosir, dan pengiriman ke seluruh Indonesia.","areaServed":{"@type":"Country","name":"Indonesia"},"brand":{"@type":"Brand","name":"Dirac Parfum"},"contactPoint":[{"@type":"ContactPoint","contactType":"customer service","telephone":"+6287892523968","areaServed":"ID","availableLanguage":["id","en"],"email":"support@diracgroup.store"}],"hasOfferCatalog":{"@type":"OfferCatalog","name":"Katalog Parfum Original","itemListElement":[{"@type":"OfferCatalog","name":"Parfum Niche Original"},{"@type":"OfferCatalog","name":"Parfum Designer Original"},{"@type":"OfferCatalog","name":"Parfum Timteng"},{"@type":"OfferCatalog","name":"Parfum Lokal Premium"}]},"email":"support@diracgroup.store"},{"@type":"WebSite","@id":"https://diracgroup.store/#website","name":"Dirac Parfum","url":"https://diracgroup.store/","inLanguage":"id-ID","potentialAction":{"@type":"SearchAction","target":"https://diracgroup.store/?s={search_term_string}","query-input":"required name=search_term_string"}},{"@type":"WebPage","@id":"https://diracgroup.store/#webpage","url":"https://diracgroup.store/","name":"Dirac Parfum | Toko Parfum Original","isPartOf":{"@id":"https://diracgroup.store/#website"},"inLanguage":"id-ID","description":"Dirac Parfum adalah toko parfum original untuk parfum niche, designer, timteng, dan lokal. Melayani retail, reseller, grosir, dan pengiriman ke seluruh Indonesia."},{"@type":"BreadcrumbList","@id":"https://diracgroup.store/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://diracgroup.store/"},{"@type":"ListItem","position":2,"name":"Dirac Parfum","item":"https://diracgroup.store/#about"},{"@type":"ListItem","position":3,"name":"Koleksi Parfum","item":"https://diracgroup.store/#products"}]},{"@type":"FAQPage","@id":"https://diracgroup.store/#faq","mainEntity":[{"@type":"Question","name":"Apa itu Dirac Parfum?","acceptedAnswer":{"@type":"Answer","text":"Dirac Parfum adalah toko parfum original yang menyediakan parfum niche, designer, timteng, dan lokal untuk retail, reseller, dan grosir."}},{"@type":"Question","name":"Apakah Dirac Parfum melayani reseller parfum?","acceptedAnswer":{"@type":"Answer","text":"Ya. Dirac Parfum melayani pembelian satuan, grosir, dan kebutuhan reseller dengan dukungan informasi produk, sample, dan rekomendasi kategori parfum."}},{"@type":"Question","name":"Brand parfum apa saja yang tersedia di Dirac Parfum?","acceptedAnswer":{"@type":"Answer","text":"Koleksi mencakup brand parfum yang banyak dicari seperti YSL, Dior, Nishane, LV, Tom Ford, JPG, Rasasi, dan Mykonos, serta pilihan parfum niche, designer, timteng, dan lokal lainnya sesuai stok."}},{"@type":"Question","name":"Bagaimana cara order di Dirac Parfum?","acceptedAnswer":{"@type":"Answer","text":"Order bisa dilakukan melalui halaman kontak, WhatsApp, atau halaman order yang tersedia di situs Dirac Parfum."}}]}]}</script>
+</head>
+<body>
+<header aria-label="Header utama Dirac Parfum" class="site-header" role="banner">
+<div class="container topbar">
+<div aria-label="Logo Dirac Parfum" class="brand" role="img">
+<div aria-hidden="true" class="brand-logo">
+<img alt="Logo Dirac Parfum" src="logo.webp" style="width:100%;height:100%;object-fit:cover;border-radius:10px;"/>
+</div>
+<div>
+<h1>Dirac Parfum</h1>
+<p class="muted">Toko Parfum Original, Reseller &amp; Grosir</p>
+</div>
+</div>
+<nav aria-label="Navigasi utama" class="main-nav" role="navigation">
+<a href="#home">Home</a>
+<a href="#about">Tentang</a>
+<a href="#products">Produk</a>
+<a href="#clients">Clients</a>
+<a href="#blog">Insights</a>
+<a class="cta" href="#contact">Hubungi Kami</a>
+</nav>
+</div>
+</header>
+<main aria-labelledby="hero-heading" class="site-main" id="home" role="main">
+<section aria-label="Halaman utama" class="container hero" data-animate="">
+<!-- Hero headline & tagline -->
+<div style="display:flex;align-items:flex-start;gap:1rem;flex-direction:column;">
+<div>
+<h2 id="hero-heading" style="margin:0;font-size:1.6rem">Dirac Parfum: Parfum Original Niche, Designer, Timteng, dan Lokal</h2>
+<p class="muted" style="margin:0.25rem 0 0 0">Toko parfum original untuk retail, reseller, grosir, dan pembeli yang mencari aroma premium terpercaya.</p>
+</div>
+<!-- Hero slider -->
+<div aria-label="Hero slideshow" aria-roledescription="carousel" class="slider" data-autoplay="true" data-interval="false">
+<div aria-live="polite" class="slides" id="heroSlides">
+<!-- REPLACE: swap the old hero slideshow block with this static hero block -->
+<div aria-label="Hero (statik)" class="slider" id="heroStatic" role="region">
+<figure aria-label="Hero" class="slide" role="group" style="margin:0">
+<div class="media">
+<video aria-hidden="false" autoplay="" id="hero-video" loop="" muted="" playsinline="" poster="images/slide1-16x9.webp" preload="auto">
+<source src="hero.MOV" type="video/quicktime"/>
+        Your browser does not support the video tag.
+      </video>
+<!-- TAMBAHKAN TOMBOL UNMUTE DI SINI (NO 1) -->
+<button aria-label="Hidupkan suara" class="video-unmute" id="unmuteBtn">🔊</button>
+</div>
+<figcaption style="position:relative;left:1rem;right:1rem;bottom:0;margin-top:0.6rem">
+<!-- optional caption content -->
+</figcaption>
+</figure>
+<!-- Highlights & CTA remain as before; keep the following container below hero -->
+<div aria-label="Highlight layanan" class="highlights" style="margin-top:1rem">
+<!-- existing highlight cards... -->
+</div>
+</div>
+<!-- Controls -->
+<div aria-hidden="false" class="slider-controls">
+<button aria-label="Sebelumnya" class="arrow left" id="heroPrev" title="Sebelumnya"></button>
+<button aria-label="Berikutnya" class="arrow right" id="heroNext" title="Berikutnya"></button>
+<div aria-label="Navigasi slide" class="dots" id="heroDots" role="tablist"></div>
+</div>
+</div>
+<!-- Highlights & CTA -->
+<div aria-label="Highlight layanan" class="highlights">
+<article aria-labelledby="h1" class="card">
+<div aria-hidden="true" class="icon">
+<!-- inline SVG perfume -->
+<svg aria-hidden="true" fill="none" focusable="false" height="28" viewbox="0 0 24 24" width="28" xmlns="http://www.w3.org/2000/svg">
+<path d="M7 6h10v2H7z" fill="currentColor" opacity="0.9"></path>
+<path d="M10 10h4v9h-4z" fill="currentColor" opacity="0.85"></path>
+<path d="M9 19h6v1a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1z" fill="currentColor" opacity="0.7"></path>
+</svg>
+</div>
+<h3 id="h1">Produk Original Terjamin</h3>
+<p class="muted">Kami hanya menjual produk yang terverifikasi keasliannya. Setiap batch diperiksa kualitasnya dan didokumentasikan untuk memudahkan klaim garansi jika diperlukan.</p>
+</article>
+<article aria-labelledby="h2" class="card">
+<div aria-hidden="true" class="icon">
+<svg aria-hidden="true" fill="none" focusable="false" height="28" viewbox="0 0 24 24" width="28" xmlns="http://www.w3.org/2000/svg">
+<path d="M4 12h16M4 6h10M4 18h8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"></path>
+</svg>
+</div>
+<h3 id="h2">Pengiriman Cepat &amp; Aman</h3>
+<p class="muted">Jaringan logistik kami meliputi pengiriman ekspres, packing gurih, serta opsi asuransi untuk pesanan grosir. Lacak pengiriman dengan nomor AWB di setiap transaksi.</p>
+</article>
+<article aria-labelledby="h3" class="card">
+<div aria-hidden="true" class="icon">
+<svg aria-hidden="true" fill="none" focusable="false" height="28" viewbox="0 0 24 24" width="28" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7z" fill="currentColor"></path>
+</svg>
+</div>
+<h3 id="h3">Dukungan Sales &amp; Merchandising</h3>
+<p class="muted">Kami menyediakan saran promosi, harga jual, serta materi visual agar produk lebih mudah terjual di marketplace dan toko fisik.</p>
+</article>
+</div>
+<div aria-label="Call to action" class="cta-row" role="region">
+<button class="btn primary" id="contactCTABtn" onclick="document.querySelector('#contact').scrollIntoView({behavior:'smooth',block:'start'})">Hubungi Kami</button>
+<button class="btn secondary" id="viewProductsBtn" onclick="document.querySelector('#products').scrollIntoView({behavior:'smooth',block:'start'})">Lihat Produk</button>
+</div>
+</div>
+</div></section>
+<!-- About -->
+<section aria-labelledby="aboutHeading" class="container" data-animate="" id="about">
+<h2 id="aboutHeading">Tentang Dirac Parfum</h2>
+<div aria-label="Cerita toko dan layanan Dirac Parfum" class="two-col" role="region">
+<div>
+<article class="card">
+<h3>Cerita Singkat</h3>
+<p>Dirac Parfum adalah toko parfum original yang menyediakan pilihan aroma berkualitas untuk pelanggan retail, reseller, toko parfum offline, maupun penjual online. Fokus utama kami adalah membantu pembeli mendapatkan stok parfum yang jelas, original, rapi, dan siap dikirim.</p>
+<p>Melalui diracgroup.store, pembeli dapat mengenal koleksi parfum niche, designer, timteng, dan lokal premium dengan lebih mudah. Kami melayani pembelian satuan, sample untuk katalog, sampai pemesanan grosir dengan informasi stok dan harga yang dibuat jelas.</p>
+</article>
+<article aria-labelledby="historyHeading" class="card">
+<h3 id="historyHeading">Perjalanan Toko</h3>
+<ul aria-label="Timeline perjalanan toko" class="timeline">
+<li><strong>12.2024</strong> — Awal mula: Dirac Parfum mulai melayani pesanan lokal dan membangun kepercayaan dari kualitas produk serta respons layanan.</li>
+<li><strong>04.2025</strong> — Pilihan stok diperluas untuk menjawab kebutuhan pembeli retail dan reseller.</li>
+<li><strong>06.2025</strong> — Packing dan pengecekan batch dibuat lebih rapi agar pesanan sampai dengan aman.</li>
+<li><strong>07.2025</strong> — Paket sample dan materi display mulai disiapkan untuk membantu reseller memperkenalkan aroma kepada pelanggan.</li>
+<li><strong>09.2025</strong> — Layanan restock dan konsultasi pilihan aroma dibuat lebih teratur.</li>
+<li><strong>11.2025</strong> — Pengelolaan stok dan pengiriman dibuat lebih cepat untuk mendukung pembelian satuan maupun grosir.</li>
+<li><strong>01.2026</strong> — Koleksi aroma ditambah agar pilihan pembeli semakin lengkap.</li>
+<li><strong>04.2026</strong> — Standar packing dan layanan order dibuat lebih konsisten untuk semua pesanan.</li>
+</ul>
+</article>
+</div>
+<aside>
+<article aria-labelledby="shopBenefitHeading" class="card vision">
+<h3 id="shopBenefitHeading">Keunggulan Belanja</h3>
+<ul class="values">
+<li>Produk parfum original dengan pengecekan kualitas setiap batch.</li>
+<li>Pilihan pembelian satuan, sample, reseller, dan grosir.</li>
+<li>Informasi stok, harga, dan pilihan aroma dibuat jelas sebelum order.</li>
+<li>Packing rapi untuk membantu produk sampai dengan aman.</li>
+</ul>
+<h3>Cara Order</h3>
+<ul class="values">
+<li>Pilih produk atau kategori aroma yang diinginkan.</li>
+<li>Hubungi WhatsApp untuk cek stok dan rekomendasi aroma.</li>
+<li>Konfirmasi pesanan, alamat, dan metode pengiriman.</li>
+<li>Pesanan diproses setelah detail order lengkap.</li>
+</ul>
+</article>
+<article aria-labelledby="founderHeading" class="card" style="margin-top:0.8rem">
+<h3 id="founderHeading">Founder</h3>
+<div style="display:flex;gap:0.75rem;align-items:center;">
+<img alt="Foto Achmad Zaenuddin" loading="lazy" src="founder1.webp" style="width:72px;height:72px;border-radius:12px;object-fit:cover;border:1px solid rgba(255,255,255,0.03);"/>
+<div>
+<strong>Achmad Zaenuddin</strong>
+<div class="muted">Founder Dirac Parfum</div>
+</div>
+</div>
+<p class="muted" style="margin-top:0.7rem">Mengawasi pemilihan produk, hubungan pemasok, kualitas stok, dan strategi layanan untuk pembeli retail, reseller, serta grosir.</p>
+</article>
+
+</aside>
+</div>
+
+</section>
+<!-- Products / Highlights -->
+<section aria-labelledby="productsHeading" class="container" data-animate="" id="products">
+<h2 id="productsHeading">Produk &amp; Layanan Utama</h2>
+<div class="highlights">
+<article aria-labelledby="p1" class="card">
+<h3 id="p1">Reseller &amp; Grosir Parfum Branded</h3>
+<p class="muted">Model pemesanan mulai dari satuan hingga grosir. Kami menawari kondisi stok yang diperbarui secara berkala, harga bertingkat, dan kemasan pilihan sesuai permintaan reseller.</p>
+</article>
+<article aria-labelledby="p2" class="card">
+<h3 id="p2">Program Sample &amp; Tester</h3>
+<p class="muted">Akses sample untuk trial pelanggan, paket tester untuk display toko, dan opsi cetak label untuk private label sesuai volume minimal.</p>
+</article>
+<article aria-labelledby="p3" class="card">
+<h3 id="p3">Konsultasi Merchandising &amp; Listing Online</h3>
+<p class="muted">Kami membantu listing produk di marketplace, menyusun foto produk, dan rekomendasi harga agar cepat ditemukan dan dibeli konsumen.</p>
+</article>
+</div>
+<div class="card" style="margin-top:0.8rem">
+<h3>Kenapa Halaman Ini Mudah Ditemukan Google</h3>
+<p class="muted">Halaman ini memperjelas niat pencarian dengan kata kunci utama seperti parfum niche, designer, timteng, lokal, reseller parfum original, serta nama brand yang sering dicari. Ditambah struktur heading, deskripsi yang natural, dan schema data terstruktur, halaman menjadi lebih mudah dipahami mesin pencari dan lebih relevan untuk calon pembeli.</p>
+</div>
+</section>
+<!-- Gallery (8 images) -->
+<section aria-labelledby="galleryHeading" class="container" data-animate="" id="gallery">
+<h2 id="galleryHeading">Galeri Foto Produk &amp; Display</h2>
+<p class="muted">Klik gambar untuk melihat lebih besar.</p>
+<div class="gallery-grid" role="list">
+<div aria-label="Lihat foto display 1" class="thumb" data-src="images/slide1-16x9.webp" role="listitem" tabindex="0">
+<img alt="Display produk parfum - koleksi unggulan" loading="lazy" src="produk1.webp"/>
+</div>
+<div aria-label="Lihat foto packing 2" class="thumb" data-src="images/slide2-16x9.webp" role="listitem" tabindex="0">
+<img alt="Proses packing produk parfum" loading="lazy" src="produk2.webp"/>
+</div>
+<div aria-label="Lihat foto label 3" class="thumb" data-src="images/slide3-16x9.webp" role="listitem" tabindex="0">
+<img alt="Close up label parfum original" loading="lazy" src="produk3.webp"/>
+</div>
+<div aria-label="Lihat foto etalase 4" class="thumb" data-src="images/slide4-16x9.webp" role="listitem" tabindex="0">
+<img alt="Etalase toko parfum modern" loading="lazy" src="produk4.webp"/>
+</div>
+<div aria-label="Lihat foto reseller 5" class="thumb" data-src="images/slide5-16x9.webp" role="listitem" tabindex="0">
+<img alt="Reseller menerima paket besar" loading="lazy" src="produk5.webp"/>
+</div>
+<div aria-label="Lihat foto sample 6" class="thumb" data-src="images/slide6-16x9.webp" role="listitem" tabindex="0">
+<img alt="Sampel parfum untuk test" loading="lazy" src="produk6.webp"/>
+</div>
+<div aria-label="Lihat foto close-up 7" class="thumb" data-src="images/slide7-16x9.webp" role="listitem" tabindex="0">
+<img alt="Close-up kualitas botol parfum" loading="lazy" src="produk7.webp"/>
+</div>
+<div aria-label="Lihat foto display 8" class="thumb" data-src="images/slide8-16x9.webp" role="listitem" tabindex="0">
+<img alt="Display varian parfum di toko" loading="lazy" src="produk8.webp"/>
+</div>
+</div>
+</section>
+<!-- BEGIN: Promo image under XERJOFF with Web To Order button -->
+<section class="container" data-animate="" id="promo-xerjoff">
+<div class="promo16x9" style="background:transparent;box-shadow:none;border:none;margin:0;">
+<div class="stage">
+<figure class="slide" style="--i:0"><div class="media"><img alt="" loading="lazy" src="s1.webp"/></div></figure>
+<figure class="slide" style="--i:1"><div class="media"><img alt="" loading="lazy" src="s2.webp"/></div></figure>
+<figure class="slide" style="--i:2"><div class="media"><img alt="" loading="lazy" src="s3.webp"/></div></figure>
+<figure class="slide" style="--i:3"><div class="media"><img alt="" loading="lazy" src="s4.webp"/></div></figure>
+<figure class="slide" style="--i:4"><div class="media"><img alt="" loading="lazy" src="s5.webp"/></div></figure>
+<figure class="slide" style="--i:5"><div class="media"><img alt="" loading="lazy" src="s6.webp"/></div></figure>
+<figure class="slide" style="--i:6"><div class="media"><img alt="" loading="lazy" src="s7.webp"/></div></figure>
+<figure class="slide" style="--i:7"><div class="media"><img alt="" loading="lazy" src="s8.webp"/></div></figure>
+<figure class="slide" style="--i:8"><div class="media"><img alt="" loading="lazy" src="s9.webp"/></div></figure>
+</div>
+</div>
+<div class="center-cta" style="padding-top:0.6rem">
+<a class="btn primary" href="https://diracgroup.store/order.html">Web To Order</a>
+</div>
+</section>
+<!-- END: Promo image under XERJOFF with Web To Order button -->
+<section aria-labelledby="clientsHeading" class="container" data-animate="" id="clients">
+<h2 id="clientsHeading">Klien &amp; Testimoni</h2>
+<!-- Client logos -->
+<div aria-label="Client logos" class="card" style="display:flex;gap:0.8rem;flex-wrap:wrap;align-items:center">
+<!-- TODO: upload logos to /logos/ -->
+<img alt="Logo client 1" loading="lazy" src="klien1.webp" style="height:40px;opacity:0.95"/>
+<img alt="Logo client 2" loading="lazy" src="klien2.webp" style="height:40px;opacity:0.95"/>
+<img alt="Logo client 3" loading="lazy" src="klien3.webp" style="height:40px;opacity:0.95"/>
+<img alt="Logo client 4" loading="lazy" src="klien4.webp" style="height:40px;opacity:0.95"/>
+<img alt="Logo client 5" loading="lazy" src="klien5.webp" style="height:40px;opacity:0.95"/>
+<img alt="Logo client 6" loading="lazy" src="klien6.webp" style="height:40px;opacity:0.95"/>
+</div>
+<div aria-label="Testimoni pelanggan" class="slider testimonials">
+<div aria-live="polite" class="slides" id="testSlides">
+<div class="slide test-slide" data-index="0">
+<div class="card">
+<strong>Arief K., Pemilik Toko Parfum • Surabaya</strong>
+<div class="muted rating">★★★★★</div>
+<p>Belanja dan restock melalui Dirac Parfum selalu menyenangkan dan bermanfaat. Produk yang ditawarkan konsisten berkualitas tinggi, membuat pelanggan saya puas. Promosi dari beliau terbukti efektif meningkatkan omset toko. Pengiriman cepat, retur sederhana, serta pelayanan profesional. Semua itu menjadi alasan kuat bagi saya untuk merekomendasikan Dirac Parfum.</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="0">
+<div class="card">
+<strong>Rachel S., Reseler Parfum • Jakarta</strong>
+<div class="muted rating">★★★★★</div>
+<p>Saya sangat puas dengan layanan Dirac Parfum. Sejak pertama kali menghubungi, saya sudah merasakan profesionalisme dan pelayanan yang sangat ramah. Semua dijelaskan dengan detail, tidak ada yang ditutupi, dan prosesnya berjalan sangat rapi. Hasil yang saya dapat benar-benar sesuai harapan, bahkan lebih baik. Terlihat jelas bahwa layanan ini dibuat dengan penuh komitmen dan ketelitian. Saya dengan senang hati merekomendasikan Dirac Parfum kepada siapa pun yang menginginkan kualitas terbaik.</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="0">
+<div class="card">
+<strong>Maya Kartika., Dropshiping • Tangerang</strong>
+<div class="muted rating">★★★★★</div>
+<p>Pelayanan Dirac Parfum benar-benar luar biasa. Saya merasa diperhatikan mulai dari konsultasi awal hingga pekerjaan selesai. Tidak hanya cepat, tetapi juga sangat detail dan teliti. Setiap permintaan saya direspons dengan baik dan profesional. Hasil akhirnya sangat memuaskan dan sesuai dengan standar yang saya harapkan. Saya salut dengan konsistensi kualitas layanannya. Sangat layak menjadi pilihan utama.</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="0">
+<div class="card">
+<strong>Fajar Kurniawan., Pembeli Setia • Surabaya</strong>
+<div class="muted rating">★★★★★</div>
+<p>Pengalaman saya menggunakan layanan dari usaha Pak Achmad Zaenuddin sangat positif. Layanannya cepat, rapi, dan penuh tanggung jawab. Saya merasa yakin sejak awal karena cara mereka menjelaskan proses dan memberikan update sangat jelas. Hasil pekerjaannya pun tidak mengecewakan, bahkan membuat saya terpukau. Kualitas layanan dan ketepatan waktunya benar-benar terasa. Saya pasti akan kembali lagi!</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="0">
+<div class="card">
+<strong>Dewi Anggraini., Reseller • Palembang</strong>
+<div class="muted rating">★★★★★</div>
+<p>Saya ingin memberikan apresiasi setinggi-tingginya kepada Dirac Parfum. Pelayanannya sangat bersahabat namun tetap profesional. Setiap detail disesuaikan dengan kebutuhan saya, dan itu membuat saya merasa sangat dihargai sebagai pelanggan. Hasil pekerjaan benar-benar memuaskan dan menunjukkan kualitas yang tidak asal-asalan. Saya sangat senang menemukan layanan dengan kualitas dan perhatian detail seperti ini. Sangat direkomendasikan!</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="1">
+<div class="card">
+<strong>Siti M., Dropshipper • Bandung</strong>
+<div class="muted rating">★★★★★</div>
+<p>Saya merasa layanan yang diberikan sangat profesional. Produk yang diberikan selalu konsisten memuaskan. Promosi dari beliau membantu penjualan toko lebih baik. Pengiriman barang tidak pernah terlambat, retur mudah, dan pelayanan sangat ramah. Karena pengalaman baik itu, saya tidak ragu merekomendasikan Dirac Parfum.</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="2">
+<div class="card">
+<strong>Rahmat D., Retail Manager • Jakarta</strong>
+<div class="muted rating">★★★★☆</div>
+<p>Kerja sama dengan Dirac sudah lebih dari dua tahun, dan pengalaman saya selalu positif. Produk yang dikirim terjamin mutunya dan sesuai kebutuhan. Dukungan promosi juga sangat membantu perkembangan usaha saya. Pengiriman cepat, retur mudah, dan semua pelayanan profesional. Karena itu saya tidak ragu menyarankan Dirac kepada orang lain.</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="3">
+<div class="card">
+<strong>Lina A., Pemilik Butik • Yogyakarta</strong>
+<div class="muted rating">★★★★★</div>
+<p>Saya merasa puas bekerja sama dengan Dirac. Produk yang diberikan selalu berkualitas dan konsisten. Dukungan promosi dari layanan benar-benar membantu meningkatkan penjualan toko saya. Pengiriman dilakukan dengan cepat dan tepat waktu, sementara retur ditangani profesional. Semua pelayanan ini membuat saya yakin untuk merekomendasikan Dirac sebagai mitra terpercaya.</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="4">
+<div class="card">
+<strong>Tommy S., E-commerce Seller • Semarang</strong>
+<div class="muted rating">★★★★☆</div>
+<p>Belanja dan restock di Dirac Parfum memberikan pengalaman menyenangkan. Produk yang dijual selalu berkualitas tinggi dan sesuai kebutuhan pasar. Dukungan promosi sangat membantu meningkatkan penjualan toko. Pengiriman cepat, retur mudah, dan pelayanan ramah. Semua hal positif ini membuat saya percaya untuk merekomendasikan Dirac Parfum.</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="5">
+<div class="card">
+<strong>Yuliana P., Admin Marketplace • Medan</strong>
+<div class="muted rating">★★★★★</div>
+<p>Produk yang tersedia selalu memuaskan dengan kualitas terbaik. Promosi yang beliau berikan membantu usaha saya berkembang pesat. Pengiriman aman tepat waktu, retur ditangani profesional, serta pelayanan ramah. Dengan semua kelebihan tersebut, saya merasa sangat yakin untuk terus merekomendasikan Dirac Parfum kepada siapa pun.</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="6">
+<div class="card">
+<strong>Fajar W., Distributor • Makassar</strong>
+<div class="muted rating">★★★★★</div>
+<p>Setiap produk yang saya terima selalu berkualitas baik dan sesuai harapan. Layanan juga memberikan dukungan promosi yang efektif sehingga penjualan meningkat. Pengiriman aman dan tidak pernah terlambat, retur ditangani dengan mudah. Semua pengalaman ini membuat saya yakin penuh merekomendasikan Dirac Parfum kepada siapa pun yang membutuhkan.</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="7">
+<div class="card">
+<strong>Nadia R., Konsultan Retail • Bali</strong>
+<div class="muted rating">★★★★☆</div>
+<p>Kualitas produk yang saya dapatkan selalu stabil dan memuaskan. Dukungan promosi memberi dampak positif pada omset toko. Pengiriman dilakukan tepat waktu, retur cepat ditangani, dan layanan ramah membuat kerja sama terasa nyaman. Karena hal itu, saya percaya merekomendasikan Dirac Parfum sebagai pilihan belanja parfum terpercaya</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="8">
+<div class="card">
+<strong>Hendra S., Pemilik Kios • Pontianak</strong>
+<div class="muted rating">★★★★★</div>
+<p>Pengalaman saya bekerja sama selalu menyenangkan. Produk yang ditawarkan benar-benar memuaskan dan konsisten berkualitas. Dukungan promosi terbukti meningkatkan penjualan. Pengiriman aman dan tepat waktu, retur mudah, serta pelayanan ramah menambah rasa percaya. Karena alasan itu, saya dengan senang hati merekomendasikan Dirac Parfum sebagai pilihan belanja parfum terpercaya</p>
+</div>
+</div>
+<div class="slide test-slide" data-index="9">
+<div class="card">
+<strong>Carla T., Reseller • Malang</strong>
+<div class="muted rating">★★★★★</div>
+<p>Sejauh ini saya merasa sangat puas dengan pelayanan dan kualitas produk. Promosi yang diberikan terbukti efektif menambah pelanggan. Pengiriman cepat, retur tidak ribet, dan komunikasi mudah membuat kerja sama semakin menyenangkan. Semua hal baik ini membuat saya dengan senang hati merekomendasikan Dirac Parfum sebagai pilihan belanja parfum terpercaya</p>
+</div>
+</div>
+</div>
+<div class="slider-controls" style="bottom:8px;">
+<button aria-label="Sebelumnya (testimoni)" class="arrow left" id="testPrev">←</button>
+<button aria-label="Berikutnya (testimoni)" class="arrow right" id="testNext">→</button>
+<div aria-label="Navigasi testimoni" class="dots" id="testDots" role="tablist"></div>
+</div>
+</div>
+<!-- Success stories -->
+<div style="margin-top:0.8rem">
+<article class="card">
+<h3>Success Story: Penjualan Musiman</h3>
+<p>Pas musim liburan kemarin, aku coba strategi baru buat jualan parfum di Marketplace FB. Biasanya jualanku lumayan, tapi sering nggak stabil. Setelah aku berusaha semaksimal mungkin, hujan aku trabas, emang bener bener proses itu tidak mungkin menghianati. Banyak yang tadinya cuma nanya, akhirnya langsung checkout. Dalam 10 hari aja, stokku habis total, penjualan naik sampai 70%, dan aku bisa muter modal lebih cepat buat isi ulang stok. Rasanya puas banget, apalagi bisa lihat sendiri kalau tampilan produk, cara promosi, dan strategi yang tepat itu bener-bener bikin jualan melejit. Dari pengalaman ini aku makin yakin kalau setiap usaha kecil yang dicoba serius bisa ngasih hasil besar, dan sekarang aku jadi lebih pede buat terus eksperimen sama strategi baru ke depannya.</p>
+<p>Kami mencatat bahwa kombinasi kualitas produk, materi visual yang efektif, serta dukungan logistik merupakan kunci utama keberhasilan tersebut. Strategi ini bisa disesuaikan lagi untuk kebutuhan reseller lain.</p>
+</article>
+<article class="card" style="margin-top:0.6rem">
+<h3>Success Story: Retail Launch</h3>
+<p>Aku juga punya pengalaman pas pertama kali berani masukin parfum niche ke jualanku. Awalnya jujur agak ragu, takutnya susah laku karena beda dari parfum yang biasa ada di pasaran. Tapi aku dapat support dari Dirac Parfum yang kasih sample, materi promosi, sampai saran harga perkenalan. Jadi waktu aku upload produk di marketplace, aku lebih pede dan punya strategi yang jelas. Hasilnya nggak mengecewakan, dalam 6 minggu pertama lebih dari 60% stok ludes, dan banyak pembeli bilang mereka suka karena aromanya unik dan beda dari yang lain. Respon positif itu bikin aku makin semangat, akhirnya aku berani order ulang dalam jumlah lebih besar. Dari situ aku sadar, dengan dukungan yang tepat dan keberanian buat nyoba, produk baru sekalipun bisa diterima pasar dan malah jadi peluang besar.</p>
+</article>
+</div>
+</section>
+
+<!-- Blog / Insights -->
+<section aria-labelledby="blogHeading" class="container" data-animate="" id="blog">
+<h2 id="blogHeading">News &amp; Insights</h2>
+<div class="blog-list" role="list">
+<article aria-labelledby="a1" class="article" role="article">
+<h4 id="a1">Gimana Sih Caranya Sukses di Bidang Reseller Produk?</h4>
+<div class="muted">10 September 2025</div>
+<p>Sukses di bidang reseller produk dimulai dari memahami kebutuhan pasar. Produk yang kamu jual harus relevan dengan gaya hidup dan selera konsumen.</p>
+<a class="btn primary" href="https://diracgroup.store/insight.html">Read more</a>
+</article>
+<article aria-labelledby="a2" class="article" role="article">
+<h4 id="a2">Rahasia Membaca Pasar Biar Produk Cepat Laku</h4>
+<div class="muted">22 Agustus 2025</div>
+<p>Sebagai reseller, memahami pasar adalah pondasi kesuksesan yang paling penting. Produk yang kamu jual tidak akan cepat laku jika hanya sekadar dipajang tanpa pemahaman siapa target pembelinya.</p>
+<a class="btn primary" href="https://diracgroup.store/insight.html">Read more</a>
+</article>
+<article aria-labelledby="a3" class="article" role="article">
+<h4 id="a3">Branding yang Bikin Orang Ingat Kamu</h4>
+<div class="muted">1 Juli 2025</div>
+<p>Branding adalah kunci agar produkmu menonjol di tengah keramaian pasar. Banyak reseller hanya fokus pada harga, padahal konsumen sering membeli karena cerita atau citra yang melekat pada sebuah produk.</p>
+<a class="btn primary" href="https://diracgroup.store/insight.html">Read more</a>
+</article>
+</div>
+</section>
+<!-- FAQ -->
+<section aria-labelledby="faqHeading" class="container" data-animate="" id="faq">
+<h2 id="faqHeading">FAQ — Pertanyaan Umum</h2>
+<div class="faq">
+<details>
+<summary>Apa jaminan keaslian produk yang Dirac Parfum berikan?</summary>
+<div class="muted">Setiap produk diperiksa dan diverifikasi saat penerimaan stok. Kami menyimpan dokumentasi batch dan bukti pembelian dari distributor resmi. Jika terdapat klaim keaslian dari pelanggan, kami akan melakukan verifikasi batch dan jika terbukti tidak asli, kami memproses pengembalian uang atau penggantian sesuai kebijakan. Proses klaim memerlukan foto produk, nomor batch, dan bukti transaksi.</div>
+</details>
+<details>
+<summary>Bagaimana proses pengiriman dan eslayananasi waktu sampai?</summary>
+<div class="muted">Kami bekerja dengan beberapa jasa kurir terpercaya. Eslayananasi pengiriman bergantung pada lokasi tujuan dan metode layanan yang dipilih: reguler (2–5 hari kerja), ekspres (1–2 hari kerja untuk area besar), dan layanan khusus untuk pengiriman grosir. Setiap pesanan akan diberi nomor resi yang dapat dilacak. Untuk pengiriman luar pulau besar, waktu mungkin lebih lama sesuai rute logistik.</div>
+</details>
+<details>
+<summary>Apa kebijakan retur dan garansi barang rusak?</summary>
+<div class="muted">Jika produk tiba dalam kondisi rusak, segera hubungi kami dalam 48 jam dengan lampiran foto kemasan, produk, dan nomor pesanan. Untuk kasus yang memenuhi syarat, kami menawarkan penggantian barang atau pengembalian uang setelah verifikasi. Produk yang dikembalikan harus lengkap dengan label dan kemasan asli sesuai ketentuan retur kami.</div>
+</details>
+<details>
+<summary>Apakah Dirac Parfum menyediakan sample untuk reseller baru?</summary>
+<div class="muted">Ya. Kami menyediakan paket sample dengan biaya simbolis atau gratis tergantung promosi. Paket sample membantu reseller menilai aroma dan kualitas sebelum melakukan pemesanan volume besar. Syarat dan ketentuan sample dapat berubah tergantung kebijakan promosi saat itu.</div>
+</details>
+<details>
+<summary>Bagaimana cara menjadi mitra reseller dan apa keuntungan order?</summary>
+<div class="muted">Untuk menjadi mitra, hubungi kami melalui formulir kontak atau WhatsApp (+62 878-9252-3968). Keuntungan termasuk harga reseller bertingkat, prioritas restock, akses sample, materi pemasaran, dan dukungan merchandising. Kami juga menyediakan saran penetapan harga agar margin Anda tetap sehat.</div>
+</details>
+<details>
+<summary>Apakah Dirac Parfum melayani private label?</summary>
+<div class="muted">Kami dapat membantu menghubungkan reseller dengan pabrik/penyedia private label untuk pemesanan dengan jumlah minimal tertentu. Proses ini melibatkan waktu produksi, pengecekan sample, dan persetujuan desain kemasan. Silakan hubungi WhatsApp kami untuk diskusi lebih lanjut.</div>
+</details>
+</div>
+</section>
+<section aria-labelledby="faqSeoHeading" class="container" data-animate="" id="seoFaq">
+<h2 id="faqSeoHeading">FAQ SEO Parfum Niche, Designer, Timteng, dan Lokal</h2>
+<div class="faq">
+<details>
+<summary>Apa keunggulan parfum niche dibanding parfum biasa?</summary>
+<div class="muted">Parfum niche biasanya lebih fokus pada karakter aroma, kualitas komposisi, dan kesan eksklusif. Banyak pembeli memilihnya saat ingin aroma yang lebih unik dan tidak pasaran.</div>
+</details>
+<details>
+<summary>Siapa target pembeli parfum designer?</summary>
+<div class="muted">Targetnya luas, mulai dari pengguna harian, kolektor parfum, hingga reseller yang ingin menghadirkan brand yang sudah dikenal pasar seperti YSL, Dior, LV, Tom Ford, dan JPG.</div>
+</details>
+<details>
+<summary>Apakah parfum timteng cocok untuk reseller?</summary>
+<div class="muted">Cocok, karena parfum timteng sering dicari karena aromanya tegas, tahan lama, dan punya daya tarik pasar yang kuat untuk penjualan online maupun offline.</div>
+</details>
+<details>
+<summary>Apakah tersedia parfum lokal premium?</summary>
+<div class="muted">Ya, parfum lokal juga penting karena menawarkan variasi aroma yang fleksibel, harga kompetitif, dan peluang margin yang menarik untuk reseller.</div>
+</details>
+</div>
+</section>
+<!-- Contact -->
+<section aria-labelledby="contactHeading" class="container" data-animate="" id="contact">
+<h2 id="contactHeading">Hubungi Kami</h2>
+<div class="two-col">
+<div>
+<article class="card">
+<h3>Lokasi &amp; Kontak</h3>
+<p class="muted">Lokasi Layanan: Jl. Ahmad Yani No. 21, Malang — Jawa Layananur, Indonesia</p>
+<p class="muted">Pengiriman tersedia ke berbagai wilayah Indonesia.</p>
+<h3>Kontak Langsung</h3>
+<p class="muted">Telepon / WhatsApp: <a href="tel:+6287892523968">+62 878-9252-3968</a></p>
+<p class="muted">Email Support: <a href="mailto:support@diracgroup.store">support@diracgroup.store</a></p>
+
+<!-- Google Maps Placeholder -->
+<!-- GOOGLE MAPS PLACEHOLDER: coords kosong, to be filled -->
+<div data-lat="" data-lng="" id="map" style="height:200px;margin-top:0.6rem;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));display:flex;align-items:center;justify-content:center">
+<div class="muted">Area layanan utama: Malang dan pengiriman ke seluruh Indonesia</div>
+</div>
+</article>
+</div>
+<aside>
+<article class="card">
+<h3>Form Kontak</h3>
+<form action="#" class="contact-form" id="contactForm" method="post" novalidate="" onsubmit="return false;">
+<label for="name">Nama</label>
+<input id="name" name="name" placeholder="Nama lengkap" required="" type="text"/>
+<label for="email">Email</label>
+<input id="email" name="email" placeholder="email@domain.com" required="" type="email"/>
+<label for="phone">Nomor Telepon</label>
+<input id="phone" name="phone" placeholder="+62" required="" type="tel"/>
+<label for="message">Pesan</label>
+<textarea id="message" name="message" placeholder="Tulis pesan Anda..." required="" rows="5"></textarea>
+<div class="muted"></div>
+<div style="display:flex;gap:0.6rem;margin-top:0.6rem">
+<button class="btn primary" id="sendMsgBtn" type="button">Kirim Pesan</button>
+<button class="btn secondary" type="reset">Reset</button>
+</div>
+</form>
+</article>
+</aside>
+</div>
+<div style="display:flex;justify-content:center;margin:1.5rem 0 0.5rem 0;"><a class="btn primary" href="https://diracgroup.store/insight.html">Web Insights</a></div></section>
+</main>
+<section aria-labelledby="seoHeading" class="container" data-animate="" id="seoBrandCoverage">
+<h2 id="seoHeading">Koleksi Parfum Niche, Designer, Timteng, dan Lokal</h2>
+<article class="card">
+<p>Dirac Parfum fokus membantu pembeli yang mencari parfum niche, parfum designer, parfum timteng, dan parfum lokal original dalam satu tempat. Kategori ini disusun untuk memudahkan Anda menemukan aroma yang sesuai gaya, karakter, dan kebutuhan pemakaian harian maupun acara spesial. Untuk pencarian populer, kami juga mengarahkan koleksi berdasarkan brand yang sering dicari seperti YSL, Dior, Nishane, LV, Tom Ford, JPG, Rasasi, dan Mykonos.</p>
+<p>SEO halaman ini dibuat agar lebih kuat untuk pencarian seperti <strong>toko parfum niche</strong>, <strong>parfum designer original</strong>, <strong>parfum timteng tahan lama</strong>, <strong>parfum lokal premium</strong>, <strong>reseller parfum original</strong>, dan <strong>brand parfum populer</strong>. Dengan begitu, calon pelanggan lebih mudah menemukan halaman ini ketika mencari pilihan parfum mewah, elegan, dan berkarakter.</p>
+</article>
+<div class="highlights" style="margin-top:0.8rem">
+<article class="card">
+<h3>Parfum Niche</h3>
+<p class="muted">Pilihan aroma yang lebih khas, eksklusif, dan berbeda dari parfum mainstream. Cocok untuk pembeli yang ingin karakter aroma lebih unik dan berkelas.</p>
+</article>
+<article class="card">
+<h3>Parfum Designer</h3>
+<p class="muted">Kategori parfum yang populer dan mudah dikenali pasar, termasuk brand yang sering dicari seperti YSL, Dior, LV, Tom Ford, dan JPG untuk kebutuhan harian maupun koleksi.</p>
+</article>
+<article class="card">
+<h3>Parfum Timteng &amp; Lokal</h3>
+<p class="muted">Sesuai untuk pencinta aroma tegas, tahan lama, dan value yang kuat. Cocok untuk pasar retail, reseller, dan pembeli yang mencari opsi lebih fleksibel dari sisi harga dan pilihan aroma.</p>
+</article>
+</div>
+</section>
+<section aria-labelledby="brandSeoHeading" class="container" data-animate="" id="brandSeo">
+<h2 id="brandSeoHeading">Brand yang Banyak Dicari</h2>
+<div class="highlights">
+<article class="card"><h3>YSL &amp; Dior</h3><p class="muted">Pilihan yang identik dengan kesan elegan, modern, dan aman untuk berbagai aktivitas. Keduanya sering masuk daftar pencarian parfum designer premium.</p></article>
+<article class="card"><h3>Nishane &amp; Tom Ford</h3><p class="muted">Cocok untuk penggemar parfum niche yang ingin karakter lebih dalam, berlapis, dan terasa berkelas saat dipakai.</p></article>
+<article class="card"><h3>LV, JPG, Rasasi, Mykonos</h3><p class="muted">Kombinasi brand yang kuat untuk pembeli yang menginginkan aroma populer, familiar, dan punya daya tarik pasar yang tinggi.</p></article>
+</div>
+</section>
+<section aria-labelledby="maxSeoHeading" class="container" data-animate="" id="seoMaximal">
+<h2 id="maxSeoHeading">SEO Maximal — Parfum Niche, Designer, Timteng, dan Lokal</h2>
+<article class="card">
+<p>Dirac Parfum disusun untuk menangkap pencarian yang paling dekat dengan niat beli. Ketika orang mencari parfum niche original, parfum designer original, parfum timteng tahan lama, parfum lokal premium, atau reseller parfum original, halaman ini memberi jawaban yang jelas, terstruktur, dan mudah dipahami. Itu sebabnya konten, heading, dan schema di halaman ini dibuat untuk membantu mesin pencari mengenali topik utama dengan akurat.</p>
+<p>Koleksi brand yang sering dicari seperti YSL, Dior, Nishane, LV, Tom Ford, JPG, Rasasi, dan Mykonos juga ditulis secara natural dalam konten supaya tetap relevan untuk pencarian brand spesifik. Dengan pendekatan ini, halaman lebih siap untuk meraih traffic dari berbagai keyword turunan seperti <strong>beli parfum niche online</strong>, <strong>parfum designer untuk daily wear</strong>, <strong>parfum timteng arab tahan lama</strong>, <strong>parfum lokal premium untuk reseller</strong>, dan <strong>toko parfum original terpercaya</strong>.</p>
+</article>
+<div class="highlights" style="margin-top:0.8rem">
+<article class="card">
+<h3>Intent Pembeli</h3>
+<p class="muted">Cocok untuk pembeli yang mencari parfum untuk dipakai harian, parfum koleksi, hadiah, signature scent, dan stok yang siap dijual ulang oleh reseller atau toko parfum.</p>
+</article>
+<article class="card">
+<h3>Cluster Kata Kunci</h3>
+<ul class="values">
+<li>parfum niche original</li>
+<li>parfum designer original</li>
+<li>parfum timteng tahan lama</li>
+<li>parfum lokal premium</li>
+<li>reseller parfum original</li>
+<li>brand parfum populer</li>
+</ul>
+</article>
+<article class="card">
+<h3>Keunggulan SEO Halaman</h3>
+<p class="muted">Struktur heading, FAQ, schema bisnis, dan deskripsi yang natural membuat halaman lebih mudah dibaca crawler sekaligus tetap nyaman untuk pengunjung yang ingin langsung memilih parfum.</p>
+</article>
+</div>
+</section>
+<section aria-labelledby="geoSeoHeading" class="container" data-animate="" id="seoGeo">
+<h2 id="geoSeoHeading">Jangkauan Layanan Indonesia</h2>
+<div class="highlights">
+<article class="card">
+<h3>Siap Kirim ke Seluruh Indonesia</h3>
+<p class="muted">Layanan diarahkan untuk pelanggan di berbagai kota besar seperti Jakarta, Surabaya, Bandung, Medan, Semarang, Yogyakarta, Bali, Makassar, dan wilayah lain di Indonesia yang membutuhkan parfum original dengan proses order yang cepat dan jelas.</p>
+</article>
+<article class="card">
+<h3>Untuk Retail dan Reseller</h3>
+<p class="muted">Halaman ini juga menargetkan pencarian dari pemilik toko, reseller, dropshipper, dan pembeli retail yang ingin stok parfum yang mudah dipasarkan dan punya daya tarik brand yang kuat.</p>
+</article>
+<article class="card">
+<h3>Keyword Long-Tail</h3>
+<p class="muted">Contoh pencarian yang relevan: parfum niche YSL Dior Nishane, parfum designer LV Tom Ford JPG, parfum timteng Rasasi Mykonos, dan parfum lokal premium untuk toko parfum online.</p>
+</article>
+</div>
+</section>
+<section aria-labelledby="trustHeading" class="container" data-animate="" id="trustSignals">
+<h2 id="trustHeading">Kenapa Dirac Parfum Mudah Dikenali Google</h2>
+<div class="highlights">
+<article class="card">
+<h3>Identitas Brand Konsisten</h3>
+<p class="muted">Nama, logo, email, dan domain dipakai konsisten di seluruh halaman sehingga mesin pencari lebih mudah memahami brand kamu.</p>
+</article>
+<article class="card">
+<h3>Data Terstruktur</h3>
+<p class="muted">Schema Organization, Store, WebSite, dan FAQPage membantu Google membaca konteks bisnis, kontak, dan pertanyaan umum dengan lebih rapi.</p>
+</article>
+<article class="card">
+<h3>Kontak Jelas</h3>
+<p class="muted">Link WhatsApp, email, dan halaman kontak memberi sinyal kepercayaan yang kuat untuk pengguna maupun crawler.</p>
+</article>
+</div>
+</section>
+<section aria-labelledby="contentSeoHeading" class="container" data-animate="" id="seoContent">
+<h2 id="contentSeoHeading">Mengapa Halaman Ini Relevan untuk Pencarian Parfum</h2>
+<div class="highlights">
+<article class="card">
+<h3>Parfum Niche</h3>
+<p class="muted">Mengedepankan karakter aroma yang unik, eksklusif, dan sering dicari oleh pembeli yang ingin tampil beda dari pasar mainstream.</p>
+</article>
+<article class="card">
+<h3>Parfum Designer</h3>
+<p class="muted">Menjangkau pengguna yang mencari brand populer dan familiar, terutama untuk pemakaian harian, kerja, acara formal, dan hadiah.</p>
+</article>
+<article class="card">
+<h3>Parfum Timteng &amp; Lokal</h3>
+<p class="muted">Memberi pilihan aroma yang tegas, tahan lama, dan kompetitif dari sisi harga sehingga ideal untuk retail dan reseller yang butuh rotasi stok cepat.</p>
+</article>
+</div>
+</section>
+<section aria-labelledby="termsHeading" class="container" data-animate="" id="terms">
+<h2 id="termsHeading">Syarat &amp; Ketentuan</h2>
+<article class="card">
+<p class="muted">Informasi produk, stok, harga, dan promo Dirac Parfum dapat berubah sewaktu-waktu mengikuti ketersediaan barang. Setiap pesanan diproses setelah konfirmasi pembayaran dan detail penerima dinyatakan lengkap.</p>
+</article>
+</section>
+<section aria-labelledby="privacyHeading" class="container" data-animate="" id="privacy">
+<h2 id="privacyHeading">Kebijakan Privasi</h2>
+<article class="card">
+<p class="muted">Data pelanggan seperti nama, nomor telepon, email, alamat, dan isi pesan hanya digunakan untuk memproses komunikasi, order, pengiriman, dan layanan purna jual Dirac Parfum. Data tidak dijual kepada pihak ketiga.</p>
+</article>
+</section>
+<footer class="site-footer" role="contentinfo">
+<div class="container footer-grid">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+<div>
+<strong>Dirac Parfum</strong>
+<div class="muted">Toko parfum original, reseller &amp; grosir | +62 878-9252-3968 | <a href="mailto:support@diracgroup.store">support@diracgroup.store</a></div>
+</div>
+<div aria-label="Kontak cepat" class="socials">
+<a aria-label="WhatsApp" href="https://wa.me/6287892523968" title="WhatsApp">
+<svg aria-hidden="true" fill="none" height="28" viewbox="0 0 24 24" width="28"><path d="M12 2a10 10 0 0 0-8.66 15l-1.1 4.03 4.12-1.08A10 10 0 1 0 12 2zm5.08 14.29c-.22.62-1.3 1.15-1.8 1.23-.48.08-1.1.12-1.77-.1-.41-.13-.94-.3-1.62-.6-2.84-1.23-4.7-4.1-4.83-4.3-.12-.2-1.15-1.53-1.15-2.92 0-1.4.73-2.08.99-2.36.26-.28.56-.35.74-.35.19 0 .37 0 .54.01.17.01.4-.07.62.47.22.53.74 1.84.8 1.98.07.14.12.3.02.49-.1.2-.15.3-.28.46-.14.17-.29.38-.41.5-.14.14-.29.3-.13.58.17.29.74 1.22 1.58 1.97 1.08.96 1.99 1.25 2.27 1.39.29.14.45.12.62-.07.17-.2.72-.84.91-1.13.2-.29.38-.24.64-.15.26.1 1.67.8 1.96.95.29.14.49.22.56.35.07.12.07.71-.15 1.33z" fill="currentColor"></path></svg>
+</a>
+
+<a aria-label="Website" href="https://diracgroup.store/" title="Website">
+<svg aria-hidden="true" fill="none" height="28" viewbox="0 0 24 24" width="28"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.2"></circle><path d="M3 12h18M12 3c2.5 2.4 3.8 5.5 3.8 9S14.5 18.6 12 21c-2.5-2.4-3.8-5.5-3.8-9S9.5 5.4 12 3Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"></path></svg>
+</a>
+</div>
+</div>
+<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center">
+<div class="muted">© <span id="year"></span> Dirac Parfum. Semua hak dilindungi.</div>
+<nav aria-label="Footer links">
+<a class="muted" href="#terms">Syarat &amp; Ketentuan</a> · <a class="muted" href="#privacy">Kebijakan Privasi</a>
+</nav>
+</div>
+</div>
+</footer>
+<!-- Lightbox modal for gallery -->
+<div aria-label="Lightbox gambar besar" aria-modal="true" class="modal" id="lightbox" role="dialog">
+<div class="figure" role="document">
+<div class="media"><img alt="" id="lightboxImg" src=""/></div>
+</div>
+<button aria-label="Tutup" class="close-modal" id="closeLightbox">✕</button>
+</div>
+<script>
+// Hero video mute/unmute toggle. Show a button overlay to toggle sound.
+document.addEventListener('DOMContentLoaded', function(){
+  const v = document.getElementById('hero-video');
+  const b = document.getElementById('unmuteBtn');
+  if(!v || !b) return;
+  function updateBtn(){
+    // When muted (or volume zero), display speaker icon; otherwise display muted icon
+    if(v.muted || v.volume === 0){
+      b.textContent = '🔊';
+      b.setAttribute('aria-label','Hidupkan suara');
+    } else {
+      b.textContent = '🔇';
+      b.setAttribute('aria-label','Matikan suara');
+    }
+  }
+  updateBtn();
+  b.addEventListener('click', async function(){
+    try {
+      if(v.muted || v.volume === 0){
+        v.muted = false;
+        v.volume = 0.8;
+        await v.play();
+      } else {
+        v.muted = true;
+        v.volume = 0;
+      }
+    } catch(err){
+      console.warn('Gagal toggle suara:', err);
+    }
+    updateBtn();
+  });
+});
+// end hero video script
+</script>
+<!-- BEGIN: In‑page WhatsApp‑style chat overlay to simulate real chat before sending to WhatsApp. -->
+<style>
+    .wa-overlay{
+      position:fixed;
+      bottom:40px;
+      right:0.75rem;
+      width:340px;
+      max-width:calc(100vw - 1.5rem);
+      height:360px;
+      max-height:calc(100vh - 130px);
+      background:#efeae2;
+      border-radius:16px;
+      box-shadow:0 16px 40px rgba(0,0,0,0.35);
+      display:none;
+      flex-direction:column;
+      overflow:hidden;
+      z-index:10000;
+    }
+    .wa-close{
+      position:absolute;
+      top:10px;
+      right:10px;
+      width:28px;
+      height:28px;
+      border:none;
+      border-radius:50%;
+      background:#25D366;
+      color:#fff;
+      font-size:18px;
+      line-height:28px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow:0 6px 14px rgba(0,0,0,0.15);
+    }
+    .wa-chat{
+      flex:1;
+      /* Provide space for the close button but keep messages anchored to the bottom like a real chat */
+      padding:56px 14px 14px;
+      overflow-y:auto;
+      display:flex;
+      flex-direction:column;
+      background:#efeae2;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><g fill='%23e4ddd4' opacity='0.9'><circle cx='12' cy='12' r='3'/><circle cx='80' cy='20' r='2'/><rect x='50' y='50' width='20' height='10' rx='5'/><circle cx='18' cy='90' r='2.5'/><rect x='90' y='80' width='14' height='6' rx='3'/></g></svg>");
+      background-size:120px 120px;
+    }
+    .wa-message{
+      display:inline-block;
+      clear:both;
+      max-width:75%;
+      margin:0.3rem 0 0.45rem;
+      padding:0.6rem 0.9rem;
+      font-size:0.92rem;
+      line-height:1.35;
+      word-wrap:break-word;
+      box-shadow:0 2px 4px rgba(0,0,0,0.1);
+    }
+    .wa-message.support{
+      background:#ffffff;
+      color:#111;
+      border-radius:0 12px 12px 12px;
+      align-self:flex-start;
+    }
+    .wa-message.user{
+      background:#dcf8c6;
+      color:#111;
+      border-radius:12px 0 12px 12px;
+      align-self:flex-end;
+    }
+    .wa-input-area{
+      display:flex;
+      align-items:center;
+      gap:0.5rem;
+      padding:0.75rem;
+      background:#f6f1eb;
+      border-top:1px solid rgba(0,0,0,0.06);
+    }
+    .wa-input{
+      flex:1;
+      min-height:42px;
+      max-height:120px;
+      padding:0.6rem 0.9rem;
+      border-radius:22px;
+      background:#fff;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,0.06);
+      font-size:16px;
+      line-height:1.3;
+      overflow-y:auto;
+      outline:none;
+      word-wrap:break-word;
+    }
+    .wa-input:empty::before{
+      content:attr(data-placeholder);
+      color:#8a8a8a;
+      pointer-events:none;
+    }
+    .wa-send{
+      width:46px;
+      height:46px;
+      border-radius:50%;
+      border:none;
+      background:#25D366;
+      color:#fff;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      box-shadow:0 8px 18px rgba(37,211,102,0.35);
+    }
+    .wa-send svg{
+      width:22px;
+      height:22px;
+    }
+    @media (max-width:420px){
+      .wa-overlay{
+        width:calc(100vw - 1.5rem);
+        height:300px;
+        bottom:30px;
+      }
+    }
+  </style>
+<div aria-label="Chat support" class="wa-overlay" id="waOverlay" role="dialog">
+<button aria-label="Tutup" class="wa-close" id="waClose">×</button>
+<div class="wa-chat" id="waChat">
+<div class="wa-message support">How can I help you? :)</div>
+</div>
+<div class="wa-input-area" role="group">
+<div aria-label="Tulis pesan..." class="wa-input" contenteditable="true" data-placeholder="Tulis pesan..." id="waInput"></div>
+<button aria-label="Kirim" class="wa-send" id="waSend">
+<svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path></svg>
+</button>
+</div>
+</div>
+<script>
+    // WhatsApp-like chat overlay functionality.  We wait for DOMContentLoaded to ensure elements exist before binding events.
+    (function(){
+      var phone = '6287892523968';
+      function toggleOverlay(){
+        var overlay = document.getElementById('waOverlay');
+        if(!overlay) return;
+        if(overlay.style.display === 'block'){
+          overlay.style.display = 'none';
+        } else {
+          overlay.style.display = 'block';
         }
       }
-
-      .eyebrow {
-        margin: 0 0 28px;
-        display: flex;
-        align-items: center;
-        gap: 16px;
-      }
-
-      .eyebrow::before {
-        content: "";
-        width: 40px;
-        height: 1px;
-        background: var(--gold);
-      }
-
-      .eyebrow span {
-        color: var(--gold);
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 0.26em;
-        text-transform: uppercase;
-      }
-
-      h1 {
-        margin: 0;
-        font-family: "Playfair Display", Georgia, serif;
-        font-size: clamp(38px, 6vw, 82px);
-        font-weight: 400;
-        line-height: 1.02;
-        letter-spacing: -0.025em;
-        color: var(--charcoal);
-      }
-
-      h1 span {
-        display: block;
-      }
-
-      h1 .accent {
-        color: var(--gold);
-        font-style: italic;
-      }
-
-      .cta-row {
-        margin-top: 40px;
-        display: flex;
-        flex-direction: column;
-        gap: 24px;
-      }
-
-      .primary-cta {
-        width: max-content;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        border-radius: 999px;
-        padding: 17px 34px;
-        background: var(--gold);
-        color: #ffffff;
-        font-size: 14px;
-        font-weight: 500;
-        letter-spacing: 0.07em;
-        text-transform: uppercase;
-        transition:
-          transform 300ms ease,
-          background 300ms ease,
-          box-shadow 300ms ease;
-      }
-
-      .primary-cta:hover {
-        transform: translateY(-2px);
-        background: var(--gold-dark);
-        box-shadow: 0 12px 40px rgba(201, 165, 106, 0.4);
-      }
-
-      .primary-cta svg {
-        width: 16px;
-        height: 16px;
-        transition: transform 300ms ease;
-      }
-
-      .primary-cta:hover svg {
-        transform: translateX(4px);
-      }
-
-      .secondary-cta {
-        width: max-content;
-        padding-bottom: 4px;
-        border-bottom: 1px solid rgba(110, 110, 110, 0.35);
-        color: var(--soft);
-        font-size: 15px;
-        font-weight: 400;
-        transition:
-          color 300ms ease,
-          border-color 300ms ease;
-      }
-
-      .secondary-cta:hover {
-        color: var(--graphite);
-        border-color: rgba(34, 34, 34, 0.6);
-      }
-
-      .stats {
-        margin-top: 56px;
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 24px 32px;
-      }
-
-      .stat {
-        display: flex;
-        align-items: center;
-        gap: 32px;
-      }
-
-      .stat-number {
-        font-family: "Playfair Display", Georgia, serif;
-        font-size: 40px;
-        font-weight: 500;
-        line-height: 1;
-        letter-spacing: -0.02em;
-        color: var(--charcoal);
-      }
-
-      .stat-label {
-        margin-top: 8px;
-        color: var(--muted);
-        font-size: 10px;
-        font-weight: 500;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-      }
-
-      .divider {
-        display: none;
-        width: 1px;
-        height: 36px;
-        background: rgba(0, 0, 0, 0.1);
-      }
-
-      .project-card {
-        position: absolute;
-        right: 32px;
-        bottom: 40px;
-        z-index: 20;
-        display: none;
-        width: 320px;
-        padding: 24px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background: rgba(255, 255, 255, 0.1);
-        box-shadow:
-          0 4px 20px rgba(0, 0, 0, 0.1),
-          0 16px 48px rgba(0, 0, 0, 0.14),
-          inset 0 1px 0 rgba(255, 255, 255, 0.18);
-        backdrop-filter: blur(14px) saturate(160%);
-      }
-
-      .featured-tag {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 20px;
-        padding: 4px 12px;
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 10px;
-        font-weight: 500;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-      }
-
-      .featured-tag span {
-        color: var(--gold);
-      }
-
-      .project-card h2 {
-        margin: 0;
-        font-family: "Playfair Display", Georgia, serif;
-        font-size: 22px;
-        font-weight: 400;
-        color: #ffffff;
-      }
-
-      .project-card .location {
-        margin: 8px 0 0;
-        color: rgba(255, 255, 255, 0.65);
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-      }
-
-      .project-meta {
-        margin: 20px 0;
-        padding: 16px 0;
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-        border-top: 1px solid rgba(255, 255, 255, 0.15);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-      }
-
-      .project-meta p {
-        margin: 0;
-      }
-
-      .project-meta .label {
-        color: rgba(255, 255, 255, 0.45);
-        font-size: 9px;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-      }
-
-      .project-meta .value {
-        margin-top: 4px;
-        color: #ffffff;
-        font-size: 12px;
-        font-weight: 500;
-      }
-
-      .status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        border-radius: 999px;
-        padding: 8px 12px;
-        background: rgba(0, 0, 0, 0.25);
-        color: rgba(255, 255, 255, 0.75);
-        font-size: 10px;
-        font-weight: 500;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-      }
-
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--gold);
-      }
-
-      .scroll-indicator {
-        position: absolute;
-        left: 50%;
-        bottom: 24px;
-        z-index: 20;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
-        transform: translateX(-50%);
-      }
-
-      .scroll-indicator span:first-child {
-        color: rgba(17, 17, 17, 0.55);
-        font-size: 9px;
-        font-weight: 500;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-      }
-
-      .scroll-line {
-        width: 1px;
-        height: 56px;
-        background: linear-gradient(to bottom, transparent, var(--gold));
-      }
-
-      .vertical-text {
-        position: absolute;
-        right: -58px;
-        top: 50%;
-        z-index: 20;
-        display: none;
-        transform: rotate(90deg);
-        color: rgba(255, 255, 255, 0.3);
-        font-size: 9px;
-        font-weight: 500;
-        letter-spacing: 0.3em;
-        text-transform: uppercase;
-      }
-
-      .preview-section {
-        width: 100%;
-        max-width: 1440px;
-        margin: 0 auto;
-        padding: 80px 24px;
-        display: grid;
-        gap: 40px;
-      }
-
-      .preview-section p.eyebrow-text {
-        margin: 0 0 16px;
-        color: var(--gold);
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 0.26em;
-        text-transform: uppercase;
-      }
-
-      .preview-section h2 {
-        margin: 0;
-        font-family: "Playfair Display", Georgia, serif;
-        font-size: clamp(34px, 5vw, 68px);
-        font-weight: 400;
-        line-height: 1.04;
-        letter-spacing: -0.02em;
-        color: var(--charcoal);
-      }
-
-      .service-grid {
-        display: grid;
-        gap: 16px;
-      }
-
-      .service-card {
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        background: rgba(255, 255, 255, 0.35);
-        padding: 28px;
-        backdrop-filter: blur(8px);
-      }
-
-      .service-card::before {
-        content: "";
-        display: block;
-        width: 40px;
-        height: 1px;
-        margin-bottom: 40px;
-        background: var(--gold);
-      }
-
-      .service-card h3 {
-        margin: 0;
-        font-family: "Playfair Display", Georgia, serif;
-        font-size: 24px;
-        font-weight: 400;
-        color: var(--charcoal);
-      }
-
-      .service-card p {
-        margin: 16px 0 0;
-        color: var(--muted);
-        font-size: 14px;
-        line-height: 1.75;
-      }
-
-      /* Smooth tag pulse */
-      @keyframes tagPulse {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50%       { opacity: 0.5; transform: scale(0.75); }
-      }
-
-      .tag-pulse {
-        animation: tagPulse 2.4s ease-in-out infinite;
-      }
-
-      /* Scroll indicator line */
-      @keyframes scrollLine {
-        0%   { clip-path: inset(0 0 100% 0); opacity: 0; }
-        30%  { clip-path: inset(0 0 0% 0);   opacity: 0.5; }
-        70%  { clip-path: inset(0 0 0% 0);   opacity: 0.5; }
-        100% { clip-path: inset(100% 0 0% 0); opacity: 0; }
-      }
-
-      .scroll-line {
-        animation: scrollLine 2.8s ease-in-out infinite;
-      }
-
-      /* Outline Image Soft Sweep Mask Reveal */
-      @keyframes softSweepReveal {
-        0% {
-          -webkit-mask-position: 200% 0;
-          opacity: 0;
-        }
-        15% {
-          opacity: 1;
-        }
-        85% {
-          opacity: 1;
-        }
-        100% {
-          -webkit-mask-position: -100% 0;
-          opacity: 0;
+      function sendMessage(){
+        var chat = document.getElementById('waChat');
+        var input = document.getElementById('waInput');
+        if(!chat || !input) return;
+        var msg = (input.textContent || '').trim();
+        if(!msg){ input.focus(); return; }
+        var bubble = document.createElement('div');
+        bubble.className = 'wa-message user';
+        bubble.textContent = msg;
+        chat.appendChild(bubble);
+        chat.scrollTop = chat.scrollHeight;
+        input.textContent = '';
+        var url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg);
+        var win = window.open(url, '_blank', 'noopener');
+        if(!win || win.closed){
+          var a = document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
         }
       }
-
-      .soft-sweep-mask {
-        -webkit-mask-image: linear-gradient(to right, transparent 0%, black 20%, black 80%, transparent 100%);
-        -webkit-mask-size: 200% 100%;
-        -webkit-mask-repeat: no-repeat;
-        animation: softSweepReveal 8s infinite linear;
-        opacity: 0;
-      }
-
-      @media (min-width: 640px) {
-        .cta-row {
-          flex-direction: row;
-          align-items: center;
+      window.addEventListener('DOMContentLoaded', function(){
+        var btn = document.querySelector('.whatsapp-btn');
+        var closeBtn = document.getElementById('waClose');
+        var sendBtn = document.getElementById('waSend');
+        var input = document.getElementById('waInput');
+        if(btn){
+          btn.addEventListener('click', function(e){ e.preventDefault(); toggleOverlay(); });
         }
-
-        .divider {
-          display: block;
-        }
-
-        .service-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-
-      @media (min-width: 768px) {
-        .nav-inner {
-          height: 88px;
-          padding: 0 48px;
-        }
-
-        .nav-links,
-        .nav-cta {
-          display: flex;
-        }
-
-        .hamburger {
-          display: none;
-        }
-
-        .hero-inner {
-          padding-left: 64px;
-          padding-right: 64px;
-        }
-
-        .preview-section {
-          padding-left: 64px;
-          padding-right: 64px;
-        }
-      }
-
-      @media (min-width: 1024px) {
-        .nav-inner {
-          padding: 0 96px;
-        }
-
-        .hero-inner {
-          padding-left: 96px;
-          padding-right: 96px;
-        }
-
-        .hero-copy {
-          max-width: 900px;
-        }
-
-        .project-card {
-          display: block;
-          right: 56px;
-          bottom: 48px;
-        }
-
-        .preview-section {
-          grid-template-columns: 0.85fr 1.15fr;
-          padding-left: 96px;
-          padding-right: 96px;
-        }
-      }
-
-      @media (min-width: 1280px) {
-        .hero-inner {
-          padding-left: 128px;
-          padding-right: 128px;
-        }
-
-        .hero-copy {
-          max-width: 1100px;
-        }
-
-        .vertical-text {
-          display: block;
-        }
-      }
-
-      @media (max-width: 420px) {
-        .primary-cta {
-          width: 100%;
-        }
-
-        .stat {
-          width: calc(50% - 16px);
-          gap: 0;
-        }
-
-        .stat-number {
-          font-size: 36px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="intro" id="intro">
-      <video
-        id="introVideo"
-        src="https://res.cloudinary.com/dprydfxok/video/upload/v1782477674/hero-interior-design-video_uumnpx.webm"
-        autoplay
-        muted
-        playsinline
-      ></video>
-    </div>
-
-    <header class="navbar" id="navbar">
-      <nav class="nav-inner" aria-label="Main navigation">
-        <a href="#" class="logo" aria-label="Alto Studio home">
-          <span class="logo-a">A</span>
-          <span class="logo-rest">LTO</span>
-        </a>
-        <div class="nav-links">
-          <a href="#projects">Projects</a>
-          <a href="#services">Services</a>
-          <a href="#about">About</a>
-          <a href="#journal">Journal</a>
-          <a href="#contact">Contact</a>
-        </div>
-        <a href="#contact" class="nav-cta">Start Project</a>
-        <button class="hamburger" id="hamburger" type="button" aria-label="Toggle navigation menu" aria-expanded="false">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-      </nav>
-    </header>
-
-    <div class="mobile-menu" id="mobileMenu">
-      <div class="mobile-menu-content">
-        <div class="mobile-links">
-          <a href="#projects">Projects</a>
-          <a href="#services">Services</a>
-          <a href="#about">About</a>
-          <a href="#journal">Journal</a>
-          <a href="#contact">Contact</a>
-        </div>
-        <a href="#contact" class="mobile-cta">Start Project</a>
-      </div>
-    </div>
-
-    <main>
-      <section class="hero">
-        <div class="hero-bg">
-          <img
-            src="https://res.cloudinary.com/dprydfxok/image/upload/v1782973434/interior-desing-hero_pahfv0.png"
-            alt="Luxury cream-toned interior with sculptural furniture"
-            draggable="false"
-          />
-          <img
-            id="outlineImage"
-            class="hero-outline"
-            src="https://res.cloudinary.com/dprydfxok/image/upload/v1782973999/interior-desing-hero-outline_bahcaa.png"
-            alt=""
-            aria-hidden="true"
-            draggable="false"
-          />
-          <video
-            id="heroVideo"
-            class="hero-video"
-            src="https://res.cloudinary.com/dprydfxok/video/upload/v1782477674/hero-interior-design-video_uumnpx.webm"
-            autoplay
-            muted
-            playsinline
-          ></video>
-        </div>
-
-        <div class="hero-overlay top-strip"></div>
-        <div class="hero-overlay content-grade"></div>
-        <div class="hero-overlay warm-grade"></div>
-        <div class="hero-overlay bottom-vignette"></div>
-        <div class="hero-overlay sunrise-bloom"></div>
-
-        <div class="hero-inner">
-          <div class="hero-copy" id="heroCopy">
-            <p class="eyebrow fade-item"><span id="heroEyebrow">Alto Studio</span></p>
-            <h1 class="fade-item" id="heroTitle">
-              <span>Luxury interiors</span>
-              <span class="accent">shaped with</span>
-              <span>quiet precision</span>
-            </h1>
-            <div class="cta-row fade-item">
-              <a href="#projects" class="primary-cta">
-                Explore Projects
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </a>
-              <a href="#contact" class="secondary-cta">Book Consultation</a>
-            </div>
-            <div class="stats fade-item">
-              <div class="stat">
-                <div>
-                  <div class="stat-number">12+</div>
-                  <div class="stat-label">Years</div>
-                </div>
-                <span class="divider"></span>
-              </div>
-              <div class="stat">
-                <div>
-                  <div class="stat-number">86</div>
-                  <div class="stat-label">Projects</div>
-                </div>
-                <span class="divider"></span>
-              </div>
-              <div class="stat">
-                <div>
-                  <div class="stat-number">24</div>
-                  <div class="stat-label">Awards</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <aside class="project-card" aria-label="Featured project">
-          <div class="featured-tag"><span>✦</span> Featured</div>
-          <h2>Luxury Penthouse</h2>
-          <p class="location">Dubai Marina</p>
-          <div class="project-meta">
-            <div>
-              <p class="label">Area</p>
-              <p class="value">420m2</p>
-            </div>
-            <div>
-              <p class="label">Scope</p>
-              <p class="value">Full</p>
-            </div>
-            <div>
-              <p class="label">Year</p>
-              <p class="value">2026</p>
-            </div>
-          </div>
-          <div class="status-pill">
-            <span class="status-dot tag-pulse"></span>
-            In Progress
-          </div>
-        </aside>
-
-        <div class="scroll-indicator" aria-hidden="true">
-          <span>Scroll</span>
-          <span class="scroll-line"></span>
-        </div>
-
-        <div class="vertical-text">Curated Spaces - 2026</div>
-      </section>
-
-      <section class="preview-section" id="projects">
-        <div>
-          <p class="eyebrow-text">Selected Work</p>
-          <h2>Calm materials, exact proportions, lasting presence.</h2>
-        </div>
-        <div class="service-grid" id="services">
-          <article class="service-card">
-            <h3>Private residences</h3>
-            <p>Bespoke planning, refined finishes, and measured detailing for interiors shaped around daily use.</p>
-          </article>
-          <article class="service-card">
-            <h3>Penthouse styling</h3>
-            <p>Bespoke planning, refined finishes, and measured detailing for interiors shaped around daily use.</p>
-          </article>
-          <article class="service-card" id="about">
-            <h3>Hospitality interiors</h3>
-            <p>Bespoke planning, refined finishes, and measured detailing for interiors shaped around daily use.</p>
-          </article>
-          <article class="service-card" id="journal">
-            <h3>Art direction</h3>
-            <p>Bespoke planning, refined finishes, and measured detailing for interiors shaped around daily use.</p>
-          </article>
-        </div>
-      </section>
-    </main>
-
-    <script>
-      const intro = document.getElementById("intro");
-      const introVideo = document.getElementById("introVideo");
-      const navbar = document.getElementById("navbar");
-      const hamburger = document.getElementById("hamburger");
-      const mobileMenu = document.getElementById("mobileMenu");
-      const heroVideo = document.getElementById("heroVideo");
-      const outlineImage = document.getElementById("outlineImage");
-      const heroCopy = document.getElementById("heroCopy");
-      const heroEyebrow = document.getElementById("heroEyebrow");
-      const heroTitle = document.getElementById("heroTitle");
-
-      const slides = [
-        {
-          eyebrow: "Alto Studio",
-          lines: ["Luxury interiors", "shaped with", "quiet precision"],
-          accent: 1,
-        },
-        {
-          eyebrow: "Private Residences",
-          lines: ["Warm restraint", "crafted for", "modern living"],
-          accent: 0,
-        },
-        {
-          eyebrow: "Bespoke Direction",
-          lines: ["Layered spaces", "with material", "depth"],
-          accent: 2,
-        },
-      ];
-
-      let activeSlide = 0;
-
-      function hideIntro() {
-        intro.classList.add("is-hidden");
-      }
-
-      function endHeroVideo() {
-        heroVideo.classList.add("is-ended");
-        outlineImage.classList.add("soft-sweep-mask");
-      }
-
-      function updateNavbar() {
-        navbar.classList.toggle("is-scrolled", window.scrollY >= 60);
-      }
-
-      function closeMenu() {
-        hamburger.classList.remove("is-open");
-        mobileMenu.classList.remove("is-open");
-        hamburger.setAttribute("aria-expanded", "false");
-        document.body.style.overflow = "";
-      }
-
-      function toggleMenu() {
-        const isOpen = hamburger.classList.toggle("is-open");
-        mobileMenu.classList.toggle("is-open", isOpen);
-        hamburger.setAttribute("aria-expanded", String(isOpen));
-        document.body.style.overflow = isOpen ? "hidden" : "";
-      }
-
-      function renderSlide(slide) {
-        heroEyebrow.textContent = slide.eyebrow;
-        heroTitle.innerHTML = slide.lines
-          .map((line, index) => `<span class="${index === slide.accent ? "accent" : ""}">${line}</span>`)
-          .join("");
-      }
-
-      function cycleSlide() {
-        heroCopy.classList.add("is-changing");
-        window.setTimeout(() => {
-          activeSlide = (activeSlide + 1) % slides.length;
-          renderSlide(slides[activeSlide]);
-          heroCopy.classList.remove("is-changing");
-          heroCopy.querySelectorAll(".fade-item").forEach((item) => {
-            item.style.animation = "none";
-            item.offsetHeight;
-            item.style.animation = "";
+        if(closeBtn){
+          closeBtn.addEventListener('click', function(){
+            var overlay = document.getElementById('waOverlay');
+            if(overlay) overlay.style.display = 'none';
           });
-        }, 520);
+        }
+        if(sendBtn){ sendBtn.addEventListener('click', sendMessage); }
+        if(input){
+          input.addEventListener('keydown', function(ev){
+            if(ev.key === 'Enter' && !ev.shiftKey){
+              ev.preventDefault();
+              sendMessage();
+            }
+          });
+        }
+      });
+    })();
+  </script>
+<!-- END: chat overlay -->
+<!-- Intersection Observer to animate sections on scroll -->
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  // Observe sections with the data‑animate attribute.  When they enter the
+  // viewport the .animated class will be applied to trigger the fade/scale
+  // effect defined in CSS.  Each section is unobserved after it animates
+  // once to avoid repeated triggers when scrolling back and forth.
+  const sections = document.querySelectorAll('[data-animate]');
+  const observer = new IntersectionObserver(function(entries, obs){
+    entries.forEach(entry => {
+      if(entry.isIntersecting){
+        entry.target.classList.add('animated');
+        obs.unobserve(entry.target);
       }
+    });
+  }, { threshold: 0.2 });
+  sections.forEach(sec => observer.observe(sec));
 
-      introVideo.addEventListener("ended", hideIntro);
-      heroVideo.addEventListener("ended", endHeroVideo);
-      window.setTimeout(hideIntro, 15000);
-      window.setTimeout(endHeroVideo, 15000);
+  // Additionally observe individual cards, team members, gallery thumbs,
+  // blog articles and FAQ details for their own entrance animation.  Each
+  // element will receive the .animate-item class the first layanane it
+  // scrolls into view.  This provides a per-element wow effect beyond
+  // section level animations.
+  const items = document.querySelectorAll('.card, .team-card, .thumb, .article, details');
+  const itemObserver = new IntersectionObserver(function(entries, obs){
+    entries.forEach(entry => {
+      if(entry.isIntersecting){
+        entry.target.classList.add('animate-item');
+        obs.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.2 });
+  items.forEach(item => itemObserver.observe(item));
+});
+</script>
+<!-- Testimoni auto-slider script -->
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  // Grab testimonial slide elements and controls
+  const container = document.getElementById('testSlides');
+  const slides = container ? container.children : [];
+  const prevBtn = document.getElementById('testPrev');
+  const nextBtn = document.getElementById('testNext');
+  const dotsContainer = document.getElementById('testDots');
+  if(!container || !slides || slides.length === 0) return;
+  let currentIndex = 0;
+  const total = slides.length;
+  // Build dot navigation based on number of slides
+  for(let i = 0; i < total; i++){
+    const dot = document.createElement('button');
+    dot.className = 'dot';
+    dot.setAttribute('role','tab');
+    dot.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
+    dot.addEventListener('click', function(){ goTo(i); });
+    dotsContainer.appendChild(dot);
+  }
+  function update(){
+    // Keep testimonial layout locked to one full-width card; no partial adjacent cards.
+    container.style.transform = 'none';
+    Array.prototype.forEach.call(slides, function(slide, idx){
+      const isActive = idx === currentIndex;
+      slide.classList.toggle('active', isActive);
+      slide.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+    });
+    // update dots state
+    const dots = dotsContainer.querySelectorAll('.dot');
+    dots.forEach((d, idx) => {
+      if(idx === currentIndex){
+        d.setAttribute('aria-pressed','true');
+      } else {
+        d.setAttribute('aria-pressed','false');
+      }
+    });
+  }
+  function goTo(index){
+    currentIndex = (index + total) % total;
+    update();
+    restartAuto();
+  }
+  function next(){
+    goTo(currentIndex + 1);
+  }
+  function prev(){
+    goTo(currentIndex - 1);
+  }
+  // Bind arrow buttons
+  if(prevBtn){ prevBtn.addEventListener('click', prev); }
+  if(nextBtn){ nextBtn.addEventListener('click', next); }
+  // Auto‑slide layananer
+  let autoLayananer;
+  function startAuto(){
+    autoLayananer = setInterval(next, 6000); // slide every 6 seconds
+  }
+  function stopAuto(){
+    clearInterval(autoLayananer);
+  }
+  function restartAuto(){
+    stopAuto();
+    startAuto();
+  }
+  // Start autoplay
+  update();
+  startAuto();
+});
+</script>
+<!-- Additional scripts for scroll reveal, smooth scroll, parallax, and lightbox -->
+<script>
+(() => {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if(entry.isIntersecting){
+        entry.target.classList.add('in');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('[data-animate]').forEach(el => io.observe(el));
+})();
+</script>
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a=>{
+  a.addEventListener('click', e=>{
+    const id=a.getAttribute('href');
+    const t=id && id.length>1 ? document.querySelector(id) : null;
+    if(t){ e.preventDefault(); t.scrollIntoView({behavior:'smooth', block:'start'}); }
+  });
+});
+</script>
+<script>
+(() => {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const hero=document.querySelector('#home');
+  if(!hero) return;
+  const title=hero.querySelector('h1');
+  window.addEventListener('scroll', ()=>{
+    const r=hero.getBoundingClientRect();
+    if(r.bottom<0||r.top>window.innerHeight) return;
+    const y = r.top * -0.04;
+    if(title) title.style.transform = `translateY(${y}px)`;
+  }, {passive:true});
+})();
+</script>
+<script>
+(() => {
+  const m=document.getElementById('lightbox') || document.querySelector('.modal');
+  const img=document.getElementById('lightboxImg') || (m && m.querySelector('img'));
+  const close=document.getElementById('closeLightbox') || (m && m.querySelector('[data-close]'));
+  if(!m || !img) return;
+  document.querySelectorAll('.gallery-grid img').forEach(i=>{
+    i.addEventListener('click', () =>{
+      img.src = i.src;
+      m.classList.add('show');
+      m.style.display='flex';
+    });
+  });
+  if(close){
+    close.addEventListener('click', () =>{
+      m.classList.remove('show');
+      setLayananeout(() => { m.style.display='none'; img.src=''; }, 180);
+    });
+  }
+})();
+</script>
+<!-- WhatsApp floating button style and markup -->
+<style>
+  .whatsapp-btn {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background-color: #25D366;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: transform .2s ease, box-shadow .2s ease;
+  }
+  .whatsapp-btn:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+  }
+  .whatsapp-btn svg{
+    width: 28px;
+    height: 28px;
+    fill: currentColor;
+  }
+</style>
+<a aria-label="Chat via WhatsApp" class="whatsapp-btn" href="#">
+<svg aria-hidden="true" fill="currentColor" viewbox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+<path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.9 7.9 0 0 0 13.6 2.326zM7.994 14.521a6.6 6.6 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.73.73 0 0 0-.529.247c-.182.198-.691.677-.691 1.654s.71 1.916.81 2.049c.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232"></path>
+</svg>
+</a>
+<style>
+/* --- Extra micro-animations (no layout shift) --- */
+@media (prefers-reduced-motion: no-preference){
+  /* subtle hover ripple for primary buttons */
+  .btn.primary{ position: relative; overflow: hidden; }
+  .btn.primary:after{
+    content:""; position:absolute; inset:auto -40% -40% -40%;
+    height:0; padding-bottom:140%; border-radius:50%;
+    transform: translateY(60%) scale(0); opacity:0.0;
+    transition: transform .6s ease, opacity .6s ease;
+    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,.15), transparent 60%);
+    pointer-events:none;
+  }
+  .btn.primary:hover:after{ transform: translateY(60%) scale(1); opacity:1; }
+}
+/* gentle shimmer for section headings */
+@keyframes headingShine{
+  0%{ background-position: -200% 0; }
+  100%{ background-position: 200% 0; }
+}
+.section h2, .container > h2{
+  background-image: linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.35), rgba(255,255,255,.05));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  background-size: 200% 100%;
+  animation: headingShine 2.4s ease infinite;
+  animation-play-state: paused;
+}
+[data-animate].animated > h2{ animation-play-state: running; }
+</style>
 
-      window.addEventListener("scroll", updateNavbar, { passive: true });
-      updateNavbar();
+<script id="shine-sweep-js">
+document.addEventListener('DOMContentLoaded', function(){
+  // Target only text elements so readability stays high
+  var targets = document.querySelectorAll('[data-animate] h2, .card h3, .article h4');
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          e.target.classList.add('shine-sweep');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.24 });
+    targets.forEach(function(el){ io.observe(el); });
+  } else {
+    targets.forEach(function(el){ el.classList.add('shine-sweep'); });
+  }
+});
+</script>
+<script>
+// Contact form handler — validate and send to WhatsApp
+document.addEventListener('DOMContentLoaded', function(){
+  var btn = document.getElementById('sendMsgBtn');
+  var nameEl = document.getElementById('name');
+  var emailEl = document.getElementById('email');
+  var phoneEl = document.getElementById('phone');
+  var msgEl = document.getElementById('message');
+  if(!btn || !nameEl || !emailEl || !phoneEl || !msgEl) return;
+  btn.addEventListener('click', function(){
+    var name = (nameEl.value || '').trim();
+    var email = (emailEl.value || '').trim();
+    var phone = (phoneEl.value || '').trim();
+    var msg = (msgEl.value || '').trim();
+    if(!name || !email || !phone || !msg){
+      alert('Mohon lengkapi Nama, Email, Nomor Telepon, dan Pesan.');
+      return;
+    }
+    var lines = [
+      '*Pesan dari Website*',
+      'Nama: ' + name,
+      'Email: ' + email,
+      'Telepon: ' + phone,
+      '',
+      msg
+    ];
+    var text = encodeURIComponent(lines.join('\n'));
+    // Try WhatsApp first
+    var waUrl = 'https://wa.me/6287892523968?text=' + text;
+    var w = window.open(waUrl, '_blank', 'noopener');
+    if(!w || w.closed){
+      // Fallback if popup is blocked: open WhatsApp in the same tab
+      window.location.href = waUrl;
+    }
+  });
+});
+</script>
+<!-- START: Replaced - Simple press handler (shimmer trigger) -->
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return;
+  }
+  const buttons = Array.from(document.querySelectorAll('.btn.primary'));
+  buttons.forEach(btn => {
+    // Ensure positioning allowed
+    if (!btn.style.position) btn.style.position = btn.style.position || 'relative';
 
-      hamburger.addEventListener("click", toggleMenu);
-      mobileMenu.querySelectorAll("a").forEach((link) => link.addEventListener("click", closeMenu));
+    function addPressed() {
+      // Add class; shimmer CSS handles a one-shot animation
+      btn.classList.add('pressed');
+      // remove after animation finishes (slightly longer than CSS animation)
+      clearLayananeout(btn.__shimmer_layananeout);
+      btn.__shimmer_layananeout = setLayananeout(()=> btn.classList.remove('pressed'), 800);
+    }
 
-      window.setInterval(cycleSlide, 5000);
-    </script>
-  </body>
+    function removePressed() {
+      // safety: shorter removal (in case pointer canceled)
+      clearLayananeout(btn.__shimmer_layananeout);
+      btn.classList.remove('pressed');
+    }
+
+    btn.addEventListener('mousedown', addPressed);
+    btn.addEventListener('touchstart', function(e){ addPressed(); }, {passive:true});
+    window.addEventListener('mouseup', removePressed);
+    window.addEventListener('touchend', removePressed);
+
+    // Keyboard support
+    btn.addEventListener('keydown', function(e){
+      if (e.code === 'Space' || e.code === 'Enter'){
+        if (e.code === 'Space') e.preventDefault();
+        addPressed();
+      }
+    });
+    btn.addEventListener('keyup', function(e){
+      if (e.code === 'Space' || e.code === 'Enter'){
+        removePressed();
+      }
+    });
+  });
+});
+</script>
+<!-- END: Replaced - Simple press handler (shimmer trigger) -->
+</body>
 </html>
