@@ -12065,46 +12065,12 @@ function diracS2SServer1TargetV206() {
 }
 
 async function diracS2SSendSecurityReportV206(payload) {
-  const emitCentralRevocationDebugV228 = (stage, detail = {}) => {
-    try {
-      console.error('[dirac-s2s-central-revocation-debug-v228]', JSON.stringify({
-        stage: String(stage || 'unknown').replace(/[^a-z0-9_.-]/gi, '_').slice(0, 96),
-        ...detail
-      }));
-    } catch (_) {}
-  };
-  const safeDiagnosticTokenV228 = (value, fallback = '') => {
-    const clean = String(value || '').trim();
-    return /^[A-Za-z0-9_.:-]{1,120}$/.test(clean) ? clean : fallback;
-  };
-  const classifySigningFailureV228 = (error) => {
-    const code = String(error && error.message || '');
-    if (code === 'DIRAC_S2S_SIGNING_IDENTITY_INVALID') return code;
-    if (/^DIRAC_S2S_KEY_MISSING_(?:private|public)$/.test(code)) return code;
-    if (/^DIRAC_S2S_KEY_TYPE_INVALID_(?:ed25519|ed448|ec|rsa|ml-dsa-87)$/.test(code)) return code;
-    if (/^DIRAC_S2S_EC_CURVE_INVALID_(?:prime256v1|secp384r1|secp521r1)$/.test(code)) return code;
-    if (code === 'DIRAC_S2S_RSA_MODULUS_TOO_SMALL') return code;
-    return 'DIRAC_S2S_SIGNING_RUNTIME_ERROR';
-  };
   const target = diracS2SServer1TargetV206();
   const targetServerId = diracS2SIdV206(diracS2STextV206('DIRAC_RECOVERY_SERVER1_SERVER_ID') || 'vercel1-main');
-  if (!target || !targetServerId) {
-    emitCentralRevocationDebugV228('pre_fetch_target_invalid', {
-      target_url_valid: Boolean(target),
-      target_server_id_valid: Boolean(targetServerId)
-    });
-    return { ok: false, unavailable: true };
-  }
+  if (!target || !targetServerId) return { ok: false, unavailable: true };
   let signedHeaders;
-  try {
-    signedHeaders = diracS2SSignHeadersV206({ target, action: 'security_report', body: payload, targetServerId });
-  } catch (error) {
-    emitCentralRevocationDebugV228('pre_fetch_signing_failed', {
-      signing_error_code: classifySigningFailureV228(error),
-      error_name: safeDiagnosticTokenV228(error && error.name, 'Error')
-    });
-    return { ok: false, unavailable: true };
-  }
+  try { signedHeaders = diracS2SSignHeadersV206({ target, action: 'security_report', body: payload, targetServerId }); }
+  catch (_) { return { ok: false, unavailable: true }; }
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), 12_000) : null;
   try {
@@ -12116,38 +12082,11 @@ async function diracS2SSendSecurityReportV206(payload) {
       signal: controller ? controller.signal : undefined
     });
     const text = await diracRecoveryReadResponseLimitedV201(response, 32 * 1024).catch(() => '');
-    if (Buffer.byteLength(text, 'utf8') > 32 * 1024) {
-      emitCentralRevocationDebugV228('post_fetch_response_too_large', { http_status: Number(response.status || 0) });
-      return { ok: false, unavailable: true };
-    }
+    if (Buffer.byteLength(text, 'utf8') > 32 * 1024) return { ok: false, unavailable: true };
     let data = {};
-    let jsonValid = true;
-    try { data = text ? JSON.parse(text) : {}; }
-    catch (_) { data = {}; jsonValid = false; }
-    const responseAccepted = response.ok && data && data.ok === true;
-    const expectedEvent = safeDiagnosticTokenV228(payload && payload.event, '');
-    const receivedEvent = safeDiagnosticTokenV228(data && data.event, '');
-    if (!responseAccepted) {
-      emitCentralRevocationDebugV228('post_fetch_server1_rejected', {
-        http_status: Number(response.status || 0),
-        response_json_valid: jsonValid,
-        remote_code: safeDiagnosticTokenV228(data && data.code, ''),
-        remote_reason: safeDiagnosticTokenV228(data && data.reason, ''),
-        remote_event: receivedEvent
-      });
-    } else if (expectedEvent && receivedEvent !== expectedEvent) {
-      emitCentralRevocationDebugV228('post_fetch_response_contract_mismatch', {
-        http_status: Number(response.status || 0),
-        expected_event: expectedEvent,
-        remote_event: receivedEvent
-      });
-    }
-    return { ok: responseAccepted, status: response.status, data };
-  } catch (error) {
-    emitCentralRevocationDebugV228('fetch_failed', {
-      error_name: safeDiagnosticTokenV228(error && error.name, 'Error'),
-      cause_code: safeDiagnosticTokenV228(error && error.cause && error.cause.code, '')
-    });
+    try { data = text ? JSON.parse(text) : {}; } catch (_) { data = {}; }
+    return { ok: response.ok && data && data.ok === true, status: response.status, data };
+  } catch (_) {
     return { ok: false, unavailable: true };
   } finally {
     if (timer) clearTimeout(timer);
@@ -12279,7 +12218,7 @@ async function diracRecoveryWorkerGuardV201(req, res, ctx, body, identityKey) {
   const sevenSignatureVerification = await diracS2SVerifyInboundV206(req, ctx, body);
   ctx.__diracS2SSevenSignatureVerificationV206 = sevenSignatureVerification;
   if (!sevenSignatureVerification.ok) {
-    await diracS2SQueueAndReportFailureV206(ctx, sevenSignatureVerification, sevenSignatureVerification.reason).catch(() => null);
+    if (!sevenSignatureVerification.unavailable) await diracS2SQueueAndReportFailureV206(ctx, sevenSignatureVerification, sevenSignatureVerification.reason).catch(() => null);
     return diracRecoveryGuardRejectV201(req, res, ctx.action, sevenSignatureVerification.reason, sevenSignatureVerification.unavailable ? 503 : 403, identityKey);
   }
   ctx.guardPassport.seven_signatures_checked = true;
