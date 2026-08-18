@@ -10712,7 +10712,7 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
   let argonQueueTicket = null;
   try {
     const env = diracRecoveryHpkeEnvGuardV159();
-    if (!env.ok) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_ENVIRONMENT_INVALID');
+    if (!env.ok) { try { console.error('[dirac-recovery-crypto-v2-env-invalid-v229]', JSON.stringify({ reason: String(env.reason || 'unknown').slice(0, 80) })); } catch (_) {} throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_ENVIRONMENT_INVALID'); }
     DIRAC_RECOVERY_CRYPTO_V2.assertRuntimePolicy();
     if (String(body.action || '') !== DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_ACTION_INVALID');
 
