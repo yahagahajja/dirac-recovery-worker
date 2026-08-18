@@ -10421,7 +10421,7 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
   const proofDeliveryTimeoutMs = 20000;
   const target = new URL(env.server1Url);
   target.searchParams.set('action', DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159);
-  const caller = diracS2SIdV206(process.env.DIRAC_S2S_SERVER_ID);
+  const caller = diracS2SIdV206('recovery');
   const timestamp = String(Date.now());
   const signature = diracRecoveryHpkeProofSignatureV159(caller, timestamp, proofBody);
   const diagnosticStartedAt = Date.now();
@@ -11784,7 +11784,7 @@ function diracS2SStableJsonV206(value) {
 }
 
 function diracS2STextV206(name) {
-  return String(process.env[name] || '').trim();
+  return String(name) === 'DIRAC_S2S_SERVER_ID' ? 'recovery' : String(process.env[name] || '').trim();
 }
 
 const DIRAC_S2S_ENV_JSON_CACHE_V207 = globalThis.__DIRAC_S2S_ENV_JSON_CACHE_V207__ || new Map();
