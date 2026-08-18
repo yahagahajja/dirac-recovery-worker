@@ -10187,7 +10187,7 @@ function diracRecoveryHpkeServer1UrlV159() {
   try {
     const url = new URL(raw);
     if (url.protocol !== 'https:' || url.username || url.password || url.hash) return '';
-    if (url.origin !== 'https://diracgroup.store') return '';
+    if (url.origin !== diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_SERVER1_ORIGIN')) return '';
     if (typeof diracCentralIsUnsafeHostV146 === 'function' && diracCentralIsUnsafeHostV146(url.hostname)) return '';
     if (url.pathname.replace(/\/+$/, '') !== '/api/health') return '';
     url.pathname = '/api/health';
