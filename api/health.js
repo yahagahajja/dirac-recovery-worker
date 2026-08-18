@@ -12052,6 +12052,14 @@ function diracS2SEvidenceV206(ctx, verification, failureCode) {
   return evidence;
 }
 
+function diracS2SIsCryptographicSignatureFailureEvidenceV229(evidence) {
+  if (!evidence || typeof evidence !== 'object' || String(evidence.failure_code || '') !== 's2s_seven_signature_invalid') return false;
+  const failed = Array.isArray(evidence.failed_signature_indexes) ? evidence.failed_signature_indexes.map(Number) : [];
+  const validCount = Number(evidence.attributed_valid_signature_count || 0);
+  if (failed.length < 1 || new Set(failed).size !== failed.length || failed.some((index) => !Number.isInteger(index) || index < 1 || index > 7)) return false;
+  return Number.isInteger(validCount) && validCount >= 1 && validCount <= 6 && validCount + failed.length === 7;
+}
+
 function diracS2SServer1TargetV206() {
   const raw = diracS2STextV206('DIRAC_RECOVERY_SERVER1_URL');
   if (!raw) return null;
@@ -12095,7 +12103,7 @@ async function diracS2SSendSecurityReportV206(payload) {
 
 async function diracS2SQueueAndReportFailureV206(ctx, verification, failureCode) {
   const evidence = diracS2SEvidenceV206(ctx, verification, failureCode);
-  if (evidence.attributed_valid_signature_count < 1 || !evidence.offender_server_id || !evidence.offender_key_version) return { ok: false, attributed: false, evidence };
+  if (!diracS2SIsCryptographicSignatureFailureEvidenceV229(evidence) || !evidence.offender_server_id || !evidence.offender_key_version) return { ok: false, attributed: false, evidence };
   const queueKey = 's2s-report-queue:' + evidence.incident_id;
   const pending = { type: 'dirac_s2s_report_queue_v206', state: 'pending', event: 'signature_failure', evidence, created_at: new Date().toISOString() };
   const persisted = typeof writePersistentSecurityJsonRequiredV194 === 'function'
@@ -12119,6 +12127,10 @@ async function diracS2SFlushPendingReportsV206() {
     for (const row of result.data) {
       const record = row && row.record_json && typeof row.record_json === 'object' ? row.record_json : null;
       if (!record || record.state !== 'pending' || !record.evidence) continue;
+      if (!diracS2SIsCryptographicSignatureFailureEvidenceV229(record.evidence)) {
+        await writePersistentSecurityJsonRequiredV194(String(row.security_key || ''), { ...record, state: 'discarded', discard_reason: 'non_cryptographic_signature_failure', discarded_at: new Date().toISOString() }, 0, 24 * 60 * 60).catch(() => false);
+        continue;
+      }
       const sent = await diracS2SSendSecurityReportV206({ action: 'security_report', event: 'signature_failure', evidence: record.evidence });
       if (sent.ok) {
         await writePersistentSecurityJsonRequiredV194(String(row.security_key || ''), { ...record, state: 'delivered', delivered_at: new Date().toISOString() }, 0, 24 * 60 * 60).catch(() => false);
@@ -12195,7 +12207,7 @@ async function diracS2SVerifyInboundV206(req, ctx, body) {
   if (!verification.ok) return verification;
   const central = await diracS2SCheckCentralRevocationV206(serverId, keyVersion);
   if (!central.ok) return { ...verification, ok: false, unavailable: true, reason: 's2s_central_revocation_unavailable' };
-  if (central.revoked) return { ...verification, ok: false, revoked: true, reason: 's2s_key_revoked' };
+  if (central.revoked) { req.__diracS2SRevocationSourceV229 = String(central.source || 'unknown'); return { ...verification, ok: false, revoked: true, reason: 's2s_key_revoked', revocationSource: String(central.source || 'unknown') }; }
   if (typeof claimPersistentSecurityKeyOnceV194 !== 'function') return { ...verification, ok: false, unavailable: true, reason: 's2s_replay_store_unavailable' };
   const replayKey = 's2s-replay:' + serverId + ':' + keyVersion + ':' + requestId + ':' + nonce;
   const claimed = await claimPersistentSecurityKeyOnceV194(replayKey, { type: 'dirac_s2s_replay_claim_v206', server_id: serverId, key_version: keyVersion, request_id: requestId, nonce, created_at: new Date().toISOString() }, 180);
@@ -12218,7 +12230,7 @@ async function diracRecoveryWorkerGuardV201(req, res, ctx, body, identityKey) {
   const sevenSignatureVerification = await diracS2SVerifyInboundV206(req, ctx, body);
   ctx.__diracS2SSevenSignatureVerificationV206 = sevenSignatureVerification;
   if (!sevenSignatureVerification.ok) {
-    if (!sevenSignatureVerification.unavailable) await diracS2SQueueAndReportFailureV206(ctx, sevenSignatureVerification, sevenSignatureVerification.reason).catch(() => null);
+    if (sevenSignatureVerification.reason === 's2s_seven_signature_invalid') await diracS2SQueueAndReportFailureV206(ctx, sevenSignatureVerification, sevenSignatureVerification.reason).catch(() => null);
     return diracRecoveryGuardRejectV201(req, res, ctx.action, sevenSignatureVerification.reason, sevenSignatureVerification.unavailable ? 503 : 403, identityKey);
   }
   ctx.guardPassport.seven_signatures_checked = true;
@@ -12230,11 +12242,11 @@ async function diracRecoveryWorkerGuardV201(req, res, ctx, body, identityKey) {
   const timestampText = diracRecoveryHeaderV201(req, 'x-dirac-worker-timestamp');
   const timestamp = Number(timestampText);
   if (!Number.isSafeInteger(timestamp) || timestamp <= 0 || Math.abs(Date.now() - timestamp) > customerSecurityRecoveryWorkerClockSkewMs()) {
-    return diracS2SLegacyRejectV206(req, res, ctx, sevenSignatureVerification, 'worker_timestamp_invalid', 403, identityKey);
+    return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_timestamp_invalid', 403, identityKey);
   }
   const signature = diracRecoveryHeaderV201(req, 'x-dirac-worker-signature');
   if (!/^[A-Za-z0-9_-]{86}$/.test(signature)) {
-    return diracS2SLegacyRejectV206(req, res, ctx, sevenSignatureVerification, 'worker_signature_format_invalid', 403, identityKey);
+    return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_signature_format_invalid', 403, identityKey);
   }
   const outerKeys = Object.keys(body).sort();
   const expectedKeys = [
@@ -12255,7 +12267,7 @@ async function diracRecoveryWorkerGuardV201(req, res, ctx, body, identityKey) {
   const canonical = customerSecurityLostPasskeyCanonical(body);
   const expected = customerSecurityRecoveryWorkerSign(caller, timestampText, canonical);
   if (!expected || !safeEqual(signature, expected)) {
-    return diracS2SLegacyRejectV206(req, res, ctx, sevenSignatureVerification, 'worker_hmac_invalid', 403, identityKey);
+    return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_hmac_invalid', 403, identityKey);
   }
   let transportContext;
   try {
@@ -12684,6 +12696,7 @@ function diracRecoveryDiagnosticSnapshotV227(req, reason, status) {
   return {
     patch: DIRAC_SERVER2_RECOVERY_AUTH_DIAGNOSTIC_V227,
     exact_reason: String(reason || 'unknown').slice(0, 160),
+    revocation_source: String(req && req.__diracS2SRevocationSourceV229 || '').slice(0, 32),
     likely_configuration_area: diracRecoveryDiagnosticLikelyAreaV227(reason),
     status: Number(status || 403),
     action: String(req && req.query && req.query.action || '').slice(0, 100),
