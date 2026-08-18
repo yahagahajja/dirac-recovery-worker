@@ -8474,9 +8474,9 @@ function customerSecurityLostPasskeyWorkerBindings(body, owner) {
     userAgentHash: customerSecurityLostPasskeyWorkerHash(body && body.user_agent_hash)
   };
   if (Object.values(bindings).some((value) => !value)) return null;
-  const expectedEmail = customerSecurityLostPasskeyHashHex('email-binding', normalizeAuthEmail(owner && owner.email));
-  const expectedCustomer = customerSecurityLostPasskeyHashHex('customer-binding', String(owner && owner.customerId || ''));
-  const expectedAuthUser = customerSecurityLostPasskeyHashHex('auth-user-binding', String(owner && owner.authUserId || ''));
+  const expectedEmail = crypto.createHmac('sha256', customerSecurityRecoveryWorkerSecret()).update('dirac-recovery-worker-binding-v228:email-binding\n').update(normalizeAuthEmail(owner && owner.email)).digest('hex');
+  const expectedCustomer = crypto.createHmac('sha256', customerSecurityRecoveryWorkerSecret()).update('dirac-recovery-worker-binding-v228:customer-binding\n').update(String(owner && owner.customerId || '')).digest('hex');
+  const expectedAuthUser = crypto.createHmac('sha256', customerSecurityRecoveryWorkerSecret()).update('dirac-recovery-worker-binding-v228:auth-user-binding\n').update(String(owner && owner.authUserId || '')).digest('hex');
   if (!safeEqual(bindings.emailBindingHash, expectedEmail)) return null;
   if (!safeEqual(bindings.customerBindingHash, expectedCustomer)) return null;
   if (!safeEqual(bindings.authUserBindingHash, expectedAuthUser)) return null;
