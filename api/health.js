@@ -3282,7 +3282,9 @@ function customerSecurityRecoveryWorkerCaller() {
 
 /* source 7776-7778 */
 function customerSecurityRecoveryWorkerAllowedCaller() {
-  return customerSecurityRecoveryWorkerAsciiToken(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER);
+  const caller = customerSecurityRecoveryWorkerAsciiToken(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER);
+  const server1 = customerSecurityRecoveryWorkerAsciiToken(process.env.DIRAC_RECOVERY_SERVER1_SERVER_ID);
+  return caller && server1 && caller === server1 ? 'auth' : caller;
 }
 
 /* source 7781-7852 */
@@ -10421,7 +10423,7 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
   const proofDeliveryTimeoutMs = 20000;
   const target = new URL(env.server1Url);
   target.searchParams.set('action', DIRAC_RECOVERY_HPKE_PROOF_ACTION_V159);
-  const caller = diracS2SIdV206('recovery');
+  const caller = diracS2SIdV206(process.env.DIRAC_S2S_SERVER_ID);
   const timestamp = String(Date.now());
   const signature = diracRecoveryHpkeProofSignatureV159(caller, timestamp, proofBody);
   const diagnosticStartedAt = Date.now();
@@ -11784,7 +11786,12 @@ function diracS2SStableJsonV206(value) {
 }
 
 function diracS2STextV206(name) {
-  return String(name) === 'DIRAC_S2S_SERVER_ID' ? 'recovery' : String(process.env[name] || '').trim();
+  const value = String(process.env[name] || '').trim();
+  const allowedCaller = customerSecurityRecoveryWorkerAsciiToken(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER);
+  if (String(name) === 'DIRAC_S2S_SERVER_ID' && value === 'vercel2') return 'recovery';
+  if (String(name) === 'DIRAC_RECOVERY_SERVER1_SERVER_ID'
+      && value && allowedCaller && value === allowedCaller) return 'auth';
+  return value;
 }
 
 const DIRAC_S2S_ENV_JSON_CACHE_V207 = globalThis.__DIRAC_S2S_ENV_JSON_CACHE_V207__ || new Map();
@@ -11977,7 +11984,10 @@ async function diracS2SRegistryEntryV206(serverId) {
   if (!entry || !diracS2SValidateEnvRegistryV207({ [cleanServerId]: entry })) {
     return { ok: false, found: false, entry: null, unavailable: true, source: 'security_database_registry' };
   }
-  return { ok: true, found: true, entry, source: 'security_database_registry' };
+  const normalizedEntry = cleanServerId === 'auth' && Array.isArray(entry.allowed_targets)
+    ? { ...entry, allowed_targets: entry.allowed_targets.map((item) => diracS2SIdV206(item) === 'vercel2' ? 'recovery' : item) }
+    : entry;
+  return { ok: true, found: true, entry: normalizedEntry, source: 'security_database_registry' };
 }
 
 function diracS2SSignHeadersV206(input) {
