@@ -4551,20 +4551,45 @@ async function customerSecuritySendLostPasskeyRecoveryLinkEmailV157(to, context 
       ''
     ].join('\r\n');
     let socket = null;
+    let smtpStage = 'tls_connect';
     try {
       const tls = require('tls');
       socket = tls.connect({ host: config.host, port: config.port, servername: config.host, timeout: 20_000 });
+      smtpStage = 'greeting_220';
       await customerSecuritySmtpCommand(socket, '', 220);
+      smtpStage = 'ehlo_250';
       await customerSecuritySmtpCommand(socket, 'EHLO diracgroup.store', 250);
       const auth = Buffer.from('\u0000' + config.user + '\u0000' + config.pass, 'utf8').toString('base64');
+      smtpStage = 'auth_plain_235';
       await customerSecuritySmtpCommand(socket, 'AUTH PLAIN ' + auth, 235);
+      smtpStage = 'mail_from_250';
       await customerSecuritySmtpCommand(socket, 'MAIL FROM:<' + fromEmail + '>', 250);
+      smtpStage = 'rcpt_to_250_251';
       await customerSecuritySmtpCommand(socket, 'RCPT TO:<' + email + '>', [250, 251]);
+      smtpStage = 'data_354';
       await customerSecuritySmtpCommand(socket, 'DATA', 354);
+      smtpStage = 'mime_body_250';
       await customerSecuritySmtpCommand(socket, customerSecurityRecoveryDotStuff(mime) + '\r\n.', 250);
+      smtpStage = 'quit_221_250';
       await customerSecuritySmtpCommand(socket, 'QUIT', [221, 250]);
       return { ok: true, provider: 'smtp' };
-    } catch (_) {
+    } catch (error) {
+      const errorCode = String(error && error.code || '').slice(0, 80);
+      const smtpCode = Number.isInteger(error && error.smtpCode) ? error.smtpCode : null;
+      const errorName = String(error && error.name || 'Error').slice(0, 80);
+      const errorMessage = String(error && error.message || '');
+      const classification = errorMessage === 'SMTP_TIMEOUT' || errorCode === 'ETIMEDOUT'
+        ? 'timeout'
+        : smtpCode !== null || errorMessage === 'SMTP_UNEXPECTED_RESPONSE'
+          ? 'smtp_response'
+          : /^(ENOTFOUND|EAI_AGAIN)$/.test(errorCode)
+            ? 'dns'
+            : /^(ECONNREFUSED|ECONNRESET|EPIPE|ENETUNREACH|EHOSTUNREACH)$/.test(errorCode)
+              ? 'socket'
+              : /TLS|CERT|VERIFY|SSL/.test(errorCode)
+                ? 'tls'
+                : 'unknown';
+      try { console.error('[dirac-recovery-smtp-diagnostic-v228]', JSON.stringify({ stage: smtpStage, error_name: errorName, error_code: errorCode, smtp_code: smtpCode, classification })); } catch (_) {}
       return { ok: false, status: 502, code: 'RECOVERY_SMTP_DELIVERY_FAILED', message: 'Gagal mengirim link recovery lewat SMTP.' };
     } finally {
       try { if (socket) socket.end(); } catch (_) {}
