@@ -12225,7 +12225,7 @@ async function diracRecoveryWorkerGuardV201(req, res, ctx, body, identityKey) {
   const caller = diracRecoveryHeaderV201(req, 'x-dirac-worker-caller');
   const allowedCaller = customerSecurityRecoveryWorkerAllowedCaller();
   if (!caller || !allowedCaller || !safeEqual(caller, allowedCaller)) {
-    return diracS2SLegacyRejectV206(req, res, ctx, sevenSignatureVerification, 'worker_caller_invalid', 403, identityKey);
+    return diracRecoveryGuardRejectV201(req, res, ctx.action, 'worker_caller_invalid', 403, identityKey);
   }
   const timestampText = diracRecoveryHeaderV201(req, 'x-dirac-worker-timestamp');
   const timestamp = Number(timestampText);
