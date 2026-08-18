@@ -12656,7 +12656,7 @@ function diracRecoveryDiagnosticSnapshotV227(req, reason, status) {
   const allowedCallerRaw = String(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER || '').trim();
   const allowedCaller = customerSecurityRecoveryWorkerAsciiToken(allowedCallerRaw);
   const workerSecretRaw = String(process.env.DIRAC_RECOVERY_WORKER_SECRET || '').trim();
-  const localServerId = diracS2SIdV206(process.env.DIRAC_S2S_SERVER_ID);
+  const localServerId = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
   const expectedServer1Id = diracS2SIdV206(process.env.DIRAC_RECOVERY_SERVER1_SERVER_ID);
   const networkId = String(process.env.DIRAC_S2S_NETWORK_ID || '').trim();
   const keyVersion = diracS2SKeyVersionV206(process.env.DIRAC_S2S_KEY_VERSION);
