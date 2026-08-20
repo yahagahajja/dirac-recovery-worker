@@ -11921,11 +11921,62 @@ function diracS2SCanonicalV206(meta) {
   ].join('\n'), 'utf8');
 }
 
+function diracS2SKeyPemV235(value, kind, expectedType) {
+  const pem = String(value || '').replace(/\\n/g, '\n').trim();
+  const begin = /^-----BEGIN ([A-Z0-9 ]+)-----/.exec(pem);
+  const label = String(begin && begin[1] || '');
+  const allowed = kind === 'private'
+    ? new Set(expectedType === 'ec' ? ['PRIVATE KEY', 'EC PRIVATE KEY'] : expectedType === 'rsa' ? ['PRIVATE KEY', 'RSA PRIVATE KEY'] : ['PRIVATE KEY'])
+    : new Set(expectedType === 'rsa' ? ['PUBLIC KEY', 'RSA PUBLIC KEY'] : ['PUBLIC KEY']);
+  if (!label || !allowed.has(label) || !pem.endsWith('-----END ' + label + '-----')) {
+    throw new Error('DIRAC_S2S_KEY_PEM_FORMAT_INVALID_' + String(expectedType || kind));
+  }
+  return pem;
+}
+
 function diracS2SKeyObjectV206(raw, kind, expectedType) {
   const clean = String(raw || '').trim();
   if (!clean) throw new Error('DIRAC_S2S_KEY_MISSING_' + kind);
-  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : { key: Buffer.from(clean, 'base64'), format: 'der', type: kind === 'private' ? 'pkcs8' : 'spki' };
-  const key = kind === 'private' ? crypto.createPrivateKey(material) : crypto.createPublicKey(material);
+  if (kind !== 'private' && kind !== 'public') throw new Error('DIRAC_S2S_KEY_KIND_INVALID');
+  let key;
+  if (clean.includes('-----BEGIN')) {
+    const pem = diracS2SKeyPemV235(clean, kind, expectedType);
+    key = kind === 'private' ? crypto.createPrivateKey(pem) : crypto.createPublicKey(pem);
+  } else {
+    const compact = clean.replace(/[ \t\r\n]/g, '');
+    const base64url = /[-_]/.test(compact);
+    const validEncoding = base64url ? /^[A-Za-z0-9_-]+={0,2}$/.test(compact) : /^[A-Za-z0-9+/]+={0,2}$/.test(compact);
+    if (!validEncoding) throw new Error('DIRAC_S2S_KEY_BASE64_INVALID_' + String(expectedType || kind));
+    const decoded = Buffer.from(compact, base64url ? 'base64url' : 'base64');
+    const suppliedCanonical = compact.replace(/=+$/, '');
+    const decodedCanonical = base64url ? decoded.toString('base64url') : decoded.toString('base64').replace(/=+$/, '');
+    if (!decoded.length || decodedCanonical !== suppliedCanonical) {
+      decoded.fill(0);
+      throw new Error('DIRAC_S2S_KEY_BASE64_NON_CANONICAL_' + String(expectedType || kind));
+    }
+    try {
+      const decodedText = decoded.toString('utf8').trim();
+      if (decodedText.startsWith('-----BEGIN')) {
+        const pem = diracS2SKeyPemV235(decodedText, kind, expectedType);
+        key = kind === 'private' ? crypto.createPrivateKey(pem) : crypto.createPublicKey(pem);
+      } else {
+        const formats = kind === 'private'
+          ? (expectedType === 'ec' ? ['pkcs8', 'sec1'] : expectedType === 'rsa' ? ['pkcs8', 'pkcs1'] : ['pkcs8'])
+          : (expectedType === 'rsa' ? ['spki', 'pkcs1'] : ['spki']);
+        for (const format of formats) {
+          try {
+            key = kind === 'private'
+              ? crypto.createPrivateKey({ key: decoded, format: 'der', type: format })
+              : crypto.createPublicKey({ key: decoded, format: 'der', type: format });
+            break;
+          } catch (_) {}
+        }
+        if (!key) throw new Error('DIRAC_S2S_KEY_DER_FORMAT_INVALID_' + String(expectedType || kind));
+      }
+    } finally {
+      decoded.fill(0);
+    }
+  }
   if (expectedType && key.asymmetricKeyType !== expectedType) throw new Error('DIRAC_S2S_KEY_TYPE_INVALID_' + expectedType);
   if (expectedType === 'rsa') {
     const modulusLength = Number(key && key.asymmetricKeyDetails && key.asymmetricKeyDetails.modulusLength || 0);
