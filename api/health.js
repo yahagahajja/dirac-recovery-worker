@@ -187,7 +187,7 @@ function aesGcmDecrypt(key, nonce, ciphertext, tag, aad) {
 function parsePrivateKey(raw, expectedType) {
   const clean = String(raw || '').trim();
   if (!clean) throw fail('PRIVATE_KEY_MISSING');
-  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : Buffer.from(clean, 'base64');
+  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : { key: Buffer.from(clean, 'base64'), format: 'der', type: 'pkcs8' };
   const key = crypto.createPrivateKey(material);
   if (expectedType && key.asymmetricKeyType !== expectedType) throw fail('PRIVATE_KEY_TYPE_INVALID');
   return key;
@@ -196,7 +196,7 @@ function parsePrivateKey(raw, expectedType) {
 function parsePublicKey(raw, expectedType) {
   const clean = String(raw || '').trim();
   if (!clean) throw fail('PUBLIC_KEY_MISSING');
-  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : Buffer.from(clean, 'base64');
+  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : { key: Buffer.from(clean, 'base64'), format: 'der', type: 'spki' };
   const key = crypto.createPublicKey(material);
   if (expectedType && key.asymmetricKeyType !== expectedType) throw fail('PUBLIC_KEY_TYPE_INVALID');
   return key;
@@ -11924,7 +11924,7 @@ function diracS2SCanonicalV206(meta) {
 function diracS2SKeyObjectV206(raw, kind, expectedType) {
   const clean = String(raw || '').trim();
   if (!clean) throw new Error('DIRAC_S2S_KEY_MISSING_' + kind);
-  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : Buffer.from(clean, 'base64');
+  const material = clean.includes('-----BEGIN') ? clean.replace(/\\n/g, '\n') : { key: Buffer.from(clean, 'base64'), format: 'der', type: kind === 'private' ? 'pkcs8' : 'spki' };
   const key = kind === 'private' ? crypto.createPrivateKey(material) : crypto.createPublicKey(material);
   if (expectedType && key.asymmetricKeyType !== expectedType) throw new Error('DIRAC_S2S_KEY_TYPE_INVALID_' + expectedType);
   if (expectedType === 'rsa') {
@@ -11974,7 +11974,7 @@ function diracS2SAssertConfigurationV206() {
   if (!serverId || !keyVersion) throw new Error('DIRAC_S2S_CONFIGURATION_IDENTITY_INVALID');
   if (!/^[A-Za-z0-9_-]{43,256}$/.test(networkId)) throw new Error('DIRAC_S2S_NETWORK_ID_INVALID');
   if (DIRAC_S2S_SECURITY_TABLE !== 'dirac_s2s_security') throw new Error('DIRAC_S2S_SECURITY_TABLE_REQUIRED');
-  readDiracSupabaseCredentials('security');
+  if (!diracS2SServer1TargetV206()) throw new Error('DIRAC_S2S_SERVER1_SECURITY_PROXY_REQUIRED');
   const revoked = diracS2SEnvJsonObjectV207('DIRAC_S2S_REVOKED_KEYS_JSON', false);
   if (!revoked.ok) throw new Error('DIRAC_S2S_REVOKED_KEYS_JSON_INVALID');
   for (const [revokedServerId, versions] of Object.entries(revoked.value)) {
@@ -12768,3 +12768,105 @@ diracRecoveryGuardRejectV201 = async function diracRecoveryGuardRejectDiagnostic
   return __diracRecoveryGuardRejectBeforeDiagnosticV227(req, res, action, reason, status, identityKey);
 };
 Object.defineProperty(module.exports, '__diracServer2RecoveryAuthDiagnosticV227', { value: true, enumerable: false });
+
+/* Server Recovery security persistence is delegated fail-closed to Server Utama. */
+const DIRAC_RECOVERY_SECURITY_DB_PROXY_V234 = 'dirac-recovery-security-db-proxy-v234';
+const DIRAC_RECOVERY_SECURITY_DB_PROXY_EVENT_V234 = 'recovery_security_db';
+const __diracRecoveryLocalSupabaseFetchBeforeProxyV234 = supabaseFetch;
+const __diracRecoveryV107DirectFetchBeforeProxyV234 = diracV107DirectFetch;
+
+function diracRecoverySecurityDbProxyMacV234(value) {
+  const secret = String(customerSecurityRecoveryWorkerSecret() || '');
+  if (Buffer.byteLength(secret, 'utf8') < 64) throw new Error('RECOVERY_SECURITY_DB_PROXY_SECRET_INVALID');
+  return crypto.createHmac('sha512', secret)
+    .update(DIRAC_RECOVERY_SECURITY_DB_PROXY_V234, 'utf8')
+    .update('\n', 'utf8')
+    .update(diracS2SStableJsonV206(value), 'utf8')
+    .digest('base64url');
+}
+
+function diracRecoverySecurityDbProxyFailureV234(code) {
+  return { ok: false, status: 503, data: { code: String(code || 'RECOVERY_SECURITY_DB_PROXY_UNAVAILABLE') } };
+}
+
+async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
+  const cleanPath = String(path || '');
+  const method = String(options.method || 'GET').toUpperCase();
+  const prefer = String(options.prefer || '');
+  const requestId = crypto.randomBytes(24).toString('base64url');
+  let serializedBody;
+  try {
+    serializedBody = JSON.stringify(options.body === undefined ? null : options.body);
+  } catch (_) {
+    return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_BODY_INVALID');
+  }
+  const evidence = {
+    version: DIRAC_RECOVERY_SECURITY_DB_PROXY_V234,
+    incident_id: requestId,
+    nonce: crypto.randomBytes(32).toString('base64url'),
+    detected_at_ms: Date.now(),
+    method,
+    path: cleanPath,
+    type: prefer,
+    page: serializedBody
+  };
+  const payload = { action: 'security_report', event: DIRAC_RECOVERY_SECURITY_DB_PROXY_EVENT_V234, evidence };
+  const sent = await diracS2SSendSecurityReportV206(payload).catch(() => ({ ok: false }));
+  const response = sent && sent.data && typeof sent.data === 'object' && !Array.isArray(sent.data) ? sent.data : null;
+  if (!sent || sent.ok !== true || !response) return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_TRANSPORT_FAILED');
+  const responseKeys = Object.keys(response).sort();
+  const expectedResponseKeys = ['event', 'ok', 'request_id', 'response_mac', 'result', 'version'];
+  const result = response.result && typeof response.result === 'object' && !Array.isArray(response.result) ? response.result : null;
+  const resultKeys = result ? Object.keys(result).sort() : [];
+  if (responseKeys.length !== expectedResponseKeys.length
+      || responseKeys.some((key, index) => key !== expectedResponseKeys[index])
+      || resultKeys.length !== 3
+      || resultKeys[0] !== 'data'
+      || resultKeys[1] !== 'ok'
+      || resultKeys[2] !== 'status'
+      || response.ok !== true
+      || response.event !== DIRAC_RECOVERY_SECURITY_DB_PROXY_EVENT_V234
+      || response.version !== DIRAC_RECOVERY_SECURITY_DB_PROXY_V234
+      || response.request_id !== requestId
+      || !/^[A-Za-z0-9_-]{86}$/.test(String(response.response_mac || ''))
+      || typeof result.ok !== 'boolean'
+      || !Number.isFinite(Number(result.status))) {
+    return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_RESPONSE_INVALID');
+  }
+  const authenticated = {
+    ok: response.ok,
+    event: response.event,
+    version: response.version,
+    request_id: response.request_id,
+    result
+  };
+  let expectedMac = '';
+  try { expectedMac = diracRecoverySecurityDbProxyMacV234(authenticated); }
+  catch (_) { return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_MAC_UNAVAILABLE'); }
+  if (!safeEqual(String(response.response_mac), expectedMac)) {
+    return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_MAC_INVALID');
+  }
+  return { ok: result.ok === true, status: Number(result.status || 0), data: result.data };
+}
+
+supabaseFetch = async function supabaseFetchViaServer1SecurityProxyV234(path, options = {}) {
+  const cleanPath = String(path || '');
+  const targetKey = typeof resolveDiracSupabaseTargetKey === 'function'
+    ? resolveDiracSupabaseTargetKey(cleanPath, options)
+    : 'legacy';
+  if (targetKey === 'security') return diracRecoverySecurityDbProxyFetchV234(cleanPath, options);
+  return __diracRecoveryLocalSupabaseFetchBeforeProxyV234(cleanPath, options);
+};
+Object.defineProperty(supabaseFetch, '__diracRecoverySecurityDbProxyV234', { value: true, enumerable: false });
+
+diracV107DirectFetch = async function diracV107DirectFetchViaServer1SecurityProxyV234(method, suffix, body) {
+  const table = diracV107Table();
+  if (table !== DIRAC_PERSISTENT_BAN_TABLE) return __diracRecoveryV107DirectFetchBeforeProxyV234(method, suffix, body);
+  return diracRecoverySecurityDbProxyFetchV234('/rest/v1/' + encodeURIComponent(table) + String(suffix || ''), {
+    method: String(method || 'GET').toUpperCase(),
+    auth: 'service',
+    prefer: String(method || '').toUpperCase() === 'POST' ? 'resolution=merge-duplicates' : '',
+    body: body === undefined ? undefined : body
+  });
+};
+Object.defineProperty(diracV107DirectFetch, '__diracRecoverySecurityDbProxyV234', { value: true, enumerable: false });
