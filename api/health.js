@@ -5169,7 +5169,7 @@ async function diracPasskeyA2FListActivePasskeys(owner) {
     isRecoveryWorkerContext = Boolean(ctx && ctx.action === DIRAC_RECOVERY_WORKER_ACTION);
   } catch (_) {}
 
-  if (!isRecoveryWorkerContext && owner && owner.email && isValidAuthEmail(owner.email)) {
+  if (module.exports.__diracRecoveryOnlyServer2V201 !== true && !isRecoveryWorkerContext && owner && owner.email && isValidAuthEmail(owner.email)) {
     await fetchRows('email=eq.' + encodeURIComponent(owner.email));
   }
 
