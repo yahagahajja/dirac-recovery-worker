@@ -12921,3 +12921,113 @@ diracV107DirectFetch = async function diracV107DirectFetchViaServer1SecurityProx
   });
 };
 Object.defineProperty(diracV107DirectFetch, '__diracRecoverySecurityDbProxyV234', { value: true, enumerable: false });
+
+/* Fail-closed, secret-free visibility for the Server Utama security-DB transport. */
+const DIRAC_RECOVERY_SECURITY_DB_TRANSPORT_DIAGNOSTIC_V236 = 'dirac-recovery-security-db-transport-diagnostic-v236';
+let DIRAC_RECOVERY_SECURITY_DB_TRANSPORT_STATE_V236 = Object.freeze({
+  patch: DIRAC_RECOVERY_SECURITY_DB_TRANSPORT_DIAGNOSTIC_V236,
+  attempted: false,
+  phase: 'not_attempted'
+});
+
+function diracRecoverySecurityDbTransportStateV236(next) {
+  DIRAC_RECOVERY_SECURITY_DB_TRANSPORT_STATE_V236 = Object.freeze({
+    patch: DIRAC_RECOVERY_SECURITY_DB_TRANSPORT_DIAGNOSTIC_V236,
+    attempted: true,
+    node_version: String(process.version || '').slice(0, 32),
+    updated_at_ms: Date.now(),
+    ...next
+  });
+  return DIRAC_RECOVERY_SECURITY_DB_TRANSPORT_STATE_V236;
+}
+
+diracS2SSendSecurityReportV206 = async function diracS2SSendSecurityReportDiagnosticV236(payload) {
+  const target = diracS2SServer1TargetV206();
+  const targetServerId = diracS2SIdV206(diracS2STextV206('DIRAC_RECOVERY_SERVER1_SERVER_ID') || 'vercel1-main');
+  const targetState = {
+    target_valid: Boolean(target),
+    target_server_id_valid: Boolean(targetServerId),
+    target_origin_sha256: target ? crypto.createHash('sha256').update(String(target.origin), 'utf8').digest('hex') : '',
+    target_path: target ? diracS2SPathV206(target).slice(0, 160) : '',
+    fetch_available: typeof fetch === 'function',
+    seven_signature_headers_present: 0,
+    http_status: 0,
+    upstream_code: '',
+    error_name: '',
+    error_code: '',
+    cause_code: ''
+  };
+  if (!target || !targetServerId || typeof fetch !== 'function') {
+    diracRecoverySecurityDbTransportStateV236({ ...targetState, phase: 'target_or_runtime_invalid' });
+    return { ok: false, unavailable: true };
+  }
+  let signedHeaders;
+  try {
+    signedHeaders = diracS2SSignHeadersV206({ target, action: 'security_report', body: payload, targetServerId });
+  } catch (error) {
+    diracRecoverySecurityDbTransportStateV236({
+      ...targetState,
+      phase: 'seven_signature_signing_failed',
+      error_name: String(error && error.name || '').slice(0, 80),
+      error_code: String(error && error.code || '').slice(0, 120),
+      cause_code: String(error && error.cause && error.cause.code || '').slice(0, 120)
+    });
+    return { ok: false, unavailable: true };
+  }
+  const signatureHeaderCount = Object.keys(signedHeaders).filter((name) => /^X-Dirac-Signature-[1-7]$/.test(name)).length;
+  if (signatureHeaderCount !== 7) {
+    diracRecoverySecurityDbTransportStateV236({ ...targetState, phase: 'seven_signature_header_count_invalid', seven_signature_headers_present: signatureHeaderCount });
+    return { ok: false, unavailable: true };
+  }
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 12_000) : null;
+  try {
+    diracRecoverySecurityDbTransportStateV236({ ...targetState, phase: 'fetch_started', seven_signature_headers_present: signatureHeaderCount });
+    const response = await fetch(target.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...signedHeaders },
+      body: JSON.stringify(payload),
+      redirect: 'error',
+      signal: controller ? controller.signal : undefined
+    });
+    const text = await diracRecoveryReadResponseLimitedV201(response, 32 * 1024).catch(() => '');
+    if (Buffer.byteLength(text, 'utf8') > 32 * 1024) {
+      diracRecoverySecurityDbTransportStateV236({ ...targetState, phase: 'response_too_large', seven_signature_headers_present: signatureHeaderCount, http_status: Number(response && response.status || 0) });
+      return { ok: false, unavailable: true };
+    }
+    let data = {};
+    let responseJsonValid = true;
+    try { data = text ? JSON.parse(text) : {}; }
+    catch (_) { data = {}; responseJsonValid = false; }
+    diracRecoverySecurityDbTransportStateV236({
+      ...targetState,
+      phase: 'response_received',
+      seven_signature_headers_present: signatureHeaderCount,
+      http_status: Number(response && response.status || 0),
+      response_json_valid: responseJsonValid,
+      upstream_code: String(data && (data.code || data.reason) || '').slice(0, 160)
+    });
+    return { ok: response.ok && data && data.ok === true, status: response.status, data };
+  } catch (error) {
+    diracRecoverySecurityDbTransportStateV236({
+      ...targetState,
+      phase: 'fetch_failed',
+      seven_signature_headers_present: signatureHeaderCount,
+      error_name: String(error && error.name || '').slice(0, 80),
+      error_code: String(error && error.code || '').slice(0, 120),
+      cause_code: String(error && error.cause && error.cause.code || '').slice(0, 120)
+    });
+    return { ok: false, unavailable: true };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+Object.defineProperty(diracS2SSendSecurityReportV206, '__diracRecoverySecurityDbTransportDiagnosticV236', { value: true, enumerable: false });
+
+const __diracRecoveryDiagnosticSnapshotBeforeSecurityDbTransportV236 = diracRecoveryDiagnosticSnapshotV227;
+diracRecoveryDiagnosticSnapshotV227 = function diracRecoveryDiagnosticSnapshotSecurityDbTransportV236(req, reason, status) {
+  return {
+    ...__diracRecoveryDiagnosticSnapshotBeforeSecurityDbTransportV236(req, reason, status),
+    security_db_proxy_transport: { ...DIRAC_RECOVERY_SECURITY_DB_TRANSPORT_STATE_V236 }
+  };
+};
