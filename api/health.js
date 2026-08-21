@@ -5099,7 +5099,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
 
   const created = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE, { method: 'POST', auth: 'service', prefer: 'return=minimal', body: insertBody });
   if (!created.ok) {
-    return res.status(created.status || 500).json({ ok: false, message: 'Gagal menyimpan lost passkey recovery request.' });
+    return res.status(created.status || 500).json({ ok: false, code: created && created.data && typeof created.data === 'object' && /^[A-Za-z0-9_.:-]{1,120}$/.test(String(created.data.code || '')) ? String(created.data.code) : 'RECOVERY_REQUEST_INSERT_FAILED', stage: 'recovery_request_insert', message: 'Gagal menyimpan lost passkey recovery request.' });
   }
 
   const successPayload = customerSecurityLostPasskeyGenerateSuccessPayloadV182({
