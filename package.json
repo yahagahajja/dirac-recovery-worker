@@ -1,12 +1,17 @@
 {
-  "name": "dirac-recovery-worker",
-  "version": "1.0.0",
+  "name": "dirac-s-reco-dedicated-compute",
+  "version": "262.0.0",
   "private": true,
+  "description": "Dedicated recovery compute runtime; the recovery handler and Central Guard remain byte-identical.",
   "type": "commonjs",
   "engines": {
-    "node": "24.x"
+    "node": ">=24.8.0 <25"
+  },
+  "scripts": {
+    "check": "node --check server.js && node --check api/health.js",
+    "start": "node server.js"
   },
   "dependencies": {
-    "argon2": "^0.40.3"
+    "argon2": "0.45.1"
   }
 }
