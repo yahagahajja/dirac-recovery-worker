@@ -4875,9 +4875,58 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     });
   }
   const recoveryCode = customerSecurityGenerateLostPasskeyRecoveryCode();
+  const recoveryCryptoV2DiagnosticIdV259 = crypto.randomBytes(16).toString('hex');
+  const recoveryCryptoV2StartedAtV259 = Date.now();
+  const recoveryMlkemPublicKeyTextV259 = String(
+    process.env.DIRAC_RECOVERY_MLKEM1024_PUBLIC_KEY_PEM
+      || process.env.DIRAC_RECOVERY_MLKEM1024_PUBLIC_KEY_DER_B64
+      || ''
+  ).trim();
+  let recoveryCryptoV2StageV259 = 'mlkem1024_public_key_preflight';
+  let recoveryMlkemPublicKeyV259 = null;
+  try {
+    if (typeof crypto.encapsulate !== 'function') {
+      throw Object.assign(new Error('RECOVERY_VAULT_MLKEM_RUNTIME_UNAVAILABLE'), { code: 'RECOVERY_VAULT_MLKEM_RUNTIME_UNAVAILABLE' });
+    }
+    if (!recoveryMlkemPublicKeyTextV259) {
+      throw Object.assign(new Error('RECOVERY_VAULT_MLKEM1024_PUBLIC_KEY_MISSING'), { code: 'RECOVERY_VAULT_MLKEM1024_PUBLIC_KEY_MISSING' });
+    }
+    const recoveryMlkemPublicKeyMaterialV259 = recoveryMlkemPublicKeyTextV259.includes('-----BEGIN')
+      ? recoveryMlkemPublicKeyTextV259.replace(/\\n/g, '\n')
+      : { key: Buffer.from(recoveryMlkemPublicKeyTextV259, 'base64'), format: 'der', type: 'spki' };
+    recoveryMlkemPublicKeyV259 = crypto.createPublicKey(recoveryMlkemPublicKeyMaterialV259);
+    if (recoveryMlkemPublicKeyV259.asymmetricKeyType !== 'ml-kem-1024') {
+      throw Object.assign(new Error('RECOVERY_VAULT_MLKEM1024_PUBLIC_KEY_TYPE_INVALID'), { code: 'RECOVERY_VAULT_MLKEM1024_PUBLIC_KEY_TYPE_INVALID' });
+    }
+    recoveryCryptoV2StageV259 = 'mlkem1024_public_key_validated';
+  } catch (error) {
+    const preflightCodeV259 = /^RECOVERY_VAULT_[A-Z0-9_]{1,100}$/.test(String(error && error.code || ''))
+      ? String(error.code)
+      : 'RECOVERY_VAULT_MLKEM1024_PUBLIC_KEY_INVALID';
+    try {
+      console.error('[dirac-recovery-crypto-preflight-v259]', JSON.stringify({
+        patch: 'dirac-recovery-crypto-preflight-v259',
+        diagnostic_id: recoveryCryptoV2DiagnosticIdV259,
+        stage: recoveryCryptoV2StageV259,
+        code: preflightCodeV259,
+        node_version: String(process.version || '').slice(0, 32),
+        mlkem_runtime_available: typeof crypto.encapsulate === 'function',
+        mlkem_public_key_configured: Boolean(recoveryMlkemPublicKeyTextV259),
+        secrets_logged: false
+      }));
+    } catch (_) {}
+    return res.status(503).json({
+      ok: false,
+      code: preflightCodeV259,
+      stage: recoveryCryptoV2StageV259,
+      diagnostic_id: recoveryCryptoV2DiagnosticIdV259,
+      message: 'Konfigurasi kriptografi recovery vault belum valid.'
+    });
+  }
   let recoveryCryptoV2;
   try {
     const requiredArgon2Params = customerSecurityLostPasskeyArgon2ParamsV157(64);
+    recoveryCryptoV2StageV259 = 'argon2id_vault';
     recoveryCryptoV2 = await DIRAC_RECOVERY_CRYPTO_V2.createVault({
       requestId,
       expiresAt,
@@ -4888,7 +4937,17 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
       websiteSecret: websiteSecret100,
       recoveryCode,
       argon2Params: requiredArgon2Params,
-      argon2RawFn: customerSecurityLostPasskeyArgon2Raw,
+      argon2RawFn: async (...args) => {
+        const output = await customerSecurityLostPasskeyArgon2Raw(...args);
+        recoveryCryptoV2StageV259 = 'post_argon2id_vault';
+        return output;
+      },
+      mlkemEncapsulateFn: () => {
+        recoveryCryptoV2StageV259 = 'mlkem1024_encapsulation';
+        const output = DIRAC_RECOVERY_CRYPTO_V2.mlkemEncapsulate(recoveryMlkemPublicKeyV259);
+        recoveryCryptoV2StageV259 = 'post_mlkem1024_encapsulation';
+        return output;
+      },
       vaultMaterialFn: (passwordValue, emailValue, websiteValue, saltValue, vaultIdValue) => Buffer.from(DIRAC_RECOVERY_CRYPTO_V2.jcs({
         version: DIRAC_RECOVERY_CRYPTO_V2.VERSION,
         password: customerSecurityLostPasskeyNormalizePasswordV157(passwordValue),
@@ -4904,12 +4963,21 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     try {
       console.error('[dirac-recovery-crypto-v2-create-failed]', JSON.stringify({
         code: String(error && error.code || 'RECOVERY_CRYPTO_V2_CREATE_FAILED').slice(0, 100),
-        request_id: requestId
+        request_id: requestId,
+        diagnostic_id: recoveryCryptoV2DiagnosticIdV259,
+        stage: recoveryCryptoV2StageV259,
+        duration_ms: Math.max(0, Date.now() - recoveryCryptoV2StartedAtV259),
+        memory_rss_mb: Math.max(0, Math.round(Number(process.memoryUsage && process.memoryUsage().rss || 0) / 1048576)),
+        node_version: String(process.version || '').slice(0, 32),
+        mlkem_public_key_validated: Boolean(recoveryMlkemPublicKeyV259 && recoveryMlkemPublicKeyV259.asymmetricKeyType === 'ml-kem-1024'),
+        secrets_logged: false
       }));
     } catch (_) {}
     return res.status(503).json({
       ok: false,
       code: String(error && error.code || 'RECOVERY_CRYPTO_V2_CREATE_FAILED'),
+      stage: recoveryCryptoV2StageV259,
+      diagnostic_id: recoveryCryptoV2DiagnosticIdV259,
       message: 'Layanan recovery maksimum belum siap.'
     });
   }
