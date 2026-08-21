@@ -5095,7 +5095,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     }
   }];
 
-  const created = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE, { method: 'POST', auth: 'service', prefer: 'return=representation', body: insertBody });
+  const created = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE, { method: 'POST', auth: 'service', prefer: 'return=minimal', body: insertBody });
   if (!created.ok) {
     return res.status(created.status || 500).json({ ok: false, message: 'Gagal menyimpan lost passkey recovery request.' });
   }
@@ -5132,7 +5132,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const deliveryPrepared = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
     method: 'PATCH',
     auth: 'service',
-    prefer: 'return=representation',
+    prefer: 'return=minimal',
     body: { sent_at: nowIso }
   });
   if (!deliveryPrepared.ok) {
@@ -12917,6 +12917,51 @@ function diracRecoverySecurityDbProxyFailureV234(code) {
   return { ok: false, status: 503, data: { code: String(code || 'RECOVERY_SECURITY_DB_PROXY_UNAVAILABLE') } };
 }
 
+const DIRAC_RECOVERY_SECURITY_DB_PAGE_CODEC_V265 = 'dirac-recovery-security-db-page-br-v265';
+const DIRAC_RECOVERY_SECURITY_DB_PAGE_CODEC_MARKER_V265 = '~br256-v265.';
+const DIRAC_RECOVERY_SECURITY_DB_PAGE_SCAN_PREVIEW_CHARS_V265 = 3000;
+const DIRAC_RECOVERY_SECURITY_DB_PAGE_RAW_LIMIT_V265 = 256 * 1024;
+const DIRAC_RECOVERY_SECURITY_DB_PAGE_WIRE_LIMIT_V265 = 23 * 1024;
+const DIRAC_RECOVERY_SECURITY_REPORT_WIRE_LIMIT_V265 = 32 * 1024;
+
+function diracRecoverySecurityDbProxyEncodePageV265(serializedBody, cleanPath, method) {
+  const raw = Buffer.from(String(serializedBody || ''), 'utf8');
+  let compressed = null;
+  try {
+    if (raw.byteLength > DIRAC_RECOVERY_SECURITY_DB_PAGE_RAW_LIMIT_V265) {
+      return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_BODY_TOO_LARGE' };
+    }
+    const eligible = String(cleanPath || '').startsWith('/rest/v1/security_lost_passkey_recovery_requests')
+      && (String(method || '') === 'POST' || String(method || '') === 'PATCH')
+      && raw.byteLength > 12 * 1024;
+    if (!eligible) {
+      return { ok: true, page: String(serializedBody || ''), compressed: false, rawBytes: raw.byteLength, encodedBytes: raw.byteLength };
+    }
+    const zlib = require('node:zlib');
+    compressed = zlib.brotliCompressSync(raw, {
+      params: {
+        [zlib.constants.BROTLI_PARAM_MODE]: zlib.constants.BROTLI_MODE_TEXT,
+        [zlib.constants.BROTLI_PARAM_QUALITY]: 11,
+        [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.byteLength
+      }
+    });
+    const digest = crypto.createHash('sha512').update(raw).digest('base64url');
+    const preview = String(serializedBody || '').slice(0, DIRAC_RECOVERY_SECURITY_DB_PAGE_SCAN_PREVIEW_CHARS_V265);
+    const page = preview + DIRAC_RECOVERY_SECURITY_DB_PAGE_CODEC_MARKER_V265
+      + String(raw.byteLength) + '.' + digest + '.' + compressed.toString('base64url');
+    const encodedBytes = Buffer.byteLength(page, 'utf8');
+    if (encodedBytes > DIRAC_RECOVERY_SECURITY_DB_PAGE_WIRE_LIMIT_V265) {
+      return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_COMPRESSED_PAGE_TOO_LARGE' };
+    }
+    return { ok: true, page, compressed: true, rawBytes: raw.byteLength, encodedBytes };
+  } catch (_) {
+    return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_COMPRESSION_FAILED' };
+  } finally {
+    raw.fill(0);
+    if (compressed) compressed.fill(0);
+  }
+}
+
 async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
   const cleanPath = String(path || '');
   const method = String(options.method || 'GET').toUpperCase();
@@ -12928,6 +12973,8 @@ async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
   } catch (_) {
     return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_BODY_INVALID');
   }
+  const encodedPageV265 = diracRecoverySecurityDbProxyEncodePageV265(serializedBody, cleanPath, method);
+  if (!encodedPageV265.ok) return diracRecoverySecurityDbProxyFailureV234(encodedPageV265.code);
   const evidence = {
     version: DIRAC_RECOVERY_SECURITY_DB_PROXY_V234,
     incident_id: requestId,
@@ -12936,9 +12983,29 @@ async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
     method,
     path: cleanPath,
     type: prefer,
-    page: serializedBody
+    page: encodedPageV265.page
   };
   const payload = { action: 'security_report', event: DIRAC_RECOVERY_SECURITY_DB_PROXY_EVENT_V234, evidence };
+  const outboundBytesV265 = Buffer.byteLength(JSON.stringify(payload), 'utf8');
+  if (encodedPageV265.compressed) {
+    try {
+      console.error('[dirac-recovery-security-db-page-codec-v265]', JSON.stringify({
+        patch: DIRAC_RECOVERY_SECURITY_DB_PAGE_CODEC_V265,
+        phase: 'encoded',
+        request_id: requestId,
+        route: 'security_lost_passkey_recovery_requests',
+        method,
+        raw_body_bytes: encodedPageV265.rawBytes,
+        encoded_page_bytes: encodedPageV265.encodedBytes,
+        outbound_body_bytes: outboundBytesV265,
+        within_central_contract: outboundBytesV265 <= DIRAC_RECOVERY_SECURITY_REPORT_WIRE_LIMIT_V265,
+        secrets_logged: false
+      }));
+    } catch (_) {}
+  }
+  if (outboundBytesV265 > DIRAC_RECOVERY_SECURITY_REPORT_WIRE_LIMIT_V265) {
+    return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_ENVELOPE_TOO_LARGE');
+  }
   const sent = await diracS2SSendSecurityReportV206(payload).catch(() => ({ ok: false }));
   const response = sent && sent.data && typeof sent.data === 'object' && !Array.isArray(sent.data) ? sent.data : null;
   if (!sent || sent.ok !== true || !response) return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_TRANSPORT_FAILED');
