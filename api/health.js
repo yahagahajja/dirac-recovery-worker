@@ -4,7 +4,7 @@
 /* source 3-3 */
 const crypto = require('crypto');
 
-const DIRAC_RECOVERY_ARGON2_MEMORY_KIB_V266 = 131072;
+const DIRAC_RECOVERY_ARGON2_MEMORY_KIB_V266 = 512000;
 
 /* source 4-1184 */
 const DIRAC_RECOVERY_CRYPTO_V2 = (() => {
@@ -12928,6 +12928,73 @@ const DIRAC_RECOVERY_SECURITY_DB_PAGE_WIRE_LIMIT_V265 = 30 * 1024;
 const DIRAC_RECOVERY_SECURITY_DB_PAGE_FIELD_CHUNK_CHARS_V273 = 23 * 1024;
 const DIRAC_RECOVERY_SECURITY_DB_PAGE_SEGMENT_CHARS_V273 = 128;
 const DIRAC_RECOVERY_SECURITY_REPORT_WIRE_LIMIT_V265 = 32 * 1024;
+const DIRAC_RECOVERY_SECURITY_DB_RESPONSE_CODEC_V275 = 'dirac-recovery-security-db-response-br-v275';
+const DIRAC_RECOVERY_SECURITY_DB_RESPONSE_RAW_LIMIT_V275 = 256 * 1024;
+const DIRAC_RECOVERY_SECURITY_DB_RESPONSE_COMPRESSED_LIMIT_V275 = 20 * 1024;
+
+function diracRecoverySecurityDbProxyDecodeResultV275(result, cleanPath, method) {
+  const eligible = String(cleanPath || '').startsWith('/rest/v1/security_lost_passkey_recovery_requests')
+    && String(method || '') === 'GET'
+    && result && result.ok === true
+    && Number(result.status) === 200;
+  if (!eligible || Array.isArray(result.data)) {
+    return { ok: true, data: result ? result.data : null };
+  }
+  const encoded = result.data && typeof result.data === 'object' && !Array.isArray(result.data) ? result.data : null;
+  const expectedKeys = ['codec', 'compressed_bytes', 'payload_b64url', 'raw_bytes', 'sha512'];
+  const actualKeys = encoded ? Object.keys(encoded).sort() : [];
+  const compressedBytes = Number(encoded && encoded.compressed_bytes);
+  const rawBytes = Number(encoded && encoded.raw_bytes);
+  const payload = String(encoded && encoded.payload_b64url || '');
+  if (!encoded
+      || actualKeys.length !== expectedKeys.length
+      || actualKeys.some((key, index) => key !== expectedKeys[index])
+      || encoded.codec !== DIRAC_RECOVERY_SECURITY_DB_RESPONSE_CODEC_V275
+      || !Number.isSafeInteger(compressedBytes)
+      || compressedBytes < 1
+      || compressedBytes > DIRAC_RECOVERY_SECURITY_DB_RESPONSE_COMPRESSED_LIMIT_V275
+      || !Number.isSafeInteger(rawBytes)
+      || rawBytes < 1
+      || rawBytes > DIRAC_RECOVERY_SECURITY_DB_RESPONSE_RAW_LIMIT_V275
+      || !/^[A-Za-z0-9_-]+$/.test(payload)
+      || !/^[A-Za-z0-9_-]{86}$/.test(String(encoded.sha512 || ''))) {
+    return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_CODEC_INVALID' };
+  }
+  let compressed = null;
+  let raw = null;
+  let text = '';
+  try {
+    compressed = Buffer.from(payload, 'base64url');
+    if (compressed.byteLength !== compressedBytes || compressed.toString('base64url') !== payload) {
+      return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_CODEC_INVALID' };
+    }
+    const zlib = require('node:zlib');
+    raw = zlib.brotliDecompressSync(compressed, { maxOutputLength: DIRAC_RECOVERY_SECURITY_DB_RESPONSE_RAW_LIMIT_V275 });
+    if (raw.byteLength !== rawBytes) {
+      return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_LENGTH_INVALID' };
+    }
+    const actualDigest = crypto.createHash('sha512').update(raw).digest('base64url');
+    if (!safeEqual(actualDigest, String(encoded.sha512))) {
+      return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_HASH_INVALID' };
+    }
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(raw); }
+    catch (_) { return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_UTF8_INVALID' }; }
+    let data;
+    try { data = JSON.parse(text); }
+    catch (_) { return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_JSON_INVALID' }; }
+    if (!Array.isArray(data) || data.length > 1
+        || data.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) {
+      return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_DATA_INVALID' };
+    }
+    return { ok: true, data };
+  } catch (_) {
+    return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_DECOMPRESSION_FAILED' };
+  } finally {
+    text = '';
+    if (compressed) compressed.fill(0);
+    if (raw) raw.fill(0);
+  }
+}
 
 function diracRecoverySecurityDbProxyPreviewV273(serializedBody) {
   let structured = '';
@@ -13079,7 +13146,9 @@ async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
   if (!safeEqual(String(response.response_mac), expectedMac)) {
     return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_MAC_INVALID');
   }
-  return { ok: result.ok === true, status: Number(result.status || 0), data: result.data };
+  const decodedResultV275 = diracRecoverySecurityDbProxyDecodeResultV275(result, cleanPath, method);
+  if (!decodedResultV275.ok) return diracRecoverySecurityDbProxyFailureV234(decodedResultV275.code);
+  return { ok: result.ok === true, status: Number(result.status || 0), data: decodedResultV275.data };
 }
 
 supabaseFetch = async function supabaseFetchViaServer1SecurityProxyV234(path, options = {}) {
