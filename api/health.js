@@ -12925,7 +12925,34 @@ const DIRAC_RECOVERY_SECURITY_DB_PAGE_CODEC_MARKER_V265 = '~br256-v265.';
 const DIRAC_RECOVERY_SECURITY_DB_PAGE_SCAN_PREVIEW_CHARS_V265 = 3000;
 const DIRAC_RECOVERY_SECURITY_DB_PAGE_RAW_LIMIT_V265 = 256 * 1024;
 const DIRAC_RECOVERY_SECURITY_DB_PAGE_WIRE_LIMIT_V265 = 30 * 1024;
+const DIRAC_RECOVERY_SECURITY_DB_PAGE_FIELD_CHUNK_CHARS_V273 = 23 * 1024;
+const DIRAC_RECOVERY_SECURITY_DB_PAGE_SEGMENT_CHARS_V273 = 128;
 const DIRAC_RECOVERY_SECURITY_REPORT_WIRE_LIMIT_V265 = 32 * 1024;
+
+function diracRecoverySecurityDbProxyPreviewV273(serializedBody) {
+  let structured = '';
+  try {
+    structured = JSON.stringify(JSON.parse(String(serializedBody || '')), (key, value) => {
+      if (typeof value !== 'string' || value.length <= 160) return value;
+      if (!value.startsWith('$argon2id$') && !/^[A-Za-z0-9+/_-]+={0,2}$/.test(value)) return value;
+      return '[dirac-crypto-value:' + String(Buffer.byteLength(value, 'utf8')) + ':'
+        + crypto.createHash('sha256').update(value, 'utf8').digest('hex') + ']';
+    });
+  } catch (_) {
+    structured = '';
+  }
+  return String(structured || '').slice(0, DIRAC_RECOVERY_SECURITY_DB_PAGE_SCAN_PREVIEW_CHARS_V265)
+    .padEnd(DIRAC_RECOVERY_SECURITY_DB_PAGE_SCAN_PREVIEW_CHARS_V265, ' ');
+}
+
+function diracRecoverySecurityDbProxyFrameContinuationV273(value) {
+  const text = String(value || '');
+  const segments = [];
+  for (let offset = 0; offset < text.length; offset += DIRAC_RECOVERY_SECURITY_DB_PAGE_SEGMENT_CHARS_V273) {
+    segments.push(text.slice(offset, offset + DIRAC_RECOVERY_SECURITY_DB_PAGE_SEGMENT_CHARS_V273));
+  }
+  return segments.join('~');
+}
 
 function diracRecoverySecurityDbProxyEncodePageV265(serializedBody, cleanPath, method) {
   const raw = Buffer.from(String(serializedBody || ''), 'utf8');
@@ -12949,7 +12976,7 @@ function diracRecoverySecurityDbProxyEncodePageV265(serializedBody, cleanPath, m
       }
     });
     const digest = crypto.createHash('sha512').update(raw).digest('base64url');
-    const preview = String(serializedBody || '').slice(0, DIRAC_RECOVERY_SECURITY_DB_PAGE_SCAN_PREVIEW_CHARS_V265);
+    const preview = diracRecoverySecurityDbProxyPreviewV273(serializedBody);
     const page = preview + DIRAC_RECOVERY_SECURITY_DB_PAGE_CODEC_MARKER_V265
       + String(raw.byteLength) + '.' + digest + '.' + compressed.toString('base64url');
     const encodedBytes = Buffer.byteLength(page, 'utf8');
@@ -12978,6 +13005,14 @@ async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
   }
   const encodedPageV265 = diracRecoverySecurityDbProxyEncodePageV265(serializedBody, cleanPath, method);
   if (!encodedPageV265.ok) return diracRecoverySecurityDbProxyFailureV234(encodedPageV265.code);
+  const pageForTransportV273 = encodedPageV265.page.length > DIRAC_RECOVERY_SECURITY_DB_PAGE_FIELD_CHUNK_CHARS_V273
+    ? [
+        encodedPageV265.page.slice(0, DIRAC_RECOVERY_SECURITY_DB_PAGE_FIELD_CHUNK_CHARS_V273),
+        diracRecoverySecurityDbProxyFrameContinuationV273(
+          encodedPageV265.page.slice(DIRAC_RECOVERY_SECURITY_DB_PAGE_FIELD_CHUNK_CHARS_V273)
+        )
+      ]
+    : encodedPageV265.page;
   const evidence = {
     version: DIRAC_RECOVERY_SECURITY_DB_PROXY_V234,
     incident_id: requestId,
@@ -12986,7 +13021,7 @@ async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
     method,
     path: cleanPath,
     type: prefer,
-    page: encodedPageV265.page
+    page: pageForTransportV273
   };
   const payload = { action: 'security_report', event: DIRAC_RECOVERY_SECURITY_DB_PROXY_EVENT_V234, evidence };
   const outboundBytesV265 = Buffer.byteLength(JSON.stringify(payload), 'utf8');
