@@ -1,70 +1,7 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "headers": [
-    {
-      "source": "/lost-passkey.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, private, max-age=0"
-        },
-        {
-          "key": "Pragma",
-          "value": "no-cache"
-        },
-        {
-          "key": "Expires",
-          "value": "0"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "no-referrer"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "Cross-Origin-Opener-Policy",
-          "value": "same-origin"
-        },
-        {
-          "key": "Cross-Origin-Embedder-Policy",
-          "value": "require-corp"
-        },
-        {
-          "key": "Cross-Origin-Resource-Policy",
-          "value": "same-origin"
-        },
-        {
-          "key": "Origin-Agent-Cluster",
-          "value": "?1"
-        },
-        {
-          "key": "Strict-Transport-Security",
-          "value": "max-age=63072000"
-        },
-        {
-          "key": "X-DNS-Prefetch-Control",
-          "value": "off"
-        },
-        {
-          "key": "X-Permitted-Cross-Domain-Policies",
-          "value": "none"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-EoeZJ0TA5MMuoeg69UfTeGlBpDZJIJj6xVtlwxv0hQUtzrwf4EuX9Xe2uzS9+RYO4/dU98g24k78K6YXg+PmQQ=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';"
-        }
-      ]
+  "functions": {
+    "api/health.js": {
+      "maxDuration": 240
     }
-  ]
+  }
 }
