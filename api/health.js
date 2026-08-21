@@ -4838,7 +4838,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
 
   const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
   if (!vaultSecrets.ok) {
-    return res.status(503).json({ ok: false, code: vaultSecrets.code, message: vaultSecrets.message });
+    return res.status(549).json({ ok: false, code: vaultSecrets.code, stage: 'vault_secrets_preflight', status_telemetry: 'dirac-recovery-status-telemetry-v261', message: vaultSecrets.message });
   }
 
   const nowMs = Date.now();
@@ -4903,6 +4903,9 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
     const preflightCodeV259 = /^RECOVERY_VAULT_[A-Z0-9_]{1,100}$/.test(String(error && error.code || ''))
       ? String(error.code)
       : 'RECOVERY_VAULT_MLKEM1024_PUBLIC_KEY_INVALID';
+    const preflightStatusV261 = preflightCodeV259 === 'RECOVERY_VAULT_MLKEM_RUNTIME_UNAVAILABLE'
+      ? 550
+      : (preflightCodeV259 === 'RECOVERY_VAULT_MLKEM1024_PUBLIC_KEY_MISSING' ? 551 : 552);
     try {
       console.error('[dirac-recovery-crypto-preflight-v259]', JSON.stringify({
         patch: 'dirac-recovery-crypto-preflight-v259',
@@ -4915,11 +4918,12 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
         secrets_logged: false
       }));
     } catch (_) {}
-    return res.status(503).json({
+    return res.status(preflightStatusV261).json({
       ok: false,
       code: preflightCodeV259,
       stage: recoveryCryptoV2StageV259,
       diagnostic_id: recoveryCryptoV2DiagnosticIdV259,
+      status_telemetry: 'dirac-recovery-status-telemetry-v261',
       message: 'Konfigurasi kriptografi recovery vault belum valid.'
     });
   }
@@ -4960,6 +4964,12 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
       metadataSignatureFn: (value) => customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'metadata_signature_v2', DIRAC_RECOVERY_CRYPTO_V2.jcs(value))
     });
   } catch (error) {
+    const recoveryCryptoV2FailureStatusV261 = ({
+      argon2id_vault: 553,
+      post_argon2id_vault: 554,
+      mlkem1024_encapsulation: 555,
+      post_mlkem1024_encapsulation: 556
+    })[recoveryCryptoV2StageV259] || 557;
     try {
       console.error('[dirac-recovery-crypto-v2-create-failed]', JSON.stringify({
         code: String(error && error.code || 'RECOVERY_CRYPTO_V2_CREATE_FAILED').slice(0, 100),
@@ -4973,11 +4983,12 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
         secrets_logged: false
       }));
     } catch (_) {}
-    return res.status(503).json({
+    return res.status(recoveryCryptoV2FailureStatusV261).json({
       ok: false,
       code: String(error && error.code || 'RECOVERY_CRYPTO_V2_CREATE_FAILED'),
       stage: recoveryCryptoV2StageV259,
       diagnostic_id: recoveryCryptoV2DiagnosticIdV259,
+      status_telemetry: 'dirac-recovery-status-telemetry-v261',
       message: 'Layanan recovery maksimum belum siap.'
     });
   }
@@ -5003,7 +5014,7 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const recoveryCodeHash = await customerSecurityLostPasskeyArgon2EncodedHashV157('recovery_code', recoveryCode, recoveryCodeSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   const bindingHashCommitment = await customerSecurityLostPasskeyArgon2EncodedHashV157('binding', bindingsCanonical, bindingSalt, vaultSecrets.pepper, vaultSecrets.rootSecret);
   if (override && override.argonQueueTicket && !customerSecurityLostPasskeyQueueLeaseHealthyV188(override.argonQueueTicket)) {
-    return res.status(503).json({ ok: false, code: 'RECOVERY_ARGON2_LEASE_LOST', message: 'Antrean keamanan recovery perlu diulang.' });
+    return res.status(558).json({ ok: false, code: 'RECOVERY_ARGON2_LEASE_LOST', stage: 'argon2id_queue_lease', status_telemetry: 'dirac-recovery-status-telemetry-v261', message: 'Antrean keamanan recovery perlu diulang.' });
   }
 
   // Recovery email opens the static recovery page; the page then validates the token through Central Guard.
