@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "api/health.js": {
-      "maxDuration": 240
-    }
-  }
-}
