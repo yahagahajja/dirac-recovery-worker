@@ -11634,10 +11634,59 @@ function diracRecoveryLinkOpenArgonPolicyV202(metadata) {
   const source = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {};
   const encoded = String(source.link_token_hash || '');
   const encodedParams = customerSecurityLostPasskeyArgon2EncodedParamsV171(encoded);
-  const declared = source.link_token_argon2id_params && typeof source.link_token_argon2id_params === 'object' && !Array.isArray(source.link_token_argon2id_params)
+  const linkDeclaredCandidate = source.link_token_argon2id_params && typeof source.link_token_argon2id_params === 'object' && !Array.isArray(source.link_token_argon2id_params)
     ? source.link_token_argon2id_params
     : null;
-  if (!encoded.startsWith('$argon2id$') || !encodedParams || !declared) return { ok: false, encoded: '' };
+  const linkDeclared = linkDeclaredCandidate
+    && Number.isSafeInteger(Number(linkDeclaredCandidate.memoryCost))
+    && Number.isSafeInteger(Number(linkDeclaredCandidate.timeCost))
+    && Number.isSafeInteger(Number(linkDeclaredCandidate.parallelism))
+    ? linkDeclaredCandidate
+    : null;
+  const vaultBundle = source.vault_bundle && typeof source.vault_bundle === 'object' && !Array.isArray(source.vault_bundle)
+    ? source.vault_bundle
+    : null;
+  const vaultMetadata = vaultBundle && vaultBundle.metadata && typeof vaultBundle.metadata === 'object' && !Array.isArray(vaultBundle.metadata)
+    ? vaultBundle.metadata
+    : null;
+  const exactVaultProfile = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const keys = Object.keys(value).sort();
+    if (keys.length !== 4 || keys.join(',') !== 'hashLength,memoryCost,parallelism,timeCost') return null;
+    const profile = {
+      memoryCost: Number(value.memoryCost),
+      timeCost: Number(value.timeCost),
+      parallelism: Number(value.parallelism),
+      hashLength: Number(value.hashLength)
+    };
+    return Number.isSafeInteger(profile.memoryCost)
+      && Number.isSafeInteger(profile.timeCost)
+      && Number.isSafeInteger(profile.parallelism)
+      && profile.hashLength === 64
+      ? profile
+      : null;
+  };
+  const metadataVaultProfile = exactVaultProfile(source.argon2id_params);
+  const bundleVaultProfile = exactVaultProfile(vaultBundle && vaultBundle.argon2id_params);
+  const signedVaultProfile = exactVaultProfile(vaultMetadata && vaultMetadata.argon2id_params);
+  let equivalentVaultBinding = null;
+  if (!linkDeclared && metadataVaultProfile && bundleVaultProfile && signedVaultProfile
+      && customerSecurityLostPasskeyCanonical(metadataVaultProfile) === customerSecurityLostPasskeyCanonical(bundleVaultProfile)
+      && customerSecurityLostPasskeyCanonical(metadataVaultProfile) === customerSecurityLostPasskeyCanonical(signedVaultProfile)
+      && String(source.link_token_argon2id_cost_source || '') === 'DIRAC_LOST_PASSKEY_LINK_OPEN_ARGON2_*') {
+    const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
+    const actualVaultSignature = String(vaultBundle && vaultBundle.metadata_signature || '');
+    const expectedVaultSignature = vaultSecrets.ok
+      ? customerSecurityLostPasskeyHmacHexV157(vaultSecrets.rootSecret, 'metadata_signature_v2', DIRAC_RECOVERY_CRYPTO_V2.jcs(vaultMetadata))
+      : '';
+    if (actualVaultSignature && expectedVaultSignature && safeEqual(actualVaultSignature, expectedVaultSignature)) {
+      equivalentVaultBinding = metadataVaultProfile;
+    }
+  }
+  const declared = linkDeclared || equivalentVaultBinding;
+  if (!encoded.startsWith('$argon2id$')) return { ok: false, encoded: '', reason: 'argon2id_hash_missing_or_invalid' };
+  if (!encodedParams) return { ok: false, encoded: '', reason: 'argon2id_phc_params_invalid' };
+  if (!declared) return { ok: false, encoded: '', reason: 'argon2id_declared_profile_missing' };
   const memoryCost = Number(declared.memoryCost);
   const timeCost = Number(declared.timeCost);
   const parallelism = Number(declared.parallelism);
@@ -11646,7 +11695,7 @@ function diracRecoveryLinkOpenArgonPolicyV202(metadata) {
     && parallelism === encodedParams.parallelism;
   let required;
   try { required = customerSecurityLostPasskeyLinkOpenArgon2ParamsV171(64); }
-  catch (_) { return { ok: false, encoded: '' }; }
+  catch (_) { return { ok: false, encoded: '', reason: 'argon2id_runtime_profile_invalid' }; }
   const strictProfile = Number.isSafeInteger(memoryCost)
     && memoryCost >= DIRAC_RECOVERY_ARGON2_MEMORY_KIB_V266
     && memoryCost >= Number(required.memoryCost || 0)
@@ -11657,7 +11706,12 @@ function diracRecoveryLinkOpenArgonPolicyV202(metadata) {
     && timeCost <= 12
     && parallelism === 4
     && parallelism === Number(required.parallelism || 0);
-  return { ok: exactBinding && strictProfile, encoded };
+  return {
+    ok: exactBinding && strictProfile,
+    encoded,
+    reason: !exactBinding ? 'argon2id_profile_binding_mismatch'
+      : (!strictProfile ? 'argon2id_strict_profile_invalid' : 'argon2id_policy_valid')
+  };
 }
 
 async function diracRecoveryLinkOpenGuardV202(req, res, ctx, body, identityKey) {
@@ -11771,7 +11825,11 @@ async function diracRecoveryLinkOpenV202(req, res, ctx, body) {
       return diracRecoveryLinkOpenJsonV202(res, 403, 'RECOVERY_BINDING_PROFILE_INVALID', 'Recovery request harus dibuat ulang.');
     }
     const argonPolicy = diracRecoveryLinkOpenArgonPolicyV202(metadata);
-    if (!argonPolicy.ok) return diracRecoveryLinkOpenJsonV202(res, 503, 'RECOVERY_LINK_ARGON2_POLICY_INVALID', 'Layanan recovery belum siap.');
+    if (!argonPolicy.ok) {
+      try { res.setHeader('X-Dirac-Recovery-Link-Stage', 'link_token_argon2_policy_v279'); } catch (_) {}
+      try { res.setHeader('X-Dirac-Recovery-Link-Reason', String(argonPolicy.reason || 'argon2id_policy_invalid').slice(0, 80)); } catch (_) {}
+      return diracRecoveryLinkOpenJsonV202(res, 503, 'RECOVERY_LINK_ARGON2_POLICY_INVALID', 'Layanan recovery belum siap.');
+    }
     const vaultSecrets = customerSecurityLostPasskeyRequireVaultSecretsV157();
     if (!vaultSecrets.ok) return diracRecoveryLinkOpenJsonV202(res, 503, String(vaultSecrets.code || 'RECOVERY_VAULT_SECRET_INVALID'), 'Layanan recovery belum siap.');
 
