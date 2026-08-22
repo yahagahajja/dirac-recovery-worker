@@ -8808,7 +8808,7 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
 
   const codeOk = await customerSecurityLostPasskeyArgon2VerifyHashV157('recovery_code', code, row.recovery_code_hash, vaultSecrets.pepper, vaultSecrets.rootSecret);
   if (!codeOk) {
-    const failure = await diracRecoveryRegisterFailureV281(requestId, 'recovery_code', action).catch(() => null);
+    const failure = await diracRecoveryRegisterFailureV282(requestId, 'recovery_code', action).catch(() => null);
     if (!failure || !['recorded', 'locked'].includes(failure.outcome)) {
       return customerSecurityLostPasskeyGenericWorkerErrorV157(res, 503, 'recovery_failure_state_unavailable', { request_id: requestId, customer_id: owner.customerId, auth_user_id: owner.authUserId, email: owner.email, worker_action: DIRAC_RECOVERY_WORKER_TASK_VERIFY }, { owner, bindings, requestId, code, row, metadata, bindingCommitmentOk: expectedBinding, recoveryCodeOk: codeOk, workerAction: DIRAC_RECOVERY_WORKER_TASK_VERIFY });
     }
@@ -10416,7 +10416,7 @@ function diracRecoveryHpkeRequestActiveV159(row) {
 
 /* source 33682-33703 */
 async function diracRecoveryHpkeRegisterCodeFailureV159(req, row, requestId) {
-  const failure = await diracRecoveryRegisterFailureV281(
+  const failure = await diracRecoveryRegisterFailureV282(
     requestId,
     'recovery_code',
     DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159
@@ -10434,7 +10434,7 @@ async function diracRecoveryHpkeRegisterCodeFailureV159(req, row, requestId) {
 }
 
 async function diracRecoveryLinkRegisterTokenFailureV281(req, row, requestId) {
-  const failure = await diracRecoveryRegisterFailureV281(
+  const failure = await diracRecoveryRegisterFailureV282(
     requestId,
     'link_token',
     DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
@@ -10856,215 +10856,179 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
   }
 }
 
-const DIRAC_RECOVERY_CLAIM_STATE_V281 = 'dirac-recovery-claim-state-v281';
-const DIRAC_RECOVERY_CLAIM_CACHE_V281 = 'dirac-recovery-claim-cache-v281';
-const DIRAC_RECOVERY_CLAIM_BEGIN_RPC_V281 = 'dirac_recovery_claim_begin_v281';
-const DIRAC_RECOVERY_CLAIM_COMPLETE_RPC_V281 = 'dirac_recovery_claim_complete_v281';
-const DIRAC_RECOVERY_CLAIM_ABORT_RPC_V281 = 'dirac_recovery_claim_abort_v281';
-const DIRAC_RECOVERY_REGISTER_FAILURE_RPC_V281 = 'dirac_recovery_register_failure_v281';
-const DIRAC_RECOVERY_CLAIM_LEASE_SECONDS_V281 = 60;
+async function diracRecoveryRegisterFailureV282(requestId, failureKind, failureSource) {
+  const cleanRequestId = String(requestId || '');
+  const kind = String(failureKind || '');
+  const source = String(failureSource || '');
+  const allowed = (kind === 'recovery_code'
+      && [DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159, 'customer_security_recovery_code_verify'].includes(source))
+    || (kind === 'link_token' && source === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165);
+  if (!/^[A-Za-z0-9_-]{16,120}$/.test(cleanRequestId) || !allowed) {
+    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_FAILURE_ARGUMENT_INVALID');
+  }
 
-async function diracRecoveryRegisterFailureV281(requestId, failureKind, failureSource) {
-  const result = await supabaseFetch('/rest/v1/rpc/' + DIRAC_RECOVERY_REGISTER_FAILURE_RPC_V281, {
-    method: 'POST',
-    auth: 'service',
-    body: {
-      p_request_id: String(requestId || ''),
-      p_failure_kind: String(failureKind || ''),
-      p_failure_source: String(failureSource || '')
+  // Zero-schema CAS. The existing request row is the authority. We update only
+  // attempt_count/status/locked_at and deliberately never replace metadata.
+  for (let casAttempt = 0; casAttempt < 5; casAttempt += 1) {
+    const read = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE
+      + '?select=' + encodeURIComponent('request_id,status,attempt_count,expires_at,used_at,revoked_at,locked_at')
+      + '&request_id=eq.' + encodeURIComponent(cleanRequestId)
+      + '&limit=2', { method: 'GET', auth: 'service' });
+    if (!read || read.ok !== true || !Array.isArray(read.data)) {
+      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_FAILURE_STORAGE_UNAVAILABLE');
     }
-  });
-  const source = result && result.ok === true && result.data && typeof result.data === 'object' && !Array.isArray(result.data)
-    ? result.data
-    : null;
-  const expectedKeys = ['attempt_count', 'locked', 'outcome', 'request_id', 'status'];
-  const actualKeys = source ? Object.keys(source).sort() : [];
-  if (!source
-      || actualKeys.length !== expectedKeys.length
-      || actualKeys.some((key, index) => key !== expectedKeys[index])
-      || source.request_id !== requestId
-      || !['inactive', 'locked', 'missing', 'recorded'].includes(String(source.outcome || ''))
-      || typeof source.locked !== 'boolean'
-      || (source.attempt_count !== null
-        && (!Number.isSafeInteger(source.attempt_count)
-          || source.attempt_count < 0
-          || source.attempt_count > LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT))
-      || (source.status !== null && !['locked', 'pending', 'revoked', 'used', 'verified'].includes(String(source.status || '')))
-      || (source.outcome === 'missing' && (source.attempt_count !== null || source.status !== null || source.locked !== false))
-      || (source.outcome === 'locked' && (source.locked !== true || source.status !== 'locked'))
-      || (source.outcome === 'recorded' && (source.locked !== false || !['pending', 'verified'].includes(source.status)))) {
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_FAILURE_RPC_RESPONSE_INVALID');
-  }
-  return source;
-}
-
-function diracRecoveryClaimLeaseHashV281(leaseToken) {
-  if (!Buffer.isBuffer(leaseToken) || leaseToken.length !== 32) {
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_LEASE_TOKEN_INVALID');
-  }
-  return crypto.createHash('sha512')
-    .update('dirac/recovery/v281/lease-token\n', 'utf8')
-    .update(leaseToken)
-    .digest('base64url');
-}
-
-function diracRecoveryClaimRpcResultV281(result, requestId, claimHash) {
-  const source = result && result.ok === true && result.data && typeof result.data === 'object' && !Array.isArray(result.data)
-    ? result.data
-    : null;
-  const expectedKeys = ['cached_response_opaque', 'claim_hash', 'lease_expires_at', 'outcome', 'request_id', 'response_expires_at'];
-  const actualKeys = source ? Object.keys(source).sort() : [];
-  const outcome = String(source && source.outcome || '');
-  if (!source
-      || actualKeys.length !== expectedKeys.length
-      || actualKeys.some((key, index) => key !== expectedKeys[index])
-      || !['aborted', 'acquired', 'busy', 'completed', 'lease_lost', 'rejected'].includes(outcome)
-      || String(source.request_id || '') !== String(requestId || '')
-      || String(source.claim_hash || '') !== String(claimHash || '')
-      || !/^[A-Za-z0-9_-]{86}$/.test(String(source.claim_hash || ''))
-      || (source.lease_expires_at !== null && !Number.isFinite(Date.parse(String(source.lease_expires_at || ''))))
-      || (source.response_expires_at !== null && !Number.isFinite(Date.parse(String(source.response_expires_at || ''))))
-      || (outcome === 'completed' && (!source.cached_response_opaque || typeof source.cached_response_opaque !== 'object' || Array.isArray(source.cached_response_opaque)))
-      || (outcome !== 'completed' && source.cached_response_opaque !== null)) {
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_RPC_RESPONSE_INVALID');
-  }
-  return source;
-}
-
-async function diracRecoveryClaimRpcV281(rpcName, body, requestId, claimHash) {
-  const allowed = new Set([
-    DIRAC_RECOVERY_CLAIM_BEGIN_RPC_V281,
-    DIRAC_RECOVERY_CLAIM_COMPLETE_RPC_V281,
-    DIRAC_RECOVERY_CLAIM_ABORT_RPC_V281
-  ]);
-  if (!allowed.has(rpcName)) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_RPC_INVALID');
-  const result = await supabaseFetch('/rest/v1/rpc/' + rpcName, {
-    method: 'POST',
-    auth: 'service',
-    body
-  });
-  if (!result || result.ok !== true) throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_STORAGE_UNAVAILABLE');
-  return diracRecoveryClaimRpcResultV281(result, requestId, claimHash);
-}
-
-async function diracRecoveryClaimBeginV281(requestId, claimHash, leaseToken) {
-  return diracRecoveryClaimRpcV281(DIRAC_RECOVERY_CLAIM_BEGIN_RPC_V281, {
-    p_request_id: requestId,
-    p_claim_hash: claimHash,
-    p_lease_token_hash: diracRecoveryClaimLeaseHashV281(leaseToken),
-    p_lease_seconds: DIRAC_RECOVERY_CLAIM_LEASE_SECONDS_V281
-  }, requestId, claimHash);
-}
-
-async function diracRecoveryClaimCompleteV281(requestId, claimHash, leaseToken, cachedResponseOpaque, responseExpiresAt) {
-  return diracRecoveryClaimRpcV281(DIRAC_RECOVERY_CLAIM_COMPLETE_RPC_V281, {
-    p_request_id: requestId,
-    p_claim_hash: claimHash,
-    p_lease_token_hash: diracRecoveryClaimLeaseHashV281(leaseToken),
-    p_cached_response_opaque: cachedResponseOpaque,
-    p_response_expires_at: responseExpiresAt
-  }, requestId, claimHash);
-}
-
-async function diracRecoveryClaimAbortV281(requestId, claimHash, leaseToken) {
-  return diracRecoveryClaimRpcV281(DIRAC_RECOVERY_CLAIM_ABORT_RPC_V281, {
-    p_request_id: requestId,
-    p_claim_hash: claimHash,
-    p_lease_token_hash: diracRecoveryClaimLeaseHashV281(leaseToken)
-  }, requestId, claimHash);
-}
-
-function diracRecoveryClaimCacheKeyV281(requestId, claimHash, rootSecret, keyVersion) {
-  const secret = Buffer.from(String(rootSecret || ''), 'utf8');
-  const salt = crypto.createHash('sha512')
-    .update(DIRAC_RECOVERY_CLAIM_CACHE_V281 + '\n', 'utf8')
-    .update(String(requestId || ''), 'utf8')
-    .update('\n', 'utf8')
-    .update(String(claimHash || ''), 'utf8')
-    .digest();
-  const info = Buffer.from('dirac/recovery/v281/claim-cache/' + String(keyVersion || ''), 'utf8');
-  try {
-    if (secret.length < LOST_PASSKEY_ROOT_SECRET_MIN_BYTES_V157
-        || !/^[A-Za-z0-9_.-]{1,80}$/.test(String(keyVersion || ''))) {
-      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_CACHE_KEY_INVALID');
+    if (read.data.length === 0) {
+      return { attempt_count: null, locked: false, outcome: 'missing', request_id: cleanRequestId, status: null };
     }
-    return Buffer.from(crypto.hkdfSync('sha512', secret, salt, info, 32));
-  } finally {
-    secret.fill(0);
-    salt.fill(0);
-    info.fill(0);
+    if (read.data.length !== 1) {
+      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_FAILURE_ROW_AMBIGUOUS');
+    }
+    const row = read.data[0] || {};
+    const status = String(row.status || '');
+    const rawAttempts = row.attempt_count;
+    const currentAttempts = rawAttempts === null || rawAttempts === undefined
+      ? 0
+      : Number(rawAttempts);
+    const expiresAtMs = Date.parse(String(row.expires_at || ''));
+    if (!Number.isSafeInteger(currentAttempts)
+        || currentAttempts < 0
+        || currentAttempts > LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT
+        || !['locked', 'pending', 'revoked', 'used', 'verified'].includes(status)) {
+      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_FAILURE_ROW_INVALID');
+    }
+    const active = ['pending', 'verified'].includes(status)
+      && !row.used_at && !row.revoked_at && !row.locked_at
+      && Number.isFinite(expiresAtMs) && expiresAtMs > Date.now();
+    if (!active) {
+      const rowLocked = status === 'locked' || Boolean(row.locked_at);
+      return {
+        attempt_count: currentAttempts,
+        locked: rowLocked,
+        outcome: rowLocked ? 'locked' : 'inactive',
+        request_id: cleanRequestId,
+        status
+      };
+    }
+
+    const nextAttempts = Math.min(LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT, currentAttempts + 1);
+    const locked = nextAttempts >= LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT;
+    const attemptFilter = rawAttempts === null || rawAttempts === undefined
+      ? '&attempt_count=is.null'
+      : '&attempt_count=eq.' + encodeURIComponent(String(currentAttempts));
+    const patched = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE
+      + '?request_id=eq.' + encodeURIComponent(cleanRequestId)
+      + '&status=eq.' + encodeURIComponent(status)
+      + attemptFilter
+      + '&expires_at=gt.' + encodeURIComponent(new Date().toISOString())
+      + '&used_at=is.null&revoked_at=is.null&locked_at=is.null', {
+      method: 'PATCH',
+      auth: 'service',
+      prefer: 'return=representation',
+      body: {
+        attempt_count: nextAttempts,
+        status: locked ? 'locked' : status,
+        locked_at: locked ? new Date().toISOString() : null
+      }
+    });
+    if (!patched || patched.ok !== true || !Array.isArray(patched.data)) {
+      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_FAILURE_STORAGE_UNAVAILABLE');
+    }
+    if (patched.data.length === 0) continue;
+    if (patched.data.length !== 1) {
+      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_FAILURE_ROW_AMBIGUOUS');
+    }
+    return {
+      attempt_count: nextAttempts,
+      locked,
+      outcome: locked ? 'locked' : 'recorded',
+      request_id: cleanRequestId,
+      status: locked ? 'locked' : status
+    };
   }
+  const finalRead = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE
+    + '?select=' + encodeURIComponent('request_id,status,attempt_count,expires_at,used_at,revoked_at,locked_at')
+    + '&request_id=eq.' + encodeURIComponent(cleanRequestId)
+    + '&limit=2', { method: 'GET', auth: 'service' });
+  const finalRows = finalRead && finalRead.ok === true && Array.isArray(finalRead.data) ? finalRead.data : [];
+  const finalRow = finalRows.length === 1 ? finalRows[0] : null;
+  const finalAttempts = Number(finalRow && finalRow.attempt_count);
+  if (finalRow
+      && String(finalRow.status || '') === 'locked'
+      && finalRow.locked_at
+      && Number.isSafeInteger(finalAttempts)
+      && finalAttempts === LOST_PASSKEY_RECOVERY_ATTEMPT_LIMIT) {
+    return { attempt_count: finalAttempts, locked: true, outcome: 'locked', request_id: cleanRequestId, status: 'locked' };
+  }
+  throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_FAILURE_CAS_CONFLICT');
 }
 
-function diracRecoveryClaimCacheAadV281(requestId, claimHash, keyVersion) {
-  return {
-    version: DIRAC_RECOVERY_CLAIM_CACHE_V281,
-    purpose: 'lost_passkey_recovery_completed_response',
-    request_id: String(requestId || ''),
-    claim_hash: String(claimHash || ''),
-    key_version: String(keyVersion || '')
-  };
-}
-
-function diracRecoveryClaimDecodeB64uV281(value, exactBytes, maximumBytes) {
+function diracRecoveryResponseDecodeB64uV282(value, exactBytes, maximumBytes) {
   const clean = String(value || '');
   if (!clean || !/^[A-Za-z0-9_-]+$/.test(clean) || clean.length % 4 === 1) {
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_CACHE_ENCODING_INVALID');
+    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_RESPONSE_ENCODING_INVALID_V282');
   }
   const decoded = Buffer.from(clean, 'base64url');
   if (decoded.toString('base64url') !== clean
       || (exactBytes !== null && decoded.length !== Number(exactBytes))
       || decoded.length > Number(maximumBytes || 0)) {
     decoded.fill(0);
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_CACHE_ENCODING_INVALID');
+    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_RESPONSE_ENCODING_INVALID_V282');
   }
   return decoded;
 }
 
-function diracRecoveryClaimFinalResponseV281(value, requestId) {
+function diracRecoveryFinalResponseV282(value, requestId) {
   const response = value && typeof value === 'object' && !Array.isArray(value) ? value : null;
   const expected = [
     'active', 'central_guard', 'code', 'method', 'ok', 'recovery_session',
     'recovery_session_expires_at', 'request_id', 'sealed_recovery'
   ];
   const keys = response ? Object.keys(response).sort() : [];
-  const sealed = response && response.sealed_recovery && typeof response.sealed_recovery === 'object' && !Array.isArray(response.sealed_recovery)
+  const sealed = response && response.sealed_recovery
+    && typeof response.sealed_recovery === 'object'
+    && !Array.isArray(response.sealed_recovery)
     ? response.sealed_recovery
     : null;
   const sealedKeys = sealed ? Object.keys(sealed).sort() : [];
-  const expectedSealed = ['aead_nonce', 'ciphertext', 'owner_binding_sha512', 'request_id', 'transcript_sha512', 'version'];
+  const expectedSealed = [
+    'aead_nonce', 'ciphertext', 'owner_binding_sha512',
+    'request_id', 'transcript_sha512', 'version'
+  ];
   let sealedNonce = null;
   let sealedCiphertext = null;
   let sealedTranscript = null;
   let sealedOwnerBinding = null;
   try {
     if (sealed) {
-      sealedNonce = diracRecoveryClaimDecodeB64uV281(sealed.aead_nonce, 12, 128);
-      sealedCiphertext = diracRecoveryClaimDecodeB64uV281(sealed.ciphertext, null, 64 * 1024);
-      sealedTranscript = diracRecoveryClaimDecodeB64uV281(sealed.transcript_sha512, 64, 128);
-      sealedOwnerBinding = diracRecoveryClaimDecodeB64uV281(sealed.owner_binding_sha512, 64, 128);
+      sealedNonce = diracRecoveryResponseDecodeB64uV282(sealed.aead_nonce, 12, 128);
+      sealedCiphertext = diracRecoveryResponseDecodeB64uV282(sealed.ciphertext, null, 64 * 1024);
+      sealedTranscript = diracRecoveryResponseDecodeB64uV282(sealed.transcript_sha512, 64, 128);
+      sealedOwnerBinding = diracRecoveryResponseDecodeB64uV282(sealed.owner_binding_sha512, 64, 128);
     }
-  if (!response
-      || keys.length !== expected.length
-      || keys.some((key, index) => key !== expected[index])
-      || response.ok !== true
-      || response.active !== true
-      || response.code !== 'RECOVERY_HYBRID_V2_VERIFIED'
-      || response.central_guard !== DIRAC_CENTRAL_SECURITY_GUARD_V146
-      || response.method !== 'x25519_mlkem1024_a256kw_dek_dual_signature'
-      || response.request_id !== requestId
-      || response.recovery_session !== null
-      || response.recovery_session_expires_at !== null
-      || !sealed
-      || sealedKeys.length !== expectedSealed.length
-      || sealedKeys.some((key, index) => key !== expectedSealed[index])
-      || sealed.request_id !== requestId
-      || sealed.version !== DIRAC_RECOVERY_CRYPTO_V2.RESPONSE_VERSION
-      || !sealedCiphertext
-      || sealedCiphertext.length < 17) {
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_CACHED_RESPONSE_INVALID');
-  }
-  return response;
+    if (!response
+        || keys.length !== expected.length
+        || keys.some((key, index) => key !== expected[index])
+        || response.ok !== true
+        || response.active !== true
+        || response.code !== 'RECOVERY_HYBRID_V2_VERIFIED'
+        || response.central_guard !== DIRAC_CENTRAL_SECURITY_GUARD_V146
+        || response.method !== 'x25519_mlkem1024_a256kw_dek_dual_signature'
+        || response.request_id !== requestId
+        || response.recovery_session !== null
+        || response.recovery_session_expires_at !== null
+        || !sealed
+        || sealedKeys.length !== expectedSealed.length
+        || sealedKeys.some((key, index) => key !== expectedSealed[index])
+        || sealed.request_id !== requestId
+        || sealed.version !== DIRAC_RECOVERY_CRYPTO_V2.RESPONSE_VERSION
+        || !sealedNonce
+        || !sealedCiphertext
+        || sealedCiphertext.length < 17
+        || !sealedTranscript
+        || !sealedOwnerBinding) {
+      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_RESPONSE_INVALID_V282');
+    }
+    return response;
   } finally {
     if (sealedNonce) sealedNonce.fill(0);
     if (sealedCiphertext) sealedCiphertext.fill(0);
@@ -11072,144 +11036,6 @@ function diracRecoveryClaimFinalResponseV281(value, requestId) {
     if (sealedOwnerBinding) sealedOwnerBinding.fill(0);
   }
 }
-
-function diracRecoveryClaimCacheEncryptV281(response, requestId, claimHash, rootSecret, keyVersion) {
-  const checked = diracRecoveryClaimFinalResponseV281(response, requestId);
-  const key = diracRecoveryClaimCacheKeyV281(requestId, claimHash, rootSecret, keyVersion);
-  const nonce = crypto.randomBytes(12);
-  const aad = Buffer.from(customerSecurityLostPasskeyCanonical(diracRecoveryClaimCacheAadV281(requestId, claimHash, keyVersion)), 'utf8');
-  const plaintext = Buffer.from(customerSecurityLostPasskeyCanonical(checked), 'utf8');
-  let ciphertext = null;
-  let tag = null;
-  try {
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 });
-    cipher.setAAD(aad, { plaintextLength: plaintext.length });
-    ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-    tag = cipher.getAuthTag();
-    if (ciphertext.length < 1 || ciphertext.length > 64 * 1024) {
-      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_CACHE_SIZE_INVALID');
-    }
-    return {
-      algorithm: 'A256GCM',
-      auth_tag_b64url: tag.toString('base64url'),
-      ciphertext_b64url: ciphertext.toString('base64url'),
-      key_version: String(keyVersion || ''),
-      nonce_b64url: nonce.toString('base64url'),
-      version: DIRAC_RECOVERY_CLAIM_CACHE_V281
-    };
-  } finally {
-    key.fill(0);
-    nonce.fill(0);
-    aad.fill(0);
-    plaintext.fill(0);
-    if (ciphertext) ciphertext.fill(0);
-    if (tag) tag.fill(0);
-  }
-}
-
-function diracRecoveryClaimCacheDecryptV281(opaque, requestId, claimHash, rootSecret, keyVersion) {
-  const source = opaque && typeof opaque === 'object' && !Array.isArray(opaque) ? opaque : null;
-  const expectedKeys = ['algorithm', 'auth_tag_b64url', 'ciphertext_b64url', 'key_version', 'nonce_b64url', 'version'];
-  const actualKeys = source ? Object.keys(source).sort() : [];
-  if (!source
-      || actualKeys.length !== expectedKeys.length
-      || actualKeys.some((key, index) => key !== expectedKeys[index])
-      || source.version !== DIRAC_RECOVERY_CLAIM_CACHE_V281
-      || source.algorithm !== 'A256GCM'
-      || source.key_version !== keyVersion) {
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_CACHE_FORMAT_INVALID');
-  }
-  const key = diracRecoveryClaimCacheKeyV281(requestId, claimHash, rootSecret, keyVersion);
-  const nonce = diracRecoveryClaimDecodeB64uV281(source.nonce_b64url, 12, 128);
-  const ciphertext = diracRecoveryClaimDecodeB64uV281(source.ciphertext_b64url, null, 64 * 1024);
-  const tag = diracRecoveryClaimDecodeB64uV281(source.auth_tag_b64url, 16, 128);
-  const aad = Buffer.from(customerSecurityLostPasskeyCanonical(diracRecoveryClaimCacheAadV281(requestId, claimHash, keyVersion)), 'utf8');
-  let plaintext = null;
-  let text = '';
-  try {
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 });
-    decipher.setAAD(aad, { plaintextLength: ciphertext.length });
-    decipher.setAuthTag(tag);
-    plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-    text = new TextDecoder('utf-8', { fatal: true }).decode(plaintext);
-    const parsed = JSON.parse(text);
-    if (customerSecurityLostPasskeyCanonical(parsed) !== text) {
-      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_CACHE_PLAINTEXT_INVALID');
-    }
-    return diracRecoveryClaimFinalResponseV281(parsed, requestId);
-  } catch (error) {
-    if (error && error.code) throw error;
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_CACHE_AUTHENTICATION_FAILED');
-  } finally {
-    key.fill(0);
-    nonce.fill(0);
-    ciphertext.fill(0);
-    tag.fill(0);
-    aad.fill(0);
-    if (plaintext) plaintext.fill(0);
-    text = '';
-  }
-}
-
-function diracRecoveryClaimCacheSecretForVersionV281(opaque, vaultSecrets) {
-  const keyVersion = String(opaque && opaque.key_version || '');
-  const currentVersion = String(vaultSecrets && vaultSecrets.rootSecretVersion || '');
-  const currentSecret = String(vaultSecrets && vaultSecrets.rootSecret || '');
-  if (!/^[A-Za-z0-9_.-]{1,80}$/.test(keyVersion)
-      || !/^[A-Za-z0-9_.-]{1,80}$/.test(currentVersion)
-      || Buffer.byteLength(currentSecret, 'utf8') < LOST_PASSKEY_ROOT_SECRET_MIN_BYTES_V157) {
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_CACHE_KEYRING_INVALID');
-  }
-  if (keyVersion === currentVersion) {
-    return { rootSecret: currentSecret, rootSecretVersion: currentVersion };
-  }
-
-  const previousSecret = String(process.env.DIRAC_SECURITY_ROOT_SECRET_PREVIOUS || '').normalize('NFC');
-  const previousVersion = String(process.env.DIRAC_SECURITY_ROOT_SECRET_PREVIOUS_VERSION || '').trim();
-  const previousSecretPresent = previousSecret.length > 0;
-  const previousVersionPresent = previousVersion.length > 0;
-  if (previousSecretPresent !== previousVersionPresent
-      || !previousSecretPresent
-      || Buffer.byteLength(previousSecret, 'utf8') < LOST_PASSKEY_ROOT_SECRET_MIN_BYTES_V157
-      || !/^[A-Za-z0-9_.-]{1,80}$/.test(previousVersion)
-      || previousVersion === currentVersion
-      || crypto.createHash('sha512').update(previousSecret, 'utf8').digest('base64url')
-        === crypto.createHash('sha512').update(currentSecret, 'utf8').digest('base64url')
-      || keyVersion !== previousVersion) {
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_CACHE_KEY_VERSION_UNAVAILABLE');
-  }
-  return { rootSecret: previousSecret, rootSecretVersion: previousVersion };
-}
-
-function diracRecoveryClaimReplayV281(result, requestId, claimHash, vaultSecrets) {
-  if (!result || result.outcome !== 'completed') {
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_NOT_COMPLETED');
-  }
-  const responseExpiresAtMs = Date.parse(String(result.response_expires_at || ''));
-  if (!Number.isFinite(responseExpiresAtMs) || responseExpiresAtMs <= Date.now()) {
-    throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_RESPONSE_EXPIRED');
-  }
-  const cacheSecret = diracRecoveryClaimCacheSecretForVersionV281(
-    result.cached_response_opaque,
-    vaultSecrets
-  );
-  return diracRecoveryClaimCacheDecryptV281(
-    result.cached_response_opaque,
-    requestId,
-    claimHash,
-    cacheSecret.rootSecret,
-    cacheSecret.rootSecretVersion
-  );
-}
-
-async function diracRecoveryClaimAbortBestEffortV281(requestId, claimHash, leaseToken) {
-  try {
-    return await diracRecoveryClaimAbortV281(requestId, claimHash, leaseToken);
-  } catch (_) {
-    return null;
-  }
-}
-
 /* source 34371-34371 */
 const DIRAC_RECOVERY_CRYPTO_V2_PATCH = 'dirac-recovery-crypto-v2-max-2026';
 
@@ -11241,11 +11067,6 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
   let recoveryCode = '';
   let argon2GateClaimed = false;
   let argonQueueTicket = null;
-  let claimHashV281 = '';
-  let claimLeaseTokenV281 = null;
-  let claimAcquiredV281 = false;
-  let claimCompletedV281 = false;
-  let claimVaultSecretsV281 = null;
   try {
     const env = diracRecoveryHpkeEnvGuardV159();
     if (!env.ok) { try { const d = { diagnostic_version: 'dirac-recovery-crypto-v2-env-full-v230', reason: String(env.reason || 'unknown').slice(0, 80), action_allowlisted: DIRAC_CENTRAL_ENV_VERCEL2_ONLY_ACTIONS_V174.has(DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159), deployment_role: String(diracCentralEnvValueV150('DIRAC_CENTRAL_DEPLOYMENT_ROLE') || diracCentralEnvValueV150('DIRAC_DEPLOYMENT_ROLE') || '').slice(0, 40), server1_only_env_present: ['DIRAC_RECOVERY_WORKER_URL','DIRAC_RECOVERY_WORKER_CALLER','DIRAC_RECOVERY_HPKE_ALLOWED_CALLER'].filter((name) => Boolean(diracRecoveryHpkeEnvTextV159(name))), worker_secret_valid: Boolean(customerSecurityRecoveryWorkerSecret()), hpke_private_key_present: Boolean(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_PRIVATE_KEY')), hpke_key_id_valid: Boolean(diracRecoveryHpkeAsciiV159(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_KEY_ID'), 1, 80)), hpke_pepper_min_64: Buffer.byteLength(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_PEPPER'), 'utf8') >= 64, argon2_memory_raw: String(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB') || '').slice(0, 32), argon2_memory_valid: Boolean(diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_MEMORY_KIB', DIRAC_RECOVERY_ARGON2_MEMORY_KIB_V266, 5242880)), argon2_time_raw: String(diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST') || '').slice(0, 32), argon2_time_valid: Boolean(diracRecoveryHpkeEnvIntegerV159('DIRAC_RECOVERY_HPKE_ARGON2_TIME_COST', 4, 12)), hpke_private_key_parse_valid: false, hpke_private_key_parse_error: '', server1_url: {} }; try { diracRecoveryHpkePrivateKeyV159(); d.hpke_private_key_parse_valid = true; } catch (e) { d.hpke_private_key_parse_error = String(e && (e.code || e.name || e.message) || 'unknown').slice(0, 120); } const r = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_SERVER1_URL'); const o = diracRecoveryHpkeEnvTextV159('DIRAC_RECOVERY_SERVER1_ORIGIN'); d.server1_url = { env_present: Boolean(r), env_chars: r.length, env_utf8_bytes: Buffer.byteLength(r, 'utf8'), env_contains_control: /[\u0000-\u001f\u007f]/.test(r), env_sha256: crypto.createHash('sha256').update(r, 'utf8').digest('hex'), expected_origin_present: Boolean(o), expected_origin: o.slice(0, 300), expected_origin_chars: o.length, expected_origin_utf8_bytes: Buffer.byteLength(o, 'utf8'), expected_origin_contains_control: /[\u0000-\u001f\u007f]/.test(o), parse_ok: false, parse_error_name: '', parse_error_code: '', protocol: '', https_protocol: false, username_present: false, password_present: false, hash_present: false, actual_origin: '', origin_match: false, hostname: '', unsafe_host: null, pathname: '', normalized_pathname: '', path_match: false, search_present: false }; try { const u = new URL(r); d.server1_url.parse_ok = true; d.server1_url.protocol = String(u.protocol || '').slice(0, 20); d.server1_url.https_protocol = u.protocol === 'https:'; d.server1_url.username_present = Boolean(u.username); d.server1_url.password_present = Boolean(u.password); d.server1_url.hash_present = Boolean(u.hash); d.server1_url.actual_origin = String(u.origin || '').slice(0, 300); d.server1_url.origin_match = u.origin === o; d.server1_url.hostname = String(u.hostname || '').slice(0, 253); d.server1_url.unsafe_host = typeof diracCentralIsUnsafeHostV146 === 'function' ? Boolean(diracCentralIsUnsafeHostV146(u.hostname)) : false; d.server1_url.pathname = String(u.pathname || '').slice(0, 300); d.server1_url.normalized_pathname = String(u.pathname || '').replace(/\/+$/, '').slice(0, 300); d.server1_url.path_match = u.pathname.replace(/\/+$/, '') === '/api/health'; d.server1_url.search_present = Boolean(u.search); } catch (e) { d.server1_url.parse_error_name = String(e && e.name || '').slice(0, 80); d.server1_url.parse_error_code = String(e && e.code || '').slice(0, 80); } console.error('[dirac-recovery-crypto-v2-env-full-v230]', JSON.stringify(d)); } catch (_) {} throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_V2_ENVIRONMENT_INVALID'); }
@@ -11371,64 +11192,11 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
       });
     }
 
-    // A new durable claim is deliberately created only after both the request
-    // binding and recovery code have passed their memory-hard verification.
-    // Completed retries use the same envelope-bound hash and receive only the
-    // cached encrypted response. An explicitly aborted/expired lease may accept
-    // a freshly randomized envelope only after these checks run again.
-    claimHashV281 = DIRAC_RECOVERY_CRYPTO_V2.claimHash(body, bundle);
-    claimLeaseTokenV281 = crypto.randomBytes(32);
-    claimVaultSecretsV281 = currentVaultSecretsV281;
-    const beginClaimV281 = await diracRecoveryClaimBeginV281(row.request_id, claimHashV281, claimLeaseTokenV281);
-    if (beginClaimV281.outcome === 'completed') {
-      return res.status(200).json(diracRecoveryClaimReplayV281(
-        beginClaimV281,
-        row.request_id,
-        claimHashV281,
-        currentVaultSecretsV281
-      ));
-    }
-    if (beginClaimV281.outcome === 'busy') {
-      const retryAfterSeconds = Math.max(1, Math.min(60, Math.ceil(
-        (Date.parse(String(beginClaimV281.lease_expires_at || '')) - Date.now()) / 1000
-      ) || 1));
-      res.setHeader('Retry-After', String(retryAfterSeconds));
-      return res.status(429).json({
-        ok: false,
-        code: 'RECOVERY_CLAIM_BUSY',
-        message: 'Recovery sedang diproses. Silakan coba kembali.'
-      });
-    }
-    if (beginClaimV281.outcome === 'rejected') {
-      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_REJECTED');
-    }
-    if (beginClaimV281.outcome !== 'acquired') {
-      throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_STORAGE_INVALID');
-    }
-    claimAcquiredV281 = true;
-
+    // Zero-schema mode: the main server commits the authenticated proof into
+    // the existing recovery_sessions table. No auxiliary claim table is used.
     const proofBody = diracRecoveryHpkeProofBodyV159(env, row);
     const server1 = await diracRecoveryHpkeSendProofV159(env, proofBody);
     if (!server1.ok) {
-      const abortResultV281 = await diracRecoveryClaimAbortBestEffortV281(
-        row.request_id,
-        claimHashV281,
-        claimLeaseTokenV281
-      );
-      if (abortResultV281 && abortResultV281.outcome === 'completed') {
-        claimCompletedV281 = true;
-        claimAcquiredV281 = false;
-        return res.status(200).json(diracRecoveryClaimReplayV281(
-          abortResultV281,
-          row.request_id,
-          claimHashV281,
-          currentVaultSecretsV281
-        ));
-      }
-      if (!abortResultV281 || abortResultV281.outcome !== 'aborted') {
-        throw DIRAC_RECOVERY_CRYPTO_V2.fail('RECOVERY_CLAIM_ABORT_UNAVAILABLE');
-      }
-      claimAcquiredV281 = false;
       const deliveryStatus = server1.status === 429
         || server1.code === 'RECOVERY_SERVER1_VERCEL_MITIGATED'
         || server1.code === 'RECOVERY_SERVER1_RATE_LIMITED'
@@ -11464,7 +11232,7 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
         recoverySessionExpiresAt: sessionExpiresAt
       }
     );
-    const finalResponseV281 = diracRecoveryClaimFinalResponseV281({
+    const finalResponseV281 = diracRecoveryFinalResponseV282({
       ok: true,
       active: true,
       method: 'x25519_mlkem1024_a256kw_dek_dual_signature',
@@ -11475,35 +11243,6 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
       recovery_session_expires_at: null,
       sealed_recovery: sealedRecovery
     }, row.request_id);
-    const cachedResponseOpaqueV281 = diracRecoveryClaimCacheEncryptV281(
-      finalResponseV281,
-      row.request_id,
-      claimHashV281,
-      currentVaultSecretsV281.rootSecret,
-      currentVaultSecretsV281.rootSecretVersion
-    );
-    const completeClaimV281 = await diracRecoveryClaimCompleteV281(
-      row.request_id,
-      claimHashV281,
-      claimLeaseTokenV281,
-      cachedResponseOpaqueV281,
-      sessionExpiresAt
-    );
-    if (completeClaimV281.outcome !== 'completed') {
-      throw DIRAC_RECOVERY_CRYPTO_V2.fail(
-        completeClaimV281.outcome === 'rejected'
-          ? 'RECOVERY_CLAIM_REJECTED'
-          : 'RECOVERY_CLAIM_LEASE_LOST'
-      );
-    }
-    const completedResponseV281 = diracRecoveryClaimReplayV281(
-      completeClaimV281,
-      row.request_id,
-      claimHashV281,
-      currentVaultSecretsV281
-    );
-    claimCompletedV281 = true;
-    claimAcquiredV281 = false;
     await customerSecurityWriteGuardEvent(row.customer_id, {
       event_type: 'lost_passkey_recovery_hybrid_v2_verified',
       status: 'success',
@@ -11519,28 +11258,8 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
       }
     }).catch(() => null);
 
-    return res.status(200).json(completedResponseV281);
+    return res.status(200).json(finalResponseV281);
   } catch (error) {
-    if (claimAcquiredV281 && !claimCompletedV281 && claimLeaseTokenV281 && claimHashV281) {
-      const abortResultV281 = await diracRecoveryClaimAbortBestEffortV281(
-        String(body && body.request_id || ''),
-        claimHashV281,
-        claimLeaseTokenV281
-      );
-      if (abortResultV281 && abortResultV281.outcome === 'completed' && claimVaultSecretsV281) {
-        try {
-          claimCompletedV281 = true;
-          claimAcquiredV281 = false;
-          return res.status(200).json(diracRecoveryClaimReplayV281(
-            abortResultV281,
-            String(body && body.request_id || ''),
-            claimHashV281,
-            claimVaultSecretsV281
-          ));
-        } catch (_) {}
-      }
-      if (abortResultV281 && abortResultV281.outcome === 'aborted') claimAcquiredV281 = false;
-    }
     const code = String(error && error.code || 'RECOVERY_HYBRID_V2_FAILED');
     const status = code === 'RECOVERY_CLAIM_REJECTED' ? 409
       : code === 'RECOVERY_CLAIM_RESPONSE_EXPIRED' ? 410
@@ -11564,10 +11283,8 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
     try { if (hybrid && hybrid.responseKey) hybrid.responseKey.fill(0); } catch (_) {}
     try { if (hybrid && hybrid.transcriptHash) hybrid.transcriptHash.fill(0); } catch (_) {}
     try { if (parsedHybrid && parsedHybrid.dek) parsedHybrid.dek.fill(0); } catch (_) {}
-    try { if (claimLeaseTokenV281) claimLeaseTokenV281.fill(0); } catch (_) {}
     recoveryCode = '';
     recovered = null;
-    claimVaultSecretsV281 = null;
   }
 }
 
