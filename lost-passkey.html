@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-tyblrc1+Hp6On1YVJ7kXG+8tKZyuEpmLh0DJ5N24/BkSYK90I/GORvjwDZLY4ZHiFxapIs1+r34ff+uAniLmeQ=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store https://api.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-e1BoP83lz7mnO5KdnA5YbInqPyv0D03j9Z7HZNRQ7CjO00qFJVuoeDkn536p7FVU3Z80LF5nG1dceCWDjBp7tw=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -28,8 +28,8 @@
     Strict-Transport-Security: max-age=63072000
     X-DNS-Prefetch-Control: off
     X-Permitted-Cross-Domain-Policies: none
-    Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self)
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-tyblrc1+Hp6On1YVJ7kXG+8tKZyuEpmLh0DJ5N24/BkSYK90I/GORvjwDZLY4ZHiFxapIs1+r34ff+uAniLmeQ=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
+    Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self), publickey-credentials-create=(self), publickey-credentials-get=(self)
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store https://api.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-e1BoP83lz7mnO5KdnA5YbInqPyv0D03j9Z7HZNRQ7CjO00qFJVuoeDkn536p7FVU3Z80LF5nG1dceCWDjBp7tw=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 atau ML-DSA-87 public key belum diisi.
@@ -217,17 +217,32 @@
         </div>
       </form>
 
+      <div id="hybridRetryBox" class="row" hidden>
+        <button id="retryHybridButton" class="secondary" type="button">Retry verifikasi yang sama</button>
+        <p id="hybridRetryState" class="small" role="status" aria-live="polite">Tidak ada retry otomatis.</p>
+      </div>
+
       <section id="resultBox" class="result" aria-labelledby="resultTitle">
-        <h2 id="resultTitle">Kode pemulihan siap</h2>
-        <p class="danger">Kode sengaja tidak ditampilkan di layar. Saat disalin, kode masuk ke clipboard sistem dan dapat dibaca aplikasi lain. Tekan tombol tepat satu kali, lalu segera tempelkan kode pada layanan resmi.</p>
+        <h2 id="resultTitle">Recovery terverifikasi</h2>
+        <p class="danger">Kode pemulihan sengaja tidak ditampilkan. Anda boleh menyalinnya satu kali, atau menghapusnya tanpa menyalin lalu langsung membuat Passkey pengganti.</p>
         <div class="row">
           <button id="copyRecoveryButton" class="primary" type="button">Salin kode pemulihan — hanya 1×</button>
+          <button id="discardRecoveryButton" class="secondary" type="button">Lewati penyalinan</button>
         </div>
         <p id="copyState" class="small" role="status" aria-live="polite">Setelah penyalinan berhasil, halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik. Browser tidak menjamin penghapusan clipboard berhasil.</p>
       </section>
 
+      <section id="passkeyBox" class="result" aria-labelledby="passkeyTitle" hidden>
+        <h2 id="passkeyTitle">Buat Passkey pengganti</h2>
+        <p>Aktifkan internet, lalu gunakan Face ID, sidik jari, atau PIN perangkat. Recovery session hanya disimpan di memori halaman dan tidak dimasukkan ke URL atau penyimpanan browser.</p>
+        <div class="row">
+          <button id="createPasskeyButton" class="primary" type="button" disabled>Buat Passkey pengganti</button>
+        </div>
+        <p id="passkeyState" class="small" role="status" aria-live="polite">Menunggu kode pemulihan dibersihkan.</p>
+      </section>
+
       <h2>Tahapan pemulihan</h2>
-      <p class="small">Tautan resmi diperiksa → isi tiga informasi pemulihan → data diverifikasi dengan aman → salin kode pemulihan satu kali → data sementara otomatis dibersihkan.</p>
+      <p class="small">Tautan resmi diperiksa → isi tiga informasi pemulihan → buka hasil terenkripsi secara offline → bersihkan kode → buat dan konfirmasikan Passkey baru.</p>
     </section>
   </main>
 
@@ -261,7 +276,10 @@
   (function () {
     'use strict';
 
+    var passkeyIndexedDbFactory = null;
+    try { passkeyIndexedDbFactory = window.indexedDB || null; } catch (_) {}
     var initialRecoveryHash = String(location.hash || '');
+    var initialRecoveryFragmentPresent = Boolean(initialRecoveryHash);
     try { history.replaceState(null, document.title, location.pathname + '#recovery'); } catch (_) {}
 
     var CONFIG = Object.freeze({
@@ -271,9 +289,17 @@
       vaultApiPath: '/api/health',
       vaultApiAction: 'lost_passkey_recovery_link_open',
       verifyApiAction: 'customer_security_recovery_hpke_verify',
-      verifyTimeoutMs: 240000,
+      mainPasskeyEndpoint: 'https://api.diracgroup.store/api/health',
+      passkeyStartAction: 'dirac_mfa_passkey_start',
+      passkeyVerifyAction: 'dirac_mfa_passkey_verify',
+      expectedPasskeyRpId: 'diracgroup.store',
+      passkeyRequestTimeoutMs: 90000,
+      passkeySessionMaxLifetimeMs: 31 * 60 * 1000,
+      // Caller budget: recovery worker/database queue may legitimately run for up to 180 s.
+      verifyTimeoutMs: 210000,
+      centralGuardBootstrapTimeoutMs: 30000,
       htmlActionSignatureVersion: 'dirac-html-action-signature-v180',
-      vaultFetchTimeoutMs: 300000,
+      vaultFetchTimeoutMs: 210000,
       maxVaultResponseBytes: 2 * 1024 * 1024,
       ed25519PublicKeysBase64: Object.freeze({
         'dirac-recovery-ed25519-2026-01': 'Q1j1EngkPw4Ec9ZB3cWhP91B/UhJt9GQVtCCoQxMIqk='
@@ -325,13 +351,35 @@
       expiryTimer: null,
       sensitiveBuffers: [],
       recoveryMaterialBytes: null,
+      recoverySessionBytes: null,
+      recoverySessionExpiresAtMs: 0,
+      recoverySessionRequestId: '',
+      recoveryOwnerCustomerId: '',
+      recoveryOwnerAuthUserId: '',
       recoveryCopied: false,
       clipboardClearTimer: null,
       debugStage: 'init',
       serverDiagnostics: null,
       lastDiagnostic: null,
       bootstrapCompleted: false,
-      flowPhase: 'bootstrap'
+      flowPhase: 'bootstrap',
+      hybridPendingEnvelope: null,
+      hybridPendingBodyText: '',
+      hybridSubmitBusy: false,
+      passkeyBusy: false,
+      passkeyPhase: 'idle',
+      passkeyStartResponse: null,
+      passkeyStartExpiresAtMs: 0,
+      passkeyConfirmationResponse: null,
+      passkeyConfirmationExpiresAtMs: 0,
+      passkeyPendingSubmission: null,
+      passkeyStartIdempotencyKey: '',
+      passkeyVerifyIdempotencyKey: '',
+      passkeyConfirmIdempotencyKey: '',
+      passkeyDevicePrivateKey: null,
+      passkeyDeviceKeyId: '',
+      passkeyDevicePublicJwk: null,
+      passkeyCredentialId: ''
     };
 
     var el = {
@@ -344,9 +392,16 @@
       websiteSecret: document.getElementById('websiteSecret'),
       decryptButton: document.getElementById('decryptButton'),
       clearButton: document.getElementById('clearButton'),
+      hybridRetryBox: document.getElementById('hybridRetryBox'),
+      retryHybridButton: document.getElementById('retryHybridButton'),
+      hybridRetryState: document.getElementById('hybridRetryState'),
       resultBox: document.getElementById('resultBox'),
       copyRecoveryButton: document.getElementById('copyRecoveryButton'),
+      discardRecoveryButton: document.getElementById('discardRecoveryButton'),
       copyState: document.getElementById('copyState'),
+      passkeyBox: document.getElementById('passkeyBox'),
+      createPasskeyButton: document.getElementById('createPasskeyButton'),
+      passkeyState: document.getElementById('passkeyState'),
       lockNotice: document.getElementById('lockNotice'),
       debugPanel: document.getElementById('debugPanel'),
       debugOutput: document.getElementById('debugOutput'),
@@ -509,7 +564,7 @@
         origin: String(location.origin || '').slice(0, 160),
         path: String(location.pathname || '').slice(0, 160),
         online: navigator.onLine !== false,
-        fragment_present: Boolean(location.hash),
+        fragment_present: initialRecoveryFragmentPresent,
         central_api_action: CONFIG.vaultApiAction,
         server_diagnostics: state.serverDiagnostics && typeof state.serverDiagnostics === 'object' ? {
           signed_envelope: safeDiagnosticText(state.serverDiagnostics.signed_envelope, 80),
@@ -535,7 +590,7 @@
     function recoveryDebug(event, error, extra) {
       void extra;
       var payload = {
-        diagnostic_version: 'lost-passkey-client-flow-debug-v177',
+        diagnostic_version: 'lost-passkey-client-flow-debug-v280',
         event: String(event || 'unknown').slice(0, 80),
         stage: String(state.debugStage || 'unknown').slice(0, 80),
         error_code: safeRecoveryErrorCode(error),
@@ -543,7 +598,7 @@
         response_content_type: String(error && error.responseContentType || '').slice(0, 120) || null
       };
       var safePayload = renderSafeDebug(payload);
-      try { console.error('[dirac-lost-passkey-client-v177]', safePayload); } catch (_) {}
+      try { console.error('[dirac-lost-passkey-client-v280]', safePayload); } catch (_) {}
       return safePayload;
     }
 
@@ -606,6 +661,7 @@
       var map = {
         PASSWORD_INVALID: 'Sandi pemulihan belum diisi atau hanya berisi karakter yang tidak dapat digunakan.',
         AES_GCM_DECRYPT_FAILED: 'Kombinasi sandi pemulihan, kode email, dan kode website tidak cocok dengan vault terenkripsi. Ketiga nilai membentuk satu kunci kriptografi, sehingga halaman tidak dapat menentukan satu kolom yang salah secara terpisah. Periksa ketiganya lalu coba lagi.',
+        AES_KW_INTEGRITY_FAILED: 'Kombinasi sandi pemulihan, kode email, dan kode website tidak cocok dengan vault terenkripsi. Periksa ketiganya lalu coba lagi.',
         ARGON2ID_WEBASSEMBLY_DISABLED: 'Fitur keamanan perangkat tidak tersedia pada browser ini. Gunakan browser resmi tanpa mode pembatas tambahan.',
         ARGON2ID_WASM_MISSING: 'Komponen keamanan halaman belum tersedia.',
         ARGON2ID_WASM_OUTPUT_INVALID: 'Proses keamanan halaman menghasilkan data yang tidak valid.',
@@ -651,7 +707,8 @@
       return msg === 'PASSWORD_INVALID'
         || /^EMAIL_SECRET_LENGTH_INVALID:\d+$/.test(msg)
         || /^WEBSITE_SECRET_LENGTH_INVALID:\d+$/.test(msg)
-        || msg === 'AES_GCM_DECRYPT_FAILED';
+        || msg === 'AES_GCM_DECRYPT_FAILED'
+        || msg === 'AES_KW_INTEGRITY_FAILED';
     }
 
     function renderCredentialError(error) {
@@ -672,7 +729,7 @@
 
     function failClosed(error) {
       recoveryDebug('fail_closed', error);
-      wipeMemory();
+      sealRecoveryFlow();
       setStatus(CONFIG.genericError, 'err');
       hideCredentialForm();
       setLockNotice(true);
@@ -681,7 +738,7 @@
 
     function deploymentFailClosed(message, error) {
       recoveryDebug('deployment_fail_closed', error || new Error('DEPLOYMENT_NOT_READY'));
-      wipeMemory();
+      sealRecoveryFlow();
       setStatus(message || 'Layanan pemulihan belum siap. Hubungi administrator.', 'err');
       hideCredentialForm();
       setLockNotice(true);
@@ -689,15 +746,7 @@
     }
 
     function renderLockedState() {
-      wipeMemory();
-      state.permanentLocked = true;
-      state.offlineDecryptRequired = false;
-      state.flowPhase = 'locked';
-      try { if (state.expiryTimer) clearTimeout(state.expiryTimer); } catch (_) {}
-      state.expiryTimer = null;
-      try { document.body.classList.add('locked'); } catch (_) {}
-      try { document.title = 'Akses Pemulihan Terkunci'; } catch (_) {}
-      try { history.replaceState(null, document.title, location.pathname + '#locked'); } catch (_) {}
+      sealRecoveryFlow();
       hideCredentialForm();
       setLockNotice(true);
       setProcessStep(1);
@@ -850,41 +899,120 @@
       if (state.recoveryMaterialBytes && state.sensitiveBuffers.indexOf(state.recoveryMaterialBytes) === -1) {
         try { state.recoveryMaterialBytes.fill(0); } catch (_) {}
       }
+      if (state.hybridPendingEnvelope) {
+        try { state.hybridPendingEnvelope.responseKey.fill(0); } catch (_) {}
+        try { state.hybridPendingEnvelope.transcriptHash.fill(0); } catch (_) {}
+      }
       state.sensitiveBuffers = [];
       state.recoveryMaterialBytes = null;
+      state.recoverySessionBytes = null;
+      state.recoverySessionExpiresAtMs = 0;
+      state.recoverySessionRequestId = '';
+      state.recoveryOwnerCustomerId = '';
+      state.recoveryOwnerAuthUserId = '';
+      state.hybridPendingEnvelope = null;
+      state.hybridPendingBodyText = '';
+      state.hybridSubmitBusy = false;
+      state.passkeyBusy = false;
+      state.passkeyPhase = 'idle';
+      state.passkeyStartResponse = null;
+      state.passkeyStartExpiresAtMs = 0;
+      state.passkeyConfirmationResponse = null;
+      state.passkeyConfirmationExpiresAtMs = 0;
+      state.passkeyPendingSubmission = null;
+      state.passkeyStartIdempotencyKey = '';
+      state.passkeyVerifyIdempotencyKey = '';
+      state.passkeyConfirmIdempotencyKey = '';
+      state.passkeyDevicePrivateKey = null;
+      state.passkeyDeviceKeyId = '';
+      state.passkeyDevicePublicJwk = null;
+      state.passkeyCredentialId = '';
       try { el.passwordMaterial.value = ''; } catch (_) {}
       try { el.emailSecret.value = ''; } catch (_) {}
       try { el.websiteSecret.value = ''; } catch (_) {}
       if (!preserveResultUi) {
         try { el.resultBox.classList.remove('show'); } catch (_) {}
         try { el.copyRecoveryButton.disabled = false; } catch (_) {}
+        try { el.discardRecoveryButton.disabled = false; } catch (_) {}
         try { el.copyRecoveryButton.textContent = 'Salin kode pemulihan — hanya 1×'; } catch (_) {}
         try { el.copyState.textContent = 'Setelah penyalinan berhasil, halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik. Browser tidak menjamin penghapusan clipboard berhasil.'; } catch (_) {}
+        try { el.passkeyBox.hidden = true; } catch (_) {}
+        try { el.passkeyBox.classList.remove('show'); } catch (_) {}
+        try { el.createPasskeyButton.disabled = true; } catch (_) {}
+        try { el.createPasskeyButton.textContent = 'Buat Passkey pengganti'; } catch (_) {}
+        try { el.passkeyState.textContent = 'Menunggu kode pemulihan dibersihkan.'; } catch (_) {}
       }
+      try { el.hybridRetryBox.hidden = true; } catch (_) {}
+      try { el.retryHybridButton.disabled = false; } catch (_) {}
+      try { el.hybridRetryState.textContent = 'Tidak ada retry otomatis.'; } catch (_) {}
     }
 
-    function keepOnlyRecoveryBuffer(recoveryBytes) {
-      for (var i = 0; i < state.sensitiveBuffers.length; i += 1) {
-        var current = state.sensitiveBuffers[i];
-        if (current !== recoveryBytes) {
-          try { current.fill(0); } catch (_) {}
-        }
-      }
-      state.sensitiveBuffers = recoveryBytes ? [recoveryBytes] : [];
-      state.recoveryMaterialBytes = recoveryBytes || null;
+    function sealRecoveryFlow() {
+      wipeMemory();
+      initialRecoveryHash = '';
+      try {
+        if (state.fragment && typeof state.fragment === 'object') state.fragment.token = '';
+      } catch (_) {}
+      state.fragment = null;
       state.vaultResponse = null;
       state.vaultBundle = null;
       state.manifestPayload = null;
+      state.offlineDecryptRequired = false;
+      state.offlineUnlockSeen = false;
+      state.formRevealInProgress = false;
+      state.formRevealed = false;
+      state.permanentLocked = true;
+      state.flowPhase = 'locked';
+      try { if (state.expiryTimer) clearTimeout(state.expiryTimer); } catch (_) {}
+      state.expiryTimer = null;
+      state.expiresAtMs = 0;
+      try { document.body.classList.add('locked'); } catch (_) {}
+      try { document.title = 'Akses Pemulihan Terkunci'; } catch (_) {}
+      try { history.replaceState(null, document.title, location.pathname + '#locked'); } catch (_) {}
+    }
+
+    function keepOnlyRecoveryHandoff(opened) {
+      var recoveryBytes = opened && opened.recoveryCodeBytes;
+      var sessionBytes = opened && opened.recoverySessionBytes;
+      for (var i = 0; i < state.sensitiveBuffers.length; i += 1) {
+        var current = state.sensitiveBuffers[i];
+        if (current !== recoveryBytes && current !== sessionBytes) {
+          try { current.fill(0); } catch (_) {}
+        }
+      }
+      state.sensitiveBuffers = [];
+      if (recoveryBytes) state.sensitiveBuffers.push(recoveryBytes);
+      if (sessionBytes) state.sensitiveBuffers.push(sessionBytes);
+      state.recoveryMaterialBytes = recoveryBytes || null;
+      state.recoverySessionBytes = sessionBytes || null;
+      state.recoverySessionExpiresAtMs = Number(opened && opened.recoverySessionExpiresAtMs || 0);
+      state.recoverySessionRequestId = String(opened && opened.requestId || '');
+      state.recoveryOwnerCustomerId = String(opened && opened.ownerCustomerId || '');
+      state.recoveryOwnerAuthUserId = String(opened && opened.ownerAuthUserId || '');
+      state.vaultResponse = null;
+      state.vaultBundle = null;
+      state.manifestPayload = null;
+      try {
+        if (state.fragment && typeof state.fragment === 'object') state.fragment.token = '';
+      } catch (_) {}
+      state.fragment = null;
       try { el.passwordMaterial.value = ''; } catch (_) {}
       try { el.emailSecret.value = ''; } catch (_) {}
       try { el.websiteSecret.value = ''; } catch (_) {}
       try { el.form.hidden = true; } catch (_) {}
+      scheduleExpiryLock(state.recoverySessionExpiresAtMs);
     }
 
-    function clearAllRecoveryReferencesAfterCopy() {
-      wipeMemory({ preserveResultUi: true });
-      try { if (state.expiryTimer) clearTimeout(state.expiryTimer); } catch (_) {}
-      state.expiryTimer = null;
+    function clearRecoveryCodeForPasskey(copied) {
+      var recoveryBytes = state.recoveryMaterialBytes;
+      if (recoveryBytes) {
+        try { recoveryBytes.fill(0); } catch (_) {}
+      }
+      state.sensitiveBuffers = state.sensitiveBuffers.filter(function (value) { return value !== recoveryBytes; });
+      state.recoveryMaterialBytes = null;
+      try {
+        if (state.fragment && typeof state.fragment === 'object') state.fragment.token = '';
+      } catch (_) {}
       state.fragment = null;
       state.vaultResponse = null;
       state.vaultBundle = null;
@@ -892,10 +1020,20 @@
       state.vaultFetched = false;
       state.offlineDecryptRequired = false;
       state.offlineUnlockSeen = false;
-      state.expiresAtMs = 0;
-      state.permanentLocked = true;
-      state.flowPhase = 'completed';
-      state.recoveryCopied = true;
+      state.flowPhase = browserIsOnline() ? 'passkey_ready' : 'await_online_passkey';
+      state.recoveryCopied = Boolean(copied);
+      state.passkeyPhase = 'start';
+      try { el.copyRecoveryButton.disabled = true; } catch (_) {}
+      try { el.discardRecoveryButton.disabled = true; } catch (_) {}
+      try { el.passkeyBox.hidden = false; } catch (_) {}
+      try { el.passkeyBox.classList.add('show'); } catch (_) {}
+      try { el.createPasskeyButton.disabled = !browserIsOnline(); } catch (_) {}
+      try {
+        el.passkeyState.textContent = browserIsOnline()
+          ? 'Internet tersedia. Tekan tombol untuk meminta challenge Passkey dari server utama.'
+          : 'Aktifkan internet. Recovery session tetap berada di memori halaman sampai masa berlakunya habis.';
+      } catch (_) {}
+      try { history.replaceState(null, document.title, location.pathname + '#passkey'); } catch (_) {}
     }
 
     function legacyCopyText(text) {
@@ -957,16 +1095,27 @@
         setStatus('Kode belum berhasil disalin. Tidak ada data yang ditampilkan atau dibersihkan sampai penyalinan benar-benar berhasil.', 'err');
         return;
       }
-      clearAllRecoveryReferencesAfterCopy();
+      clearRecoveryCodeForPasskey(true);
       scheduleClipboardClearAttempt();
-      try { history.replaceState(null, document.title, location.pathname + '#completed'); } catch (_) {}
       el.copyRecoveryButton.disabled = true;
       el.copyRecoveryButton.textContent = 'Kode sudah disalin dan memori dibersihkan';
-      el.copyState.textContent = 'Penyalinan berhasil. Tempelkan kode sekarang pada layanan resmi. Clipboard akan dicoba dikosongkan setelah 30 detik, tetapi browser tidak menjamin penghapusan berhasil.';
+      el.copyState.textContent = 'Penyalinan berhasil. Buffer kode sudah dibersihkan. Clipboard akan dicoba dikosongkan setelah 30 detik. Aktifkan internet untuk membuat Passkey pengganti.';
       el.resultBox.classList.add('show');
       setLockNotice(false);
       setProcessStep(3);
-      setStatus('Kode berhasil disalin satu kali. Seluruh buffer dan referensi data pemulihan di halaman ini telah dibersihkan.', 'ok');
+      setStatus('Kode berhasil disalin satu kali. Recovery session tetap berada di memori untuk membuat Passkey pengganti.', 'ok');
+    }
+
+    function discardRecoveryMaterialForPasskey() {
+      if (!state.recoveryMaterialBytes || state.permanentLocked) return;
+      assertNotExpired();
+      if (browserIsOnline()) return renderLockedState();
+      clearRecoveryCodeForPasskey(false);
+      el.copyRecoveryButton.disabled = true;
+      el.discardRecoveryButton.disabled = true;
+      el.copyState.textContent = 'Kode pemulihan dihapus tanpa disalin. Tindakan ini tidak dapat dibatalkan.';
+      el.resultBox.classList.add('show');
+      setStatus('Kode pemulihan sudah dibersihkan. Aktifkan internet untuk membuat Passkey pengganti.', 'waiting');
     }
 
     function hardenStorageAccess() {
@@ -1169,10 +1318,14 @@
       var tokenBytes = utf8(fragment.token);
       var saltBytes = utf8('dirac-html-action-signature-v180:salt');
       var infoBytes = utf8('dirac-lost-passkey-recovery-link-open:v180');
+      var bodyBytes = null;
+      var payloadBytes = null;
+      var signatureBytes = null;
       try {
+        bodyBytes = utf8(canonical(requestBody));
         var payload = {
           action: CONFIG.vaultApiAction,
-          body_sha256: await sha256B64Url(utf8(canonical(requestBody))),
+          body_sha256: await sha256B64Url(bodyBytes),
           iat_ms: timestamp,
           method: 'POST',
           nonce: nonce,
@@ -1191,19 +1344,23 @@
           false,
           ['sign']
         );
-        var signature = await crypto.subtle.sign('HMAC', key, utf8(canonical(payload)));
+        payloadBytes = utf8(canonical(payload));
+        signatureBytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, payloadBytes));
         return {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
           'X-Dirac-Html-Signature-Version': CONFIG.htmlActionSignatureVersion,
           'X-Dirac-Html-Signature-Timestamp': String(timestamp),
           'X-Dirac-Html-Signature-Nonce': nonce,
-          'X-Dirac-Html-Signature': bytesToB64Url(new Uint8Array(signature))
+          'X-Dirac-Html-Signature': bytesToB64Url(signatureBytes)
         };
       } finally {
         tokenBytes.fill(0);
         saltBytes.fill(0);
         infoBytes.fill(0);
+        try { if (bodyBytes) bodyBytes.fill(0); } catch (_) {}
+        try { if (payloadBytes) payloadBytes.fill(0); } catch (_) {}
+        try { if (signatureBytes) signatureBytes.fill(0); } catch (_) {}
       }
     }
 
@@ -1287,6 +1444,40 @@
       }
     }
 
+    function isJsonResponseContentType(value) {
+      return /^application\/(?:json|[A-Za-z0-9!#$&^_.+-]+\+json)(?:\s*;|\s*$)/i.test(String(value || '').trim());
+    }
+
+    function assertExactObjectFields(value, expectedKeys, code) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(String(code || 'OBJECT_FIELDS_INVALID'));
+      var actual = Object.keys(value).sort();
+      var expected = expectedKeys.slice().sort();
+      if (actual.length !== expected.length || actual.some(function (key, index) { return key !== expected[index]; })) {
+        throw new Error(String(code || 'OBJECT_FIELDS_INVALID'));
+      }
+      return value;
+    }
+
+    function assertVaultResponseEnvelope(body, fragment) {
+      assertExactObjectFields(body, [
+        'expires_at', 'manifest', 'ok', 'purpose', 'request_id', 'signatures',
+        'signed_manifest', 'vault_bundle', 'version'
+      ], 'VAULT_RESPONSE_FIELDS_INVALID');
+      if (body.ok !== true
+          || String(body.version || '') !== CONFIG.expectedLegacyVersion
+          || String(body.purpose || '') !== CONFIG.expectedPurpose
+          || String(body.request_id || '') !== String(fragment && fragment.rid || '')) {
+        throw new Error('VAULT_RESPONSE_BINDING_INVALID');
+      }
+      var signed = assertExactObjectFields(body.signed_manifest, ['payload', 'signature_b64', 'signatures'], 'SIGNED_MANIFEST_FIELDS_INVALID');
+      if (canonical(body.manifest) !== canonical(signed.payload)
+          || canonical(body.signatures) !== canonical(signed.signatures)
+          || String(body.expires_at || '') !== String(signed.payload && signed.payload.expires_at || '')) {
+        throw new Error('VAULT_RESPONSE_ALIAS_INVALID');
+      }
+      return body;
+    }
+
     async function fetchVaultOnce(fragment) {
       if (state.vaultFetched) throw new Error('VAULT_FETCH_ALREADY_USED');
       state.vaultFetched = true;
@@ -1325,7 +1516,7 @@
               continue;
             }
             var safeErrorBody = null;
-            if (contentType.indexOf('application/json') !== -1) {
+            if (isJsonResponseContentType(contentType)) {
               try { safeErrorBody = await readJsonResponseLimited(response, 64 * 1024); } catch (_) { safeErrorBody = null; }
             } else {
               await cancelResponseBody(response);
@@ -1342,14 +1533,14 @@
             fetchError.responseContentType = contentType;
             throw fetchError;
           }
-          if (contentType.indexOf('application/json') === -1) {
+          if (!isJsonResponseContentType(contentType)) {
             throw new Error('VAULT_RESPONSE_NOT_JSON');
           }
           var body = await readJsonResponseLimited(response, CONFIG.maxVaultResponseBytes);
           if (!body || body.ok !== true) {
             throw new Error('VAULT_RESPONSE_INVALID');
           }
-          return body;
+          return assertVaultResponseEnvelope(body, fragment);
         }
         throw new Error('VAULT_FETCH_FAILED');
       } catch (error) {
@@ -1424,12 +1615,24 @@
     }
 
     function normalizedArgonParams(params) {
-      return {
+      assertExactObjectFields(params, ['hashLength', 'memoryCost', 'parallelism', 'timeCost'], 'ARGON2_FIELDS_INVALID');
+      var normalized = {
         memoryCost: getArgonParam(params, 'memoryCost', 'memory_kib', 0),
         timeCost: getArgonParam(params, 'timeCost', 'time_cost', 0),
         parallelism: getArgonParam(params, 'parallelism', 'parallelism', 0),
-        hashLength: getArgonParam(params, 'hashLength', 'hash_len', 64)
+        hashLength: getArgonParam(params, 'hashLength', 'hash_len', 0)
       };
+      if (typeof params.memoryCost !== 'number'
+          || typeof params.timeCost !== 'number'
+          || typeof params.parallelism !== 'number'
+          || typeof params.hashLength !== 'number'
+          || !Number.isSafeInteger(params.memoryCost)
+          || !Number.isSafeInteger(params.timeCost)
+          || !Number.isSafeInteger(params.parallelism)
+          || !Number.isSafeInteger(params.hashLength)) {
+        throw new Error('ARGON2_FIELDS_INVALID');
+      }
+      return normalized;
     }
 
     function verifyMinimumArgon2idParams(params) {
@@ -1942,35 +2145,129 @@
       };
     }
 
+    function armHybridManualRetry(envelope) {
+      if (!envelope || !envelope.body
+          || !(envelope.responseKey instanceof Uint8Array)
+          || envelope.responseKey.byteLength !== 32
+          || !(envelope.transcriptHash instanceof Uint8Array)
+          || envelope.transcriptHash.byteLength !== 64) {
+        throw new Error('HYBRID_RETRY_CONTEXT_INVALID');
+      }
+      var serialized = canonical(envelope.body);
+      if (serialized !== JSON.stringify(JSON.parse(serialized))
+          || !/^[A-Za-z0-9_-]{43}$/.test(String(envelope.body.idempotency_key || ''))
+          || !Number.isSafeInteger(Number(envelope.body.expires_at_ms))) {
+        throw new Error('HYBRID_RETRY_SERIALIZATION_INVALID');
+      }
+      state.hybridPendingEnvelope = envelope;
+      state.hybridPendingBodyText = serialized;
+      state.hybridSubmitBusy = false;
+      return serialized;
+    }
+
+    function assertExactHybridRetryContext(envelope, serialized) {
+      if (!envelope || state.hybridPendingEnvelope !== envelope
+          || typeof serialized !== 'string'
+          || serialized !== state.hybridPendingBodyText
+          || serialized !== canonical(envelope.body)
+          || Date.now() >= Number(envelope.body.expires_at_ms || 0) - 1000) {
+        throw new Error('HYBRID_RETRY_CONTEXT_EXPIRED_OR_CHANGED');
+      }
+    }
+
+    function clearHybridRetryContextAfterOpen() {
+      state.hybridPendingEnvelope = null;
+      state.hybridPendingBodyText = '';
+      state.hybridSubmitBusy = false;
+      try { el.hybridRetryBox.hidden = true; } catch (_) {}
+      try { el.retryHybridButton.disabled = false; } catch (_) {}
+      try { el.hybridRetryState.textContent = 'Tidak ada retry otomatis.'; } catch (_) {}
+    }
+
+    function isHybridTransportRetryable(error) {
+      var status = Number(error && error.httpStatus || 0);
+      var name = String(error && error.name || '');
+      var message = String(error && error.message || '');
+      if (/HYBRID_RETRY_CONTEXT_EXPIRED_OR_CHANGED|EXPIRED/.test(message)) return false;
+      return error && error.transportOutcomeUnknown === true
+        || name === 'AbortError'
+        || name === 'TypeError'
+        || status === 408
+        || status === 425
+        || status === 429
+        || status >= 500
+        || /(?:CENTRAL_GUARD_BOOTSTRAP_TIMEOUT|ONLINE_CONNECTION_NOT_STABLE|NETWORK|TIMEOUT|TEMPORARILY)/.test(message);
+    }
+
+    function showHybridManualRetry(error) {
+      state.flowPhase = 'hybrid_manual_retry';
+      state.hybridSubmitBusy = false;
+      el.hybridRetryBox.hidden = false;
+      el.retryHybridButton.disabled = !browserIsOnline();
+      el.hybridRetryState.textContent = 'Exact envelope, idempotency key, dan response key dipertahankan hanya di memori. Tidak ada retry otomatis.';
+      setStatus(
+        browserIsOnline()
+          ? 'Respons transport tidak pasti. Tekan tombol retry untuk mengirim byte envelope yang sama.'
+          : 'Respons transport tidak pasti. Aktifkan internet, lalu tekan retry; tidak ada pengiriman otomatis.',
+        'waiting'
+      );
+      try { recoveryDebug('hybrid_manual_retry_armed', error); } catch (_) {}
+    }
+
     async function obtainCentralGuardTokens() {
       var startedAt = Date.now();
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.verifyApiAction);
-      rootCauseClientTrace('head_bootstrap_start', { elapsed_ms: 0, timeout_ms: CONFIG.verifyTimeoutMs });
-      var response = await fetch(url.toString(), {
-        method: 'HEAD',
-        credentials: 'same-origin',
-        cache: 'no-store',
-        redirect: 'error',
-        referrer: location.origin + location.pathname,
-        referrerPolicy: 'same-origin',
-        headers: { 'Accept': 'application/json' }
-      });
-      var csrf = String(response.headers.get('x-csrf-token') || response.headers.get('x-dirac-csrf-token') || '').trim();
-      var pageNonce = String(response.headers.get('x-dirac-page-nonce') || '').trim();
-      rootCauseClientTrace('head_bootstrap_response', {
-        elapsed_ms: Date.now() - startedAt,
-        http_status: Number(response.status || 0),
-        response_ok: response.ok,
-        csrf_present: Boolean(csrf),
-        page_nonce_present: Boolean(pageNonce)
-      });
-      if (!csrf || !pageNonce) throw new Error('CENTRAL_GUARD_BOOTSTRAP_TOKEN_MISSING');
-      return { csrf: csrf, pageNonce: pageNonce };
+      var controller = new AbortController();
+      var timeoutTriggered = false;
+      var timeoutId = setTimeout(function () {
+        timeoutTriggered = true;
+        controller.abort();
+      }, CONFIG.centralGuardBootstrapTimeoutMs);
+      rootCauseClientTrace('head_bootstrap_start', { elapsed_ms: 0, timeout_ms: CONFIG.centralGuardBootstrapTimeoutMs });
+      try {
+        var response = await fetch(url.toString(), {
+          method: 'HEAD',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          redirect: 'error',
+          referrer: location.origin + location.pathname,
+          referrerPolicy: 'same-origin',
+          headers: { 'Accept': 'application/json' },
+          signal: controller.signal
+        });
+        var csrf = String(response.headers.get('x-csrf-token') || response.headers.get('x-dirac-csrf-token') || '').trim();
+        var pageNonce = String(response.headers.get('x-dirac-page-nonce') || '').trim();
+        var centralGuard = String(response.headers.get('x-dirac-central-security-guard') || '').trim();
+        rootCauseClientTrace('head_bootstrap_response', {
+          elapsed_ms: Date.now() - startedAt,
+          http_status: Number(response.status || 0),
+          response_ok: response.ok,
+          csrf_present: Boolean(csrf),
+          page_nonce_present: Boolean(pageNonce)
+        });
+        if (response.status !== 204 || centralGuard !== CONFIG.expectedCentralGuard) throw new Error('CENTRAL_GUARD_BOOTSTRAP_RESPONSE_INVALID');
+        if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(csrf) || csrf.length > 4096
+            || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(pageNonce) || pageNonce.length > 4096) {
+          throw new Error('CENTRAL_GUARD_BOOTSTRAP_TOKEN_INVALID');
+        }
+        return { csrf: csrf, pageNonce: pageNonce };
+      } catch (error) {
+        rootCauseClientTrace('head_bootstrap_failed', {
+          elapsed_ms: Date.now() - startedAt,
+          timeout_ms: CONFIG.centralGuardBootstrapTimeoutMs,
+          note: timeoutTriggered ? 'AbortController timeout' : String(error && (error.message || error.name) || 'unknown').slice(0, 160)
+        });
+        if (timeoutTriggered || error && error.name === 'AbortError') throw new Error('CENTRAL_GUARD_BOOTSTRAP_TIMEOUT');
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
 
-    async function submitHybridEnvelope(envelope) {
+    async function submitHybridEnvelope(envelope, serializedEnvelope) {
       var overallStartedAt = Date.now();
+      assertExactHybridRetryContext(envelope, serializedEnvelope);
       var tokens = await obtainCentralGuardTokens();
       var url = new URL(CONFIG.vaultApiPath, location.origin);
       url.searchParams.set('action', CONFIG.verifyApiAction);
@@ -2001,6 +2298,7 @@
         await new Promise(function (resolve) { setTimeout(resolve, 1000); });
         assertNotPermanentlyLocked();
         assertNotExpired();
+        assertExactHybridRetryContext(envelope, serializedEnvelope);
         if (!browserIsOnline()) throw new Error('ONLINE_CONNECTION_NOT_STABLE');
         rootCauseClientTrace('verify_post_fetch_start', {
           elapsed_ms: Date.now() - overallStartedAt,
@@ -2022,7 +2320,7 @@
             'X-Dirac-Page-Nonce': tokens.pageNonce,
             'Idempotency-Key': envelope.body.idempotency_key
           },
-          body: JSON.stringify(envelope.body),
+          body: serializedEnvelope,
           signal: controller.signal
         });
         rootCauseClientTrace('verify_post_response_headers', {
@@ -2031,6 +2329,11 @@
           http_status: Number(response.status || 0),
           response_ok: response.ok
         });
+        var responseContentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (!isJsonResponseContentType(responseContentType)) {
+          await cancelResponseBody(response);
+          throw new Error('RECOVERY_HYBRID_RESPONSE_NOT_JSON');
+        }
         var data = await readJsonResponseLimited(response, 128 * 1024);
         rootCauseClientTrace('verify_post_body_read', {
           elapsed_ms: Date.now() - overallStartedAt,
@@ -2044,14 +2347,35 @@
           error.httpStatus = Number(response.status || 0);
           throw error;
         }
+        if (data.active !== true
+            || String(data.code || '') !== 'RECOVERY_HYBRID_V2_VERIFIED'
+            || String(data.central_guard || '') !== CONFIG.expectedCentralGuard
+            || String(data.request_id || '') !== String(envelope.body.request_id || '')) {
+          throw new Error('RECOVERY_HYBRID_RESPONSE_BINDING_INVALID');
+        }
+        if (!Object.prototype.hasOwnProperty.call(data, 'recovery_session')
+            || data.recovery_session !== null
+            || !Object.prototype.hasOwnProperty.call(data, 'recovery_session_expires_at')
+            || data.recovery_session_expires_at !== null
+            || Object.prototype.hasOwnProperty.call(data, 'recovery_session_token')
+            || Object.prototype.hasOwnProperty.call(data, 'lost_passkey_recovery_session_token')
+            || Object.prototype.hasOwnProperty.call(data, 'dirac_lost_passkey_recovery_session')) {
+          throw new Error('RECOVERY_SESSION_TOP_LEVEL_FORBIDDEN');
+        }
         return data;
       } catch (error) {
         rootCauseClientTrace('verify_post_failed', {
           elapsed_ms: Date.now() - overallStartedAt,
           timeout_ms: CONFIG.verifyTimeoutMs,
           http_status: Number(error && error.httpStatus || 0),
-          note: timeoutTriggered ? 'AbortController timeout' : String(error && (error.name || error.message) || 'unknown').slice(0, 160)
+          note: timeoutTriggered ? 'AbortController timeout' : String(error && (error.message || error.name) || 'unknown').slice(0, 160)
         });
+        if (timeoutTriggered || error && error.name === 'AbortError') {
+          var timeoutError = new Error('RECOVERY_HYBRID_TRANSPORT_TIMEOUT');
+          timeoutError.transportOutcomeUnknown = true;
+          timeoutError.httpStatus = 0;
+          throw timeoutError;
+        }
         throw error;
       } finally {
         clearTimeout(timeoutId);
@@ -2061,40 +2385,1287 @@
       }
     }
 
+    async function hmacSha512Raw(keyBytes, dataBytes) {
+      var material = keyBytes instanceof Uint8Array ? keyBytes.slice() : new Uint8Array(0);
+      try {
+        if (material.byteLength !== 32 || !(dataBytes instanceof Uint8Array)) throw new Error('OWNER_BINDING_HMAC_INPUT_INVALID');
+        var key = await crypto.subtle.importKey('raw', material, { name: 'HMAC', hash: 'SHA-512' }, false, ['sign']);
+        return new Uint8Array(await crypto.subtle.sign('HMAC', key, dataBytes));
+      } finally {
+        try { material.fill(0); } catch (_) {}
+      }
+    }
+
+    function constantTimeBytesEqual(left, right) {
+      if (!(left instanceof Uint8Array) || !(right instanceof Uint8Array)) return false;
+      var difference = left.byteLength ^ right.byteLength;
+      var length = Math.max(left.byteLength, right.byteLength);
+      for (var index = 0; index < length; index += 1) {
+        difference |= (left[index % Math.max(1, left.byteLength)] || 0)
+          ^ (right[index % Math.max(1, right.byteLength)] || 0);
+      }
+      return difference === 0;
+    }
+
+    function parseStrictFutureIso(value, nowMs) {
+      var text = String(value || '');
+      var parsedMs = Date.parse(text);
+      if (!Number.isFinite(parsedMs)
+          || new Date(parsedMs).toISOString() !== text
+          || parsedMs <= Number(nowMs || 0) + 1000
+          || parsedMs > Number(nowMs || 0) + CONFIG.passkeySessionMaxLifetimeMs) {
+        throw new Error('RECOVERY_SESSION_EXPIRY_INVALID');
+      }
+      return parsedMs;
+    }
+
     async function openSealedRecovery(data, envelope, requestId) {
       var sealed = data && data.sealed_recovery;
-      if (!sealed || sealed.version !== CONFIG.expectedResponseVersion || sealed.request_id !== requestId) throw new Error('SEALED_RECOVERY_RESPONSE_INVALID');
-      if (String(sealed.transcript_sha512 || '') !== bytesToB64Url(envelope.transcriptHash)) throw new Error('SEALED_RECOVERY_TRANSCRIPT_INVALID');
-      var aad = rememberBuffer(utf8(canonical({ version: CONFIG.expectedResponseVersion, purpose: CONFIG.expectedPurpose, request_id: requestId })));
-      var nonce;
-      var ciphertext;
-      try { nonce = rememberBuffer(b64ToBytes(sealed.aead_nonce)); }
-      catch (_) { throw new Error('SEALED_NONCE_BASE64_INVALID'); }
-      if (nonce.length !== 12) { nonce.fill(0); throw new Error('SEALED_NONCE_LENGTH_INVALID'); }
-      try { ciphertext = rememberBuffer(b64ToBytes(sealed.ciphertext)); }
-      catch (_) { throw new Error('SEALED_CIPHERTEXT_BASE64_INVALID'); }
-      if (ciphertext.length < 17 || ciphertext.length > 64 * 1024) { ciphertext.fill(0); throw new Error('SEALED_CIPHERTEXT_LENGTH_INVALID'); }
-      var plaintext = await decryptAesGcmCombined(envelope.responseKey, nonce, ciphertext, aad);
-      var parsed;
+      assertExactObjectFields(sealed, [
+        'version', 'request_id', 'aead_nonce', 'ciphertext',
+        'transcript_sha512', 'owner_binding_sha512'
+      ], 'SEALED_RECOVERY_RESPONSE_FIELDS_INVALID');
+      if (sealed.version !== CONFIG.expectedResponseVersion || sealed.request_id !== requestId) {
+        throw new Error('SEALED_RECOVERY_RESPONSE_INVALID');
+      }
+      if (String(sealed.transcript_sha512 || '') !== bytesToB64Url(envelope.transcriptHash)) {
+        throw new Error('SEALED_RECOVERY_TRANSCRIPT_INVALID');
+      }
+
+      var ownerBinding = null;
+      var aad = null;
+      var nonce = null;
+      var ciphertext = null;
+      var plaintext = null;
+      var computedBinding = null;
+      var bindingInput = null;
+      var bindingPrefix = null;
+      var bindingPayload = null;
+      var parsed = null;
       var plaintextText = '';
       try {
-        plaintextText = fromUtf8(plaintext);
-        parsed = JSON.parse(plaintextText);
-        if (canonical(parsed) !== plaintextText) throw new Error('SEALED_RECOVERY_NON_CANONICAL');
-      } catch (error) {
-        if (error && error.message === 'SEALED_RECOVERY_NON_CANONICAL') throw error;
-        throw new Error('SEALED_RECOVERY_JSON_INVALID');
+        try { ownerBinding = b64ToBytes(sealed.owner_binding_sha512); }
+        catch (_) { throw new Error('OWNER_BINDING_BASE64_INVALID'); }
+        if (ownerBinding.byteLength !== 64 || String(sealed.owner_binding_sha512 || '').length !== 86) {
+          throw new Error('OWNER_BINDING_LENGTH_INVALID');
+        }
+        aad = rememberBuffer(utf8(canonical({
+          version: CONFIG.expectedResponseVersion,
+          purpose: CONFIG.expectedPurpose,
+          request_id: requestId,
+          owner_binding_sha512: sealed.owner_binding_sha512
+        })));
+        try { nonce = rememberBuffer(b64ToBytes(sealed.aead_nonce)); }
+        catch (_) { throw new Error('SEALED_NONCE_BASE64_INVALID'); }
+        if (nonce.byteLength !== 12) throw new Error('SEALED_NONCE_LENGTH_INVALID');
+        try { ciphertext = rememberBuffer(b64ToBytes(sealed.ciphertext)); }
+        catch (_) { throw new Error('SEALED_CIPHERTEXT_BASE64_INVALID'); }
+        if (ciphertext.byteLength < 17 || ciphertext.byteLength > 64 * 1024) {
+          throw new Error('SEALED_CIPHERTEXT_LENGTH_INVALID');
+        }
+        plaintext = await decryptAesGcmCombined(envelope.responseKey, nonce, ciphertext, aad);
+        try {
+          plaintextText = fromUtf8(plaintext);
+          parsed = JSON.parse(plaintextText);
+          if (canonical(parsed) !== plaintextText) throw new Error('SEALED_RECOVERY_NON_CANONICAL');
+        } catch (error) {
+          if (error && error.message === 'SEALED_RECOVERY_NON_CANONICAL') throw error;
+          throw new Error('SEALED_RECOVERY_JSON_INVALID');
+        } finally {
+          plaintextText = '';
+        }
+
+        assertExactObjectFields(parsed, [
+          'owner_auth_user_id', 'owner_customer_id', 'purpose', 'recovery_code',
+          'recovery_session_expires_at', 'recovery_session_token', 'request_id', 'version'
+        ], 'SEALED_RECOVERY_FIELDS_INVALID');
+        var ownerAuthUserId = String(parsed.owner_auth_user_id || '');
+        var ownerCustomerId = String(parsed.owner_customer_id || '');
+        var strictUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (parsed.version !== CONFIG.expectedResponseVersion
+            || parsed.request_id !== requestId
+            || parsed.purpose !== CONFIG.expectedPurpose
+            || !strictUuid.test(ownerAuthUserId)
+            || !strictUuid.test(ownerCustomerId)
+            || !/^[A-Za-z0-9_-]{1200}$/.test(String(parsed.recovery_code || ''))
+            || !/^[A-Za-z0-9_-]{32,160}$/.test(String(parsed.recovery_session_token || ''))) {
+          throw new Error('SEALED_RECOVERY_CONTENT_INVALID');
+        }
+        var sessionExpiryMs = parseStrictFutureIso(parsed.recovery_session_expires_at, Date.now());
+        bindingPrefix = utf8('dirac/recovery/v281/owner-binding\n');
+        bindingPayload = utf8(canonical({
+          owner_auth_user_id: ownerAuthUserId,
+          owner_customer_id: ownerCustomerId,
+          purpose: CONFIG.expectedPurpose,
+          request_id: requestId
+        }));
+        bindingInput = concatBytes(bindingPrefix, bindingPayload);
+        computedBinding = await hmacSha512Raw(envelope.responseKey, bindingInput);
+        if (!constantTimeBytesEqual(computedBinding, ownerBinding)) throw new Error('OWNER_BINDING_HMAC_INVALID');
+
+        var recoveryCodeBytes = rememberBuffer(utf8(parsed.recovery_code));
+        var recoverySessionBytes = rememberBuffer(utf8(parsed.recovery_session_token));
+        parsed.recovery_code = '';
+        parsed.recovery_session_token = '';
+        parsed.recovery_session_expires_at = '';
+        return {
+          recoveryCodeBytes: recoveryCodeBytes,
+          recoverySessionBytes: recoverySessionBytes,
+          recoverySessionExpiresAtMs: sessionExpiryMs,
+          requestId: requestId,
+          ownerCustomerId: ownerCustomerId,
+          ownerAuthUserId: ownerAuthUserId
+        };
       } finally {
         plaintextText = '';
+        try { if (parsed) parsed.recovery_code = ''; } catch (_) {}
+        try { if (parsed) parsed.recovery_session_token = ''; } catch (_) {}
+        try { if (ownerBinding) ownerBinding.fill(0); } catch (_) {}
+        try { if (computedBinding) computedBinding.fill(0); } catch (_) {}
+        try { if (bindingInput) bindingInput.fill(0); } catch (_) {}
+        try { if (bindingPrefix) bindingPrefix.fill(0); } catch (_) {}
+        try { if (bindingPayload) bindingPayload.fill(0); } catch (_) {}
+        try { if (plaintext) plaintext.fill(0); } catch (_) {}
+        try { envelope.responseKey.fill(0); } catch (_) {}
+        try { envelope.transcriptHash.fill(0); } catch (_) {}
       }
-      var keys = Object.keys(parsed || {}).sort();
-      var expected = ['recovery_code', 'request_id', 'version'];
-      if (!parsed || keys.length !== expected.length || keys.some(function (key, index) { return key !== expected[index]; })) throw new Error('SEALED_RECOVERY_FIELDS_INVALID');
-      if (parsed.version !== CONFIG.expectedResponseVersion || parsed.request_id !== requestId || !/^[A-Za-z0-9_-]{1200}$/.test(String(parsed.recovery_code || ''))) throw new Error('SEALED_RECOVERY_CONTENT_INVALID');
-      var recoveryBytes = rememberBuffer(utf8(parsed.recovery_code));
-      try { plaintext.fill(0); envelope.responseKey.fill(0); envelope.transcriptHash.fill(0); } catch (_) {}
-      parsed.recovery_code = '';
-      return recoveryBytes;
+    }
+
+    async function finishHybridResponseOffline(response, envelope) {
+      state.flowPhase = 'await_offline_result';
+      try { el.hybridRetryBox.hidden = true; } catch (_) {}
+      await waitForConnectivity(false, 'Respons terenkripsi diterima. Matikan Wi-Fi dan data seluler untuk membuka hasil.');
+      state.flowPhase = 'offline_result';
+      assertOfflinePhase('OFFLINE_REQUIRED_FOR_RESULT_OPEN');
+      var openedRecovery = await runLoadingStage('Menyiapkan kode dan recovery session', function () {
+        return openSealedRecovery(response, envelope, envelope.body.request_id);
+      });
+      assertOfflinePhase('OFFLINE_REQUIRED_FOR_RESULT_READY');
+      await runLoadingStage('Menyiapkan tombol salin satu kali', function () {
+        keepOnlyRecoveryHandoff(openedRecovery);
+        clearHybridRetryContextAfterOpen();
+        state.recoveryCopied = false;
+        state.flowPhase = 'complete_offline';
+        el.copyRecoveryButton.disabled = false;
+        el.copyRecoveryButton.textContent = 'Salin kode pemulihan — hanya 1×';
+        el.copyState.textContent = 'Kode tidak ditampilkan. Saat disalin, kode masuk ke clipboard sistem. Tempelkan segera; halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik.';
+        el.resultBox.classList.add('show');
+      });
+      setProcessStep(3);
+      setStatus('Verifikasi berhasil. Tetap offline; kode pemulihan siap disalin satu kali.', 'ok');
+    }
+
+    async function retryHybridEnvelopeManually() {
+      if (state.hybridSubmitBusy || state.permanentLocked) return;
+      var envelope = state.hybridPendingEnvelope;
+      var serialized = state.hybridPendingBodyText;
+      state.hybridSubmitBusy = true;
+      el.retryHybridButton.disabled = true;
+      try {
+        if (!browserIsOnline()) throw new Error('ONLINE_CONNECTION_NOT_STABLE');
+        assertExactHybridRetryContext(envelope, serialized);
+        state.flowPhase = 'hybrid_manual_retry_submit';
+        var response = await runLoadingStage('Retry verifikasi dengan envelope yang sama', function () {
+          return submitHybridEnvelope(envelope, serialized);
+        });
+        await finishHybridResponseOffline(response, envelope);
+      } catch (error) {
+        if (isHybridTransportRetryable(error)
+            && state.hybridPendingEnvelope === envelope
+            && Date.now() < Number(envelope && envelope.body && envelope.body.expires_at_ms || 0) - 1000) {
+          showHybridManualRetry(error);
+        } else {
+          failClosed(error);
+        }
+      } finally {
+        state.hybridSubmitBusy = false;
+        if (!state.permanentLocked && state.flowPhase === 'hybrid_manual_retry') {
+          el.retryHybridButton.disabled = !browserIsOnline();
+        }
+      }
+    }
+
+    function assertRecoverySessionInMemory() {
+      assertNotPermanentlyLocked();
+      assertNotExpired();
+      if (!(state.recoverySessionBytes instanceof Uint8Array)
+          || state.recoverySessionBytes.byteLength < 32
+          || state.recoverySessionBytes.byteLength > 160
+          || !state.recoverySessionRequestId
+          || !state.recoveryOwnerCustomerId
+          || !state.recoveryOwnerAuthUserId) {
+        throw new Error('RECOVERY_SESSION_MEMORY_INVALID');
+      }
+      if (!Number.isFinite(state.recoverySessionExpiresAtMs)
+          || state.recoverySessionExpiresAtMs <= Date.now() + 1000) {
+        throw new Error('RECOVERY_SESSION_EXPIRED');
+      }
+    }
+
+    function recoveryPasskeyEndpoint(action) {
+      var endpoint;
+      try { endpoint = new URL(CONFIG.mainPasskeyEndpoint); }
+      catch (_) { throw new Error('PASSKEY_ENDPOINT_INVALID'); }
+      if (endpoint.protocol !== 'https:'
+          || endpoint.origin !== 'https://api.diracgroup.store'
+          || endpoint.pathname !== '/api/health'
+          || endpoint.username || endpoint.password || endpoint.search || endpoint.hash
+          || (action !== CONFIG.passkeyStartAction && action !== CONFIG.passkeyVerifyAction)) {
+        throw new Error('PASSKEY_ENDPOINT_INVALID');
+      }
+      endpoint.searchParams.set('action', action);
+      return endpoint;
+    }
+
+    function decodeA2FTicketPayload(ticket) {
+      var parts = String(ticket || '').split('.');
+      if (parts.length !== 2 || !/^[A-Za-z0-9_-]+$/.test(parts[0]) || !/^[A-Za-z0-9_-]{43}$/.test(parts[1])) {
+        throw new Error('PASSKEY_A2F_TICKET_FORMAT_INVALID');
+      }
+      var payloadBytes = null;
+      var payloadText = '';
+      try {
+        payloadBytes = b64ToBytes(parts[0]);
+        payloadText = fromUtf8(payloadBytes);
+        var payload = JSON.parse(payloadText);
+        if (canonical(payload) !== payloadText) throw new Error('PASSKEY_A2F_TICKET_NON_CANONICAL');
+        return { payload: payload, signature: parts[1] };
+      } catch (error) {
+        if (error && error.message === 'PASSKEY_A2F_TICKET_NON_CANONICAL') throw error;
+        throw new Error('PASSKEY_A2F_TICKET_PAYLOAD_INVALID');
+      } finally {
+        payloadText = '';
+        try { if (payloadBytes) payloadBytes.fill(0); } catch (_) {}
+      }
+    }
+
+    async function obtainRecoveryPasskeyGuardProof(action, bodyHash) {
+      if (!/^[a-f0-9]{64}$/.test(String(bodyHash || ''))) throw new Error('PASSKEY_BODY_HASH_INVALID');
+      var url = recoveryPasskeyEndpoint(action);
+      url.searchParams.set('_dirac_a2f_body_hash', bodyHash);
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function () { controller.abort(); }, CONFIG.centralGuardBootstrapTimeoutMs);
+      try {
+        var response = await fetch(url.toString(), {
+          method: 'HEAD',
+          mode: 'cors',
+          credentials: 'include',
+          cache: 'no-store',
+          redirect: 'error',
+          referrer: location.origin + location.pathname,
+          referrerPolicy: 'unsafe-url',
+          headers: { 'Accept': 'application/json' },
+          signal: controller.signal
+        });
+        var csrf = String(response.headers.get('x-dirac-csrf-token') || response.headers.get('x-csrf-token') || '').trim();
+        var pageNonce = String(response.headers.get('x-dirac-page-nonce') || '').trim();
+        var centralGuard = String(response.headers.get('x-dirac-central-security-guard') || '').trim();
+        var a2fTicket = String(response.headers.get('x-dirac-a2f-ticket') || '').trim();
+        var a2fSignature = String(response.headers.get('x-dirac-a2f-signature') || '').trim();
+        var a2fTimestamp = String(response.headers.get('x-dirac-a2f-timestamp') || '').trim();
+        var a2fNonce = String(response.headers.get('x-dirac-a2f-nonce') || '').trim();
+        await cancelResponseBody(response);
+        if (![200, 204, 405].includes(Number(response.status || 0))
+            || centralGuard !== CONFIG.expectedCentralGuard
+            || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(csrf) || csrf.length > 4096
+            || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(pageNonce) || pageNonce.length > 4096
+            || !a2fTicket || !a2fSignature
+            || !/^\d{10}$/.test(a2fTimestamp)
+            || !/^[A-Za-z0-9_-]{32}$/.test(a2fNonce)) {
+          throw new Error('PASSKEY_GUARD_BOOTSTRAP_RESPONSE_INVALID');
+        }
+        var decoded = decodeA2FTicketPayload(a2fTicket);
+        var proof = decoded.payload || {};
+        var nowSeconds = Math.floor(Date.now() / 1000);
+        if (decoded.signature !== a2fSignature
+            || proof.typ !== 'dirac-a2f-request-signature-v148'
+            || proof.act !== action
+            || proof.method !== 'POST'
+            || proof.path !== '/api/health'
+            || proof.bh !== bodyHash
+            || proof.jti !== a2fNonce
+            || Number(proof.iat) !== Number(a2fTimestamp)
+            || !Number.isSafeInteger(Number(proof.iat))
+            || !Number.isSafeInteger(Number(proof.exp))
+            || Number(proof.iat) > nowSeconds + 30
+            || Number(proof.iat) < nowSeconds - 180
+            || Number(proof.exp) <= nowSeconds
+            || Number(proof.exp) > Number(proof.iat) + 120) {
+          throw new Error('PASSKEY_A2F_TICKET_BINDING_INVALID');
+        }
+        return {
+          csrf: csrf,
+          pageNonce: pageNonce,
+          a2fTicket: a2fTicket,
+          a2fSignature: a2fSignature,
+          a2fTimestamp: a2fTimestamp,
+          a2fNonce: a2fNonce
+        };
+      } catch (error) {
+        if (error && error.name === 'AbortError') throw new Error('PASSKEY_GUARD_BOOTSTRAP_TIMEOUT');
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    async function postRecoveryPasskeyAction(action, submission) {
+      assertRecoverySessionInMemory();
+      if (!submission || typeof submission !== 'object' || Array.isArray(submission)
+          || submission.action !== action
+          || !/^[A-Za-z0-9_-]{43}$/.test(String(submission.idempotency_key || ''))) {
+        throw new Error('PASSKEY_SUBMISSION_CONTRACT_INVALID');
+      }
+      var sessionText = '';
+      var bodyText = '';
+      var bodyHashInput = null;
+      var proof = null;
+      var mutationDispatched = false;
+      var responseReceived = false;
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function () { controller.abort(); }, CONFIG.passkeyRequestTimeoutMs);
+      try {
+        sessionText = fromUtf8(state.recoverySessionBytes);
+        if (!/^[A-Za-z0-9_-]{32,160}$/.test(sessionText)) throw new Error('RECOVERY_SESSION_MEMORY_INVALID');
+        var requestBody = JSON.parse(JSON.stringify(submission));
+        requestBody.recovery_session_token = sessionText;
+        bodyText = JSON.stringify(requestBody);
+        requestBody.recovery_session_token = '';
+        sessionText = '';
+        bodyHashInput = utf8(bodyText);
+        if (!bodyText || bodyHashInput.byteLength > 192 * 1024) throw new Error('PASSKEY_REQUEST_TOO_LARGE');
+        var bodyHash = await sha256Hex(bodyHashInput);
+        bodyHashInput.fill(0);
+        bodyHashInput = null;
+        proof = await obtainRecoveryPasskeyGuardProof(action, bodyHash);
+        assertRecoverySessionInMemory();
+        var url = recoveryPasskeyEndpoint(action);
+        mutationDispatched = true;
+        var response = await fetch(url.toString(), {
+          method: 'POST',
+          mode: 'cors',
+          credentials: 'include',
+          cache: 'no-store',
+          redirect: 'error',
+          referrer: location.origin + location.pathname,
+          referrerPolicy: 'unsafe-url',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Idempotency-Key': submission.idempotency_key,
+            'X-CSRF-Token': proof.csrf,
+            'X-Dirac-CSRF-Token': proof.csrf,
+            'X-Dirac-Page-Nonce': proof.pageNonce,
+            'X-Dirac-A2F-Ticket': proof.a2fTicket,
+            'X-Dirac-A2F-Signature': proof.a2fSignature,
+            'X-Dirac-A2F-Timestamp': proof.a2fTimestamp,
+            'X-Dirac-A2F-Nonce': proof.a2fNonce
+          },
+          body: bodyText,
+          signal: controller.signal
+        });
+        responseReceived = true;
+        bodyText = '';
+        var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (!isJsonResponseContentType(contentType)) {
+          await cancelResponseBody(response);
+          var typeError = new Error('PASSKEY_RESPONSE_NOT_JSON');
+          typeError.httpStatus = Number(response.status || 0);
+          throw typeError;
+        }
+        var data = await readJsonResponseLimited(response, 192 * 1024);
+        if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('PASSKEY_RESPONSE_INVALID');
+        if (String(data.code || '') === 'PASSKEY_RECOVERY_ALREADY_COMPLETED') {
+          if (Number(response.status || 0) !== 200
+              || response.ok !== true
+              || data.ok !== true
+              || data.completed !== true
+              || data.passkey_active !== true
+              || data.login_required !== true
+              || data.mutation_performed !== false
+              || String(data.request_id || '') !== state.recoverySessionRequestId
+              || !Number.isSafeInteger(Number(data.security_epoch))
+              || Number(data.security_epoch) < 2
+              || !Number.isSafeInteger(Number(data.old_passkeys_deactivated))
+              || Number(data.old_passkeys_deactivated) < 1) {
+            throw new Error('PASSKEY_ALREADY_COMPLETED_RESPONSE_INVALID');
+          }
+          var completedError = new Error('PASSKEY_RECOVERY_ALREADY_COMPLETED');
+          completedError.httpStatus = 200;
+          completedError.serverCode = 'PASSKEY_RECOVERY_ALREADY_COMPLETED';
+          completedError.serverData = data;
+          throw completedError;
+        }
+        if (!response.ok || data.ok !== true) {
+          var responseError = new Error(String(data.code || 'PASSKEY_SERVER_REJECTED').slice(0, 120));
+          responseError.httpStatus = Number(response.status || 0);
+          responseError.serverCode = String(data.code || '').slice(0, 120);
+          responseError.retryAfter = String(response.headers.get('retry-after') || '').slice(0, 32);
+          responseError.serverData = data;
+          throw responseError;
+        }
+        return { status: Number(response.status || 0), data: data };
+      } catch (error) {
+        if (error && error.name === 'AbortError') {
+          var timeoutError = new Error('PASSKEY_REQUEST_TIMEOUT');
+          timeoutError.httpStatus = 0;
+          timeoutError.passkeyMutationDispatched = mutationDispatched;
+          timeoutError.passkeyResponseReceived = responseReceived;
+          throw timeoutError;
+        }
+        try {
+          error.passkeyMutationDispatched = mutationDispatched;
+          error.passkeyResponseReceived = responseReceived;
+        } catch (_) {}
+        if (mutationDispatched && (!error || error.passkeyMutationDispatched !== true)) {
+          var stateUnknownError = new Error(String(error && error.message || 'PASSKEY_MUTATION_STATE_UNKNOWN').slice(0, 120));
+          stateUnknownError.name = String(error && error.name || 'Error');
+          stateUnknownError.httpStatus = Number(error && error.httpStatus || 0);
+          stateUnknownError.serverCode = String(error && error.serverCode || '').slice(0, 120);
+          stateUnknownError.serverData = error && error.serverData && typeof error.serverData === 'object'
+            ? error.serverData
+            : null;
+          stateUnknownError.passkeyMutationDispatched = true;
+          stateUnknownError.passkeyResponseReceived = responseReceived;
+          throw stateUnknownError;
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+        sessionText = '';
+        bodyText = '';
+        try { if (bodyHashInput) bodyHashInput.fill(0); } catch (_) {}
+        if (proof) {
+          proof.csrf = '';
+          proof.pageNonce = '';
+          proof.a2fTicket = '';
+          proof.a2fSignature = '';
+          proof.a2fTimestamp = '';
+          proof.a2fNonce = '';
+        }
+      }
+    }
+
+    function assertRecoveryPasskeyBrowserSupport() {
+      if (!window.isSecureContext
+          || typeof window.PublicKeyCredential !== 'function'
+          || !navigator.credentials
+          || typeof navigator.credentials.create !== 'function'
+          || typeof navigator.credentials.get !== 'function') {
+        throw new Error('PASSKEY_BROWSER_UNSUPPORTED');
+      }
+    }
+
+    async function assertRecoveryPasskeyPlatformSupport() {
+      assertRecoveryPasskeyBrowserSupport();
+      if (typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function') {
+        var available;
+        try { available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); }
+        catch (_) { throw new Error('PASSKEY_PLATFORM_CAPABILITY_CHECK_FAILED'); }
+        if (available !== true) throw new Error('PASSKEY_PLATFORM_AUTHENTICATOR_UNAVAILABLE');
+      }
+    }
+
+    function decodePasskeyB64Url(value, minimum, maximum, code) {
+      var text = String(value || '');
+      if (!/^[A-Za-z0-9_-]+$/.test(text)) throw new Error(String(code || 'PASSKEY_BASE64URL_INVALID'));
+      var bytes = b64ToBytes(text);
+      if (bytesToB64Url(bytes) !== text
+          || bytes.byteLength < Number(minimum || 1)
+          || bytes.byteLength > Number(maximum || 65536)) {
+        bytes.fill(0);
+        throw new Error(String(code || 'PASSKEY_BASE64URL_INVALID'));
+      }
+      return bytes;
+    }
+
+    function sanitizePasskeyTransports(value) {
+      if (!Array.isArray(value)) return [];
+      var allowed = ['ble', 'hybrid', 'internal', 'nfc', 'smart-card', 'usb'];
+      var output = [];
+      value.slice(0, 12).forEach(function (item) {
+        var text = String(item || '').toLowerCase();
+        if (allowed.indexOf(text) !== -1 && output.indexOf(text) === -1) output.push(text);
+      });
+      return output;
+    }
+
+    function assertPasskeyRpId(value) {
+      var rpId = String(value || '').trim().toLowerCase();
+      var hostname = String(location.hostname || '').toLowerCase();
+      if (rpId !== CONFIG.expectedPasskeyRpId
+          || (hostname !== rpId && !hostname.endsWith('.' + rpId))) {
+        throw new Error('PASSKEY_RP_ID_INVALID');
+      }
+      return rpId;
+    }
+
+    function publicKeyCreationOptionsFromServer(response) {
+      var source = response && response.publicKey;
+      if (!source || typeof source !== 'object' || Array.isArray(source)) throw new Error('PASSKEY_CREATE_OPTIONS_INVALID');
+      var rpId = assertPasskeyRpId(source.rp && source.rp.id);
+      var challenge = decodePasskeyB64Url(source.challenge, 16, 128, 'PASSKEY_CHALLENGE_INVALID');
+      var userId = decodePasskeyB64Url(source.user && source.user.id, 1, 64, 'PASSKEY_USER_HANDLE_INVALID');
+      var rpName = String(source.rp && source.rp.name || '').trim();
+      var userName = String(source.user && source.user.name || '').trim();
+      var displayName = String(source.user && source.user.displayName || '').trim();
+      if (!rpName || rpName.length > 128 || !userName || userName.length > 320 || !displayName || displayName.length > 320) {
+        throw new Error('PASSKEY_OWNER_DISPLAY_INVALID');
+      }
+      var parameters = Array.isArray(source.pubKeyCredParams) ? source.pubKeyCredParams.filter(function (item) {
+        return item && item.type === 'public-key' && (Number(item.alg) === -7 || Number(item.alg) === -257);
+      }).map(function (item) { return { type: 'public-key', alg: Number(item.alg) }; }) : [];
+      if (!parameters.length) throw new Error('PASSKEY_ALGORITHM_POLICY_INVALID');
+      if (!Array.isArray(source.excludeCredentials) || source.excludeCredentials.length !== 0) {
+        throw new Error('PASSKEY_RECOVERY_EXCLUDE_POLICY_INVALID');
+      }
+      var selection = source.authenticatorSelection || {};
+      if (selection.authenticatorAttachment !== 'platform'
+          || selection.userVerification !== 'required'
+          || !['preferred', 'required'].includes(String(selection.residentKey || ''))) {
+        throw new Error('PASSKEY_AUTHENTICATOR_POLICY_INVALID');
+      }
+      return {
+        challenge: challenge,
+        rp: { id: rpId, name: rpName },
+        user: { id: userId, name: userName, displayName: displayName },
+        pubKeyCredParams: parameters,
+        timeout: Math.max(1000, Math.min(60000, Number(source.timeout || 60000))),
+        attestation: ['none', 'indirect', 'direct', 'enterprise'].includes(String(source.attestation || '')) ? String(source.attestation) : 'none',
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',
+          residentKey: String(selection.residentKey),
+          requireResidentKey: selection.requireResidentKey === true,
+          userVerification: 'required'
+        },
+        excludeCredentials: [],
+        extensions: { credProps: true }
+      };
+    }
+
+    function publicKeyRequestOptionsFromServer(response, expectedCredentialId) {
+      var source = response && response.publicKey;
+      if (!source || typeof source !== 'object' || Array.isArray(source)) throw new Error('PASSKEY_CONFIRM_OPTIONS_INVALID');
+      var rpId = assertPasskeyRpId(source.rpId);
+      var challenge = decodePasskeyB64Url(source.challenge, 16, 128, 'PASSKEY_CONFIRM_CHALLENGE_INVALID');
+      if (source.userVerification !== 'required'
+          || !Array.isArray(source.allowCredentials)
+          || source.allowCredentials.length !== 1) {
+        throw new Error('PASSKEY_CONFIRM_POLICY_INVALID');
+      }
+      var allowed = source.allowCredentials[0] || {};
+      var id = decodePasskeyB64Url(allowed.id, 16, 4096, 'PASSKEY_CONFIRM_CREDENTIAL_INVALID');
+      if (allowed.type !== 'public-key' || bytesToB64Url(id) !== String(expectedCredentialId || '')) {
+        id.fill(0);
+        throw new Error('PASSKEY_CONFIRM_CREDENTIAL_MISMATCH');
+      }
+      return {
+        challenge: challenge,
+        rpId: rpId,
+        timeout: Math.max(1000, Math.min(60000, Number(source.timeout || 60000))),
+        userVerification: 'required',
+        allowCredentials: [{
+          type: 'public-key',
+          id: id,
+          transports: sanitizePasskeyTransports(allowed.transports)
+        }]
+      };
+    }
+
+    function serializePublicKeyCredential(credential, mode) {
+      if (!credential || credential.type !== 'public-key' || !credential.rawId || !credential.response) {
+        throw new Error('PASSKEY_BROWSER_CREDENTIAL_INVALID');
+      }
+      var rawId = bytesToB64Url(new Uint8Array(credential.rawId));
+      if (!/^[A-Za-z0-9_-]{16,4096}$/.test(rawId)) throw new Error('PASSKEY_CREDENTIAL_ID_INVALID');
+      var extensions = {};
+      try {
+        var rawExtensions = credential.getClientExtensionResults ? credential.getClientExtensionResults() : {};
+        if (rawExtensions && rawExtensions.credProps && typeof rawExtensions.credProps.rk === 'boolean') {
+          extensions.credProps = { rk: rawExtensions.credProps.rk };
+        }
+      } catch (_) {}
+      var output = {
+        id: rawId,
+        rawId: rawId,
+        type: 'public-key',
+        clientExtensionResults: extensions,
+        response: {
+          clientDataJSON: bytesToB64Url(new Uint8Array(credential.response.clientDataJSON || new ArrayBuffer(0)))
+        }
+      };
+      if (mode === 'registration') {
+        output.response.attestationObject = bytesToB64Url(new Uint8Array(credential.response.attestationObject || new ArrayBuffer(0)));
+        output.response.transports = sanitizePasskeyTransports(
+          typeof credential.response.getTransports === 'function' ? credential.response.getTransports() : []
+        );
+      } else if (mode === 'authentication') {
+        output.response.authenticatorData = bytesToB64Url(new Uint8Array(credential.response.authenticatorData || new ArrayBuffer(0)));
+        output.response.signature = bytesToB64Url(new Uint8Array(credential.response.signature || new ArrayBuffer(0)));
+        output.response.userHandle = credential.response.userHandle
+          ? bytesToB64Url(new Uint8Array(credential.response.userHandle))
+          : null;
+      } else {
+        throw new Error('PASSKEY_CREDENTIAL_MODE_INVALID');
+      }
+      if (!output.response.clientDataJSON
+          || (mode === 'registration' && !output.response.attestationObject)
+          || (mode === 'authentication' && (!output.response.authenticatorData || !output.response.signature))) {
+        throw new Error('PASSKEY_BROWSER_CREDENTIAL_INCOMPLETE');
+      }
+      return output;
+    }
+
+    function assertRecoveryPasskeySetupToken(value) {
+      var token = String(value || '');
+      if (!/^[A-Za-z0-9_-]{32,16384}\.[A-Za-z0-9_-]{43}$/.test(token)) {
+        throw new Error('PASSKEY_SETUP_TOKEN_INVALID');
+      }
+      return token;
+    }
+
+    function assertRecoveryPasskeyStartResult(result) {
+      var data = result && result.data;
+      if (!result || result.status !== 200 || !data
+          || data.ok !== true
+          || data.method !== 'passkey'
+          || data.passkeyMode !== 'registration'
+          || data.needsRegistration !== true
+          || data.recovery_replacement !== true
+          || data.device_binding_required !== true
+          || data.device_binding_policy !== 'webcrypto-nonextractable-v1') {
+        throw new Error('PASSKEY_RECOVERY_START_RESPONSE_INVALID');
+      }
+      var setupToken = assertRecoveryPasskeySetupToken(data.setupToken);
+      if (data.mfaSetupToken && data.mfaSetupToken !== setupToken) throw new Error('PASSKEY_SETUP_TOKEN_ALIAS_MISMATCH');
+      var expiresIn = Number(data.expires_in || 0);
+      if (!Number.isSafeInteger(expiresIn) || expiresIn < 5 || expiresIn > 600) {
+        throw new Error('PASSKEY_START_EXPIRY_INVALID');
+      }
+      var expiresAtMs = Math.min(state.recoverySessionExpiresAtMs, Date.now() + expiresIn * 1000);
+      if (expiresAtMs <= Date.now() + 3000) throw new Error('PASSKEY_START_EXPIRY_INVALID');
+      return {
+        data: data,
+        setupToken: setupToken,
+        expiresAtMs: expiresAtMs,
+        publicKey: publicKeyCreationOptionsFromServer(data)
+      };
+    }
+
+    function assertRecoveryPasskeyConfirmationResult(result) {
+      var data = result && result.data;
+      if (!result || result.status !== 202 || !data
+          || data.ok !== true
+          || data.verified !== false
+          || data.active !== false
+          || data.method !== 'passkey'
+          || data.passkeyMode !== 'confirm_pending'
+          || data.confirmation_required !== true
+          || data.needsRegistration !== false
+          || data.database_saved !== true
+          || data.pending_created !== true
+          || data.device_binding_required !== true
+          || data.device_binding_policy !== 'webcrypto-nonextractable-v1') {
+        throw new Error('PASSKEY_CONFIRMATION_RESPONSE_INVALID');
+      }
+      var setupToken = assertRecoveryPasskeySetupToken(data.setupToken);
+      if (data.mfaSetupToken && data.mfaSetupToken !== setupToken) throw new Error('PASSKEY_CONFIRMATION_TOKEN_ALIAS_MISMATCH');
+      var expiresIn = Number(data.expires_in || 0);
+      if (!Number.isSafeInteger(expiresIn) || expiresIn < 1 || expiresIn > 600) {
+        throw new Error('PASSKEY_CONFIRMATION_EXPIRY_INVALID');
+      }
+      var expiresAtMs = Math.min(state.recoverySessionExpiresAtMs, Date.now() + expiresIn * 1000);
+      if (expiresAtMs <= Date.now() + 1000) throw new Error('PASSKEY_CONFIRMATION_EXPIRY_INVALID');
+      return {
+        data: data,
+        setupToken: setupToken,
+        expiresAtMs: expiresAtMs,
+        publicKey: publicKeyRequestOptionsFromServer(data, state.passkeyCredentialId)
+      };
+    }
+
+    function assertRecoveryPasskeyFinalResult(result) {
+      var data = result && result.data;
+      var session = data && data.dashboardSession;
+      if (!result || result.status !== 200 || !data
+          || data.ok !== true
+          || data.verified !== true
+          || data.active !== true
+          || data.method !== 'passkey'
+          || data.passkey_registered !== true
+          || data.passkeyMode !== 'registration'
+          || data.needsRegistration !== false
+          || data.database_saved !== true
+          || data.device_bound !== true
+          || data.device_binding_verified !== true
+          || data.device_binding_policy !== 'webcrypto-nonextractable-v1'
+          || data.lost_passkey_recovery_replacement !== true
+          || !Number.isSafeInteger(Number(data.old_passkeys_deactivated))
+          || Number(data.old_passkeys_deactivated) < 1
+          || data.owner_bound !== true
+          || !session || session.verified !== true
+          || session.method !== 'passkey'
+          || session.transport !== 'httponly-secure-cookie-only'
+          || !Number.isSafeInteger(Number(session.securityEpoch))
+          || Number(session.securityEpoch) < 2) {
+        throw new Error('PASSKEY_FINAL_POSTCONDITION_INVALID');
+      }
+      return data;
+    }
+
+    async function createNonextractablePasskeyDeviceKey() {
+      var temporary = null;
+      var pkcs8 = null;
+      try {
+        temporary = await crypto.subtle.generateKey(
+          { name: 'ECDSA', namedCurve: 'P-256' },
+          true,
+          ['sign', 'verify']
+        );
+        var exportedPublic = await crypto.subtle.exportKey('jwk', temporary.publicKey);
+        var x = String(exportedPublic && exportedPublic.x || '');
+        var y = String(exportedPublic && exportedPublic.y || '');
+        if (exportedPublic.kty !== 'EC' || exportedPublic.crv !== 'P-256'
+            || !/^[A-Za-z0-9_-]{43}$/.test(x)
+            || !/^[A-Za-z0-9_-]{43}$/.test(y)) {
+          throw new Error('PASSKEY_DEVICE_PUBLIC_KEY_INVALID');
+        }
+        pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', temporary.privateKey));
+        var privateKey = await crypto.subtle.importKey(
+          'pkcs8',
+          pkcs8,
+          { name: 'ECDSA', namedCurve: 'P-256' },
+          false,
+          ['sign']
+        );
+        if (!privateKey || privateKey.type !== 'private' || privateKey.extractable !== false) {
+          throw new Error('PASSKEY_DEVICE_PRIVATE_KEY_EXTRACTABLE');
+        }
+        var publicJwk = Object.freeze({ kty: 'EC', crv: 'P-256', x: x, y: y });
+        var keyId = await sha256Hex(utf8('P-256\n' + x + '\n' + y));
+        if (!/^[a-f0-9]{64}$/.test(keyId)) throw new Error('PASSKEY_DEVICE_KEY_ID_INVALID');
+        return { privateKey: privateKey, publicJwk: publicJwk, keyId: keyId };
+      } catch (error) {
+        if (error && ['QuotaExceededError', 'UnknownError', 'OperationError'].includes(String(error.name || ''))) {
+          var memoryError = new Error('PASSKEY_DEVICE_KEY_LOW_MEMORY');
+          memoryError.name = String(error.name || 'UnknownError');
+          throw memoryError;
+        }
+        throw error;
+      } finally {
+        try { if (pkcs8) pkcs8.fill(0); } catch (_) {}
+        temporary = null;
+      }
+    }
+
+    async function signPasskeyDeviceBinding(privateKey, setupToken, challenge, credentialId, mode) {
+      if (!privateKey || privateKey.type !== 'private' || privateKey.extractable !== false
+          || !['registration', 'authentication'].includes(mode)
+          || !/^[A-Za-z0-9_-]{16,4096}$/.test(String(credentialId || ''))) {
+        throw new Error('PASSKEY_DEVICE_SIGNING_CONTEXT_INVALID');
+      }
+      var tokenBytes = utf8(setupToken);
+      var inputBytes = null;
+      var signature = null;
+      try {
+        var tokenHash = await sha256B64Url(tokenBytes);
+        var signingInput = [
+          'DIRAC_PASSKEY_DEVICE_BINDING_V1',
+          mode,
+          String(challenge || ''),
+          credentialId,
+          tokenHash
+        ].join('\n');
+        inputBytes = utf8(signingInput);
+        signature = new Uint8Array(await crypto.subtle.sign(
+          { name: 'ECDSA', hash: 'SHA-256' },
+          privateKey,
+          inputBytes
+        ));
+        if (signature.byteLength !== 64) throw new Error('PASSKEY_DEVICE_SIGNATURE_FORMAT_INVALID');
+        return bytesToB64Url(signature);
+      } finally {
+        try { tokenBytes.fill(0); } catch (_) {}
+        try { if (inputBytes) inputBytes.fill(0); } catch (_) {}
+        try { if (signature) signature.fill(0); } catch (_) {}
+      }
+    }
+
+    function openPasskeyDeviceDatabase() {
+      return new Promise(function (resolve, reject) {
+        if (!passkeyIndexedDbFactory || typeof passkeyIndexedDbFactory.open !== 'function') {
+          reject(new Error('PASSKEY_DEVICE_KEY_STORAGE_UNAVAILABLE'));
+          return;
+        }
+        var request;
+        try { request = passkeyIndexedDbFactory.open('dirac-passkey-device-binding-v1', 1); }
+        catch (_) { reject(new Error('PASSKEY_DEVICE_KEY_STORAGE_UNAVAILABLE')); return; }
+        request.onupgradeneeded = function () {
+          var database = request.result;
+          if (!database.objectStoreNames.contains('device_keys')) {
+            database.createObjectStore('device_keys', { keyPath: 'key_id' });
+          }
+        };
+        request.onsuccess = function () { resolve(request.result); };
+        request.onerror = function () { reject(new Error('PASSKEY_DEVICE_KEY_STORAGE_OPEN_FAILED')); };
+        request.onblocked = function () { reject(new Error('PASSKEY_DEVICE_KEY_STORAGE_BLOCKED')); };
+      });
+    }
+
+    function passkeyIdbRequest(request, code) {
+      return new Promise(function (resolve, reject) {
+        request.onsuccess = function () { resolve(request.result); };
+        request.onerror = function () { reject(new Error(String(code || 'PASSKEY_DEVICE_KEY_STORAGE_REQUEST_FAILED'))); };
+      });
+    }
+
+    function passkeyIdbTransaction(transaction, code) {
+      return new Promise(function (resolve, reject) {
+        transaction.oncomplete = function () { resolve(); };
+        transaction.onerror = function () { reject(new Error(String(code || 'PASSKEY_DEVICE_KEY_STORAGE_TRANSACTION_FAILED'))); };
+        transaction.onabort = function () { reject(new Error(String(code || 'PASSKEY_DEVICE_KEY_STORAGE_TRANSACTION_ABORTED'))); };
+      });
+    }
+
+    async function persistPasskeyDeviceKey(deviceKey, credentialId) {
+      var database = null;
+      var credentialHashInput = utf8(String(credentialId || ''));
+      var credentialHash = await sha256Hex(credentialHashInput);
+      credentialHashInput.fill(0);
+      try {
+        database = await openPasskeyDeviceDatabase();
+        var nowMs = Date.now();
+        var record = {
+          key_id: deviceKey.keyId,
+          private_key: deviceKey.privateKey,
+          public_key_jwk: {
+            kty: 'EC', crv: 'P-256', x: deviceKey.publicJwk.x, y: deviceKey.publicJwk.y
+          },
+          credential_id_sha256: credentialHash,
+          state: 'pending',
+          created_at_ms: nowMs,
+          updated_at_ms: nowMs
+        };
+        var write = database.transaction(['device_keys'], 'readwrite');
+        var writeComplete = passkeyIdbTransaction(write, 'PASSKEY_DEVICE_KEY_PERSIST_FAILED');
+        write.objectStore('device_keys').put(record);
+        await writeComplete;
+        var read = database.transaction(['device_keys'], 'readonly');
+        var readComplete = passkeyIdbTransaction(read, 'PASSKEY_DEVICE_KEY_READBACK_TRANSACTION_FAILED');
+        var storedRequest = passkeyIdbRequest(
+          read.objectStore('device_keys').get(deviceKey.keyId),
+          'PASSKEY_DEVICE_KEY_READBACK_FAILED'
+        );
+        var readResults = await Promise.all([storedRequest, readComplete]);
+        var stored = readResults[0];
+        if (!stored
+            || stored.key_id !== deviceKey.keyId
+            || stored.credential_id_sha256 !== credentialHash
+            || stored.state !== 'pending'
+            || !stored.private_key
+            || stored.private_key.type !== 'private'
+            || stored.private_key.extractable !== false) {
+          throw new Error('PASSKEY_DEVICE_KEY_READBACK_INVALID');
+        }
+        return true;
+      } catch (error) {
+        if (error && ['QuotaExceededError', 'UnknownError', 'DataCloneError'].includes(String(error.name || ''))) {
+          var storageError = new Error('PASSKEY_DEVICE_KEY_LOW_MEMORY');
+          storageError.name = String(error.name || 'UnknownError');
+          throw storageError;
+        }
+        throw error;
+      } finally {
+        try { if (database) database.close(); } catch (_) {}
+        try { if (credentialHashInput) credentialHashInput.fill(0); } catch (_) {}
+        credentialHash = '';
+      }
+    }
+
+    async function markPasskeyDeviceKeyActive(keyId, securityEpoch) {
+      var database = null;
+      try {
+        database = await openPasskeyDeviceDatabase();
+        var read = database.transaction(['device_keys'], 'readonly');
+        var readComplete = passkeyIdbTransaction(read, 'PASSKEY_DEVICE_KEY_FINAL_READ_TRANSACTION_FAILED');
+        var recordRequest = passkeyIdbRequest(
+          read.objectStore('device_keys').get(keyId),
+          'PASSKEY_DEVICE_KEY_FINAL_READ_FAILED'
+        );
+        var readResults = await Promise.all([recordRequest, readComplete]);
+        var record = readResults[0];
+        if (!record || record.state !== 'pending' || !record.private_key || record.private_key.extractable !== false) {
+          throw new Error('PASSKEY_DEVICE_KEY_FINAL_STATE_INVALID');
+        }
+        record.state = 'active';
+        record.security_epoch = Number(securityEpoch);
+        record.updated_at_ms = Date.now();
+        var write = database.transaction(['device_keys'], 'readwrite');
+        var writeComplete = passkeyIdbTransaction(write, 'PASSKEY_DEVICE_KEY_FINAL_WRITE_FAILED');
+        write.objectStore('device_keys').put(record);
+        await writeComplete;
+        return true;
+      } finally {
+        try { if (database) database.close(); } catch (_) {}
+      }
+    }
+
+    async function buildRegistrationDeviceEnvelope(deviceKey, setupToken, challenge, credentialId) {
+      var signature = await signPasskeyDeviceBinding(
+        deviceKey.privateKey, setupToken, challenge, credentialId, 'registration'
+      );
+      return ['dpk1r', deviceKey.keyId, deviceKey.publicJwk.x, deviceKey.publicJwk.y, signature].join('.');
+    }
+
+    async function buildAuthenticationDeviceEnvelope(deviceKey, setupToken, challenge, credentialId) {
+      var signature = await signPasskeyDeviceBinding(
+        deviceKey.privateKey, setupToken, challenge, credentialId, 'authentication'
+      );
+      return ['dpk1a', deviceKey.keyId, signature].join('.');
+    }
+
+    function clonePasskeySubmission(value) {
+      var cloned = JSON.parse(JSON.stringify(value));
+      if (!cloned || typeof cloned !== 'object' || Array.isArray(cloned)) {
+        throw new Error('PASSKEY_SUBMISSION_CLONE_INVALID');
+      }
+      return cloned;
+    }
+
+    async function requestRecoveryPasskeyStart() {
+      if (state.passkeyStartResponse && state.passkeyStartExpiresAtMs > Date.now() + 1000) {
+        return state.passkeyStartResponse;
+      }
+      if (state.passkeyStartResponse && state.passkeyStartExpiresAtMs <= Date.now() + 1000) {
+        state.passkeyStartIdempotencyKey = '';
+      }
+      state.passkeyStartResponse = null;
+      state.passkeyStartExpiresAtMs = 0;
+      if (!state.passkeyStartIdempotencyKey) state.passkeyStartIdempotencyKey = randomB64Url32();
+      var submission = {
+        action: CONFIG.passkeyStartAction,
+        idempotency_key: state.passkeyStartIdempotencyKey
+      };
+      var response = await postRecoveryPasskeyAction(CONFIG.passkeyStartAction, submission);
+      var start = assertRecoveryPasskeyStartResult(response);
+      state.passkeyStartResponse = start;
+      state.passkeyStartExpiresAtMs = start.expiresAtMs;
+      return start;
+    }
+
+    async function prepareRecoveryPasskeyRegistration() {
+      var start = await requestRecoveryPasskeyStart();
+      if (start.expiresAtMs <= Date.now() + 1000) throw new Error('PASSKEY_START_EXPIRED');
+      el.passkeyState.textContent = 'Challenge diterima. Konfirmasikan Face ID, sidik jari, atau PIN perangkat.';
+      var browserCredential = await navigator.credentials.create({ publicKey: start.publicKey });
+      if (!browserCredential) throw new Error('PASSKEY_CREATE_EMPTY');
+      var credential = serializePublicKeyCredential(browserCredential, 'registration');
+      var credentialId = credential.rawId;
+      var deviceKey = await createNonextractablePasskeyDeviceKey();
+      await persistPasskeyDeviceKey(deviceKey, credentialId);
+      var deviceEnvelope = await buildRegistrationDeviceEnvelope(
+        deviceKey,
+        start.setupToken,
+        String(start.data.publicKey.challenge || ''),
+        credentialId
+      );
+      state.passkeyDevicePrivateKey = deviceKey.privateKey;
+      state.passkeyDeviceKeyId = deviceKey.keyId;
+      state.passkeyDevicePublicJwk = deviceKey.publicJwk;
+      state.passkeyCredentialId = credentialId;
+      state.passkeyVerifyIdempotencyKey = randomB64Url32();
+      state.passkeyPendingSubmission = {
+        stage: 'registration',
+        submission: clonePasskeySubmission({
+          action: CONFIG.passkeyVerifyAction,
+          idempotency_key: state.passkeyVerifyIdempotencyKey,
+          setupToken: start.setupToken,
+          passkeyMode: 'registration',
+          credential: credential,
+          response: deviceEnvelope
+        })
+      };
+      state.passkeyPhase = 'registration_submit';
+      start = null;
+      browserCredential = null;
+      credential = null;
+      deviceEnvelope = '';
+    }
+
+    function armRecoveryPasskeyConfirmation(result) {
+      var confirmation = assertRecoveryPasskeyConfirmationResult(result);
+      state.passkeyPendingSubmission = null;
+      state.passkeyStartResponse = null;
+      state.passkeyStartExpiresAtMs = 0;
+      state.passkeyConfirmationResponse = confirmation;
+      state.passkeyConfirmationExpiresAtMs = confirmation.expiresAtMs;
+      state.passkeyConfirmIdempotencyKey = '';
+      state.passkeyPhase = 'confirm_prompt';
+      el.createPasskeyButton.textContent = 'Konfirmasi Passkey baru';
+      el.passkeyState.textContent = 'Passkey tersimpan sebagai pending. Tekan tombol sekali lagi untuk konfirmasi akhir.';
+      setStatus('Passkey pending tersimpan. Diperlukan satu konfirmasi perangkat lagi sebelum Passkey lama dicabut.', 'waiting');
+    }
+
+    async function prepareRecoveryPasskeyConfirmation() {
+      var confirmation = state.passkeyConfirmationResponse;
+      if (!confirmation || state.passkeyConfirmationExpiresAtMs <= Date.now() + 1000) {
+        throw new Error('PASSKEY_CONFIRMATION_EXPIRED');
+      }
+      if (!state.passkeyDevicePrivateKey
+          || !state.passkeyDeviceKeyId
+          || !state.passkeyCredentialId) {
+        throw new Error('PASSKEY_CONFIRMATION_DEVICE_KEY_MISSING');
+      }
+      el.passkeyState.textContent = 'Konfirmasikan Passkey baru dengan Face ID, sidik jari, atau PIN.';
+      var browserCredential = await navigator.credentials.get({ publicKey: confirmation.publicKey });
+      if (!browserCredential) throw new Error('PASSKEY_CONFIRM_EMPTY');
+      var credential = serializePublicKeyCredential(browserCredential, 'authentication');
+      if (credential.rawId !== state.passkeyCredentialId) throw new Error('PASSKEY_CONFIRM_CREDENTIAL_MISMATCH');
+      var deviceKey = {
+        privateKey: state.passkeyDevicePrivateKey,
+        keyId: state.passkeyDeviceKeyId,
+        publicJwk: state.passkeyDevicePublicJwk
+      };
+      var deviceEnvelope = await buildAuthenticationDeviceEnvelope(
+        deviceKey,
+        confirmation.setupToken,
+        String(confirmation.data.publicKey.challenge || ''),
+        credential.rawId
+      );
+      state.passkeyConfirmIdempotencyKey = randomB64Url32();
+      state.passkeyPendingSubmission = {
+        stage: 'confirmation',
+        submission: clonePasskeySubmission({
+          action: CONFIG.passkeyVerifyAction,
+          idempotency_key: state.passkeyConfirmIdempotencyKey,
+          setupToken: confirmation.setupToken,
+          passkeyMode: 'confirm_pending',
+          credential: credential,
+          response: deviceEnvelope
+        })
+      };
+      state.passkeyPhase = 'confirmation_submit';
+      browserCredential = null;
+      credential = null;
+      deviceEnvelope = '';
+    }
+
+    async function finalizeRecoveryPasskeySuccess(result, alreadyCompleted) {
+      var finalData = alreadyCompleted ? (result && result.data || {}) : assertRecoveryPasskeyFinalResult(result);
+      var securityEpoch = Number(
+        finalData && finalData.dashboardSession && finalData.dashboardSession.securityEpoch
+        || finalData && finalData.security_epoch
+        || 0
+      );
+      var deviceRecordActive = false;
+      if (state.passkeyDeviceKeyId && Number.isSafeInteger(securityEpoch) && securityEpoch >= 2) {
+        try {
+          await markPasskeyDeviceKeyActive(state.passkeyDeviceKeyId, securityEpoch);
+          deviceRecordActive = true;
+        } catch (_) {
+          deviceRecordActive = false;
+        }
+      }
+      wipeMemory({ preserveResultUi: true });
+      try { if (state.expiryTimer) clearTimeout(state.expiryTimer); } catch (_) {}
+      state.expiryTimer = null;
+      state.expiresAtMs = 0;
+      state.flowPhase = alreadyCompleted ? 'passkey_already_completed' : 'passkey_complete';
+      state.passkeyPhase = 'complete';
+      el.createPasskeyButton.disabled = true;
+      el.createPasskeyButton.textContent = alreadyCompleted ? 'Recovery sudah selesai' : 'Passkey berhasil diganti';
+      el.passkeyState.textContent = deviceRecordActive
+        ? 'Recovery session sudah dikonsumsi tepat sekali. Passkey baru aktif dan material recovery telah dibersihkan.'
+        : 'Server menyatakan rotasi selesai. Material recovery sudah dibersihkan; login ulang diperlukan untuk memverifikasi binding perangkat.';
+      setStatus(
+        alreadyCompleted
+          ? 'Rotasi ini sudah selesai di server. Tidak ada ceremony yang diulang. Silakan login dengan Passkey baru.'
+          : deviceRecordActive
+            ? 'Passkey baru aktif, Passkey lama dicabut, dan recovery session sudah dikonsumsi. Silakan lanjutkan dengan sesi baru.'
+            : 'Passkey sudah dirotasi di server, tetapi status penyimpanan binding lokal belum dapat ditandai aktif. Jangan ulangi recovery; login ulang untuk pemeriksaan.',
+        deviceRecordActive ? 'ok' : 'waiting'
+      );
+      try { history.replaceState(null, document.title, location.pathname + '#complete'); } catch (_) {}
+    }
+
+    function markRecoveryPasskeyPostResponseError(error, status) {
+      var marked = new Error('PASSKEY_POST_RESPONSE_PROCESSING_FAILED');
+      var responseStatus = Number(status || 0);
+      marked.name = String(error && error.name || 'Error').slice(0, 80) || 'Error';
+      marked.httpStatus = Number.isSafeInteger(responseStatus)
+        && responseStatus >= 100 && responseStatus <= 599
+        ? responseStatus
+        : 0;
+      marked.serverCode = String(
+        error && (error.serverCode || error.message) || 'PASSKEY_POST_RESPONSE_PROCESSING_FAILED'
+      ).slice(0, 120);
+      marked.passkeyMutationDispatched = true;
+      marked.passkeyResponseReceived = true;
+      return marked;
+    }
+
+    async function submitPendingRecoveryPasskey() {
+      var pending = state.passkeyPendingSubmission;
+      if (!pending || !pending.submission
+          || !['registration', 'confirmation'].includes(String(pending.stage || ''))) {
+        throw new Error('PASSKEY_PENDING_SUBMISSION_INVALID');
+      }
+      el.passkeyState.textContent = pending.stage === 'registration'
+        ? 'Menyimpan Passkey pending di server utama...'
+        : 'Mengaktifkan Passkey baru dan mencabut seluruh Passkey lama secara atomik...';
+      var result = await postRecoveryPasskeyAction(CONFIG.passkeyVerifyAction, pending.submission);
+      try {
+        if (pending.stage === 'registration' && result.status === 202) {
+          armRecoveryPasskeyConfirmation(result);
+          return;
+        }
+        if (result.status !== 200) throw new Error('PASSKEY_VERIFY_STATUS_INVALID');
+        await finalizeRecoveryPasskeySuccess(result, false);
+      } catch (error) {
+        var responseStatus = result && result.status;
+        state.passkeyPendingSubmission = null;
+        result = null;
+        throw markRecoveryPasskeyPostResponseError(error, responseStatus);
+      }
+    }
+
+    function isRecoveryPasskeyRetryableError(error) {
+      var status = Number(error && error.httpStatus || 0);
+      var code = String(error && (error.serverCode || error.message) || '');
+      var hasHttpStatus = Boolean(error && Object.prototype.hasOwnProperty.call(error, 'httpStatus'));
+      return (hasHttpStatus && status === 0)
+        || status === 408
+        || status === 425
+        || status === 429
+        || status >= 500
+        || /(?:TIMEOUT|NETWORK|FETCH|DEPENDENCY|DATABASE|COLD_START|RATE_LIMIT|TEMPORARILY|FAILED TO FETCH)/i.test(code);
+    }
+
+    function recoveryPasskeyBrowserErrorKind(error) {
+      var name = String(error && error.name || '');
+      var code = String(error && error.message || '');
+      if (name === 'NotAllowedError' || name === 'AbortError') return 'cancelled';
+      if (name === 'NotSupportedError' || name === 'SecurityError'
+          || /(?:BROWSER_UNSUPPORTED|PLATFORM_AUTHENTICATOR_UNAVAILABLE|PLATFORM_CAPABILITY)/.test(code)) return 'unsupported';
+      if (['QuotaExceededError', 'UnknownError', 'DataCloneError', 'OperationError', 'NotReadableError'].includes(name)
+          || /(?:LOW_MEMORY|KEY_STORAGE|STORAGE_BLOCKED)/.test(code)) return 'low_memory';
+      if (name === 'InvalidStateError' || name === 'ConstraintError') return 'unsupported';
+      return '';
+    }
+
+    function closeRecoveryPasskeyUnknownMutationState(error) {
+      var responseReceived = Boolean(error && error.passkeyResponseReceived === true);
+      wipeMemory({ preserveResultUi: true });
+      state.flowPhase = 'passkey_mutation_state_unknown';
+      state.passkeyPhase = 'closed';
+      el.createPasskeyButton.disabled = true;
+      el.createPasskeyButton.textContent = 'Jangan kirim ulang';
+      el.passkeyState.textContent = responseReceived
+        ? 'Server menerima request perubahan, tetapi responsnya tidak membuktikan state yang aman untuk diulang. Request tidak akan dikirim ulang.'
+        : 'Koneksi terputus setelah request perubahan dikirim. State server tidak diketahui dan request tidak akan dikirim ulang.';
+      setStatus(
+        'Durable replay untuk mutasi Passkey belum tersedia. Coba login dengan Passkey baru; bila gagal, hubungi administrator. Jangan mengulangi recovery ini.',
+        'err'
+      );
+    }
+
+    async function handleRecoveryPasskeyError(error) {
+      var code = String(error && (error.serverCode || error.message) || 'PASSKEY_UNKNOWN_ERROR');
+      var serverData = error && error.serverData && typeof error.serverData === 'object'
+        ? error.serverData
+        : null;
+      if (code === 'PASSKEY_RECOVERY_ALREADY_COMPLETED') {
+        await finalizeRecoveryPasskeySuccess({ data: serverData || {} }, true);
+        if (serverData) {
+          try { serverData.recovery_session_token = ''; } catch (_) {}
+        }
+        return;
+      }
+      if (/PERMANENT_BAN|BAN_ACTIVE/.test(code)) {
+        renderLockedState();
+        setStatus('Permintaan ditolak oleh kebijakan keamanan server. Tidak ada ceremony Passkey yang diulang.', 'err');
+        return;
+      }
+      if (/RECOVERY_SESSION_(?:EXPIRED|USED|CONSUMED|REVOKED)/.test(code)) {
+        wipeMemory({ preserveResultUi: true });
+        state.flowPhase = 'recovery_session_closed';
+        state.passkeyPhase = 'closed';
+        el.createPasskeyButton.disabled = true;
+        el.passkeyState.textContent = 'Recovery session sudah kedaluwarsa atau telah dikonsumsi. Buka tautan recovery resmi yang baru.';
+        setStatus('Recovery session tidak lagi dapat digunakan. Ini bukan permanent-ban browser.', 'err');
+        return;
+      }
+      if (error && error.passkeyMutationDispatched === true) {
+        closeRecoveryPasskeyUnknownMutationState(error);
+        return;
+      }
+      var browserKind = recoveryPasskeyBrowserErrorKind(error);
+      if (browserKind === 'cancelled') {
+        el.passkeyState.textContent = 'Prompt perangkat dibatalkan. Challenge belum dibuang; tekan tombol untuk mencoba lagi sebelum kedaluwarsa.';
+        setStatus('Konfirmasi browser dibatalkan. Tidak ada permanent-ban dan tidak ada retry otomatis.', 'waiting');
+        return;
+      }
+      if (browserKind === 'unsupported') {
+        el.passkeyState.textContent = 'Browser/perangkat ini tidak mendukung kebijakan Passkey yang diwajibkan. Gunakan browser resmi dengan authenticator platform.';
+        setStatus('Browser incompatibility dipisahkan dari kesalahan kode dan permanent-ban.', 'err');
+        return;
+      }
+      if (browserKind === 'low_memory') {
+        el.passkeyState.textContent = 'Browser gagal menyediakan atau menyimpan kunci nonextractable. Tutup tab lain lalu tekan tombol lagi; tidak ada retry otomatis.';
+        setStatus('Kondisi memori/storage browser terdeteksi sebagai dependency lokal, bukan permanent-ban.', 'err');
+        return;
+      }
+      if (/PASSKEY_(?:START|CONFIRMATION)_EXPIRED/.test(code)) {
+        el.passkeyState.textContent = 'Challenge Passkey kedaluwarsa. Untuk mencegah state ganda, buka ulang tautan recovery resmi.';
+        setStatus('Challenge kedaluwarsa tanpa mengonsumsi ulang recovery session secara lokal.', 'err');
+        return;
+      }
+      if (isRecoveryPasskeyRetryableError(error)) {
+        el.passkeyState.textContent = state.passkeyPendingSubmission
+          ? 'Request perubahan belum dikirim ke server karena bootstrap gagal. Tekan tombol untuk mengirim request tertahan.'
+          : 'Dependency bootstrap belum tersedia. Anda dapat meminta challenge lagi tanpa retry otomatis.';
+        setStatus('Layanan sementara belum tersedia. Tidak ada retry otomatis atau permanent-ban.', 'waiting');
+        return;
+      }
+      el.passkeyState.textContent = 'Kontrak Passkey ditolak. Request tidak diulang otomatis. Muat ulang hanya melalui tautan recovery resmi bila perlu.';
+      setStatus('Passkey belum dapat diselesaikan. Kesalahan kontrak dipisahkan dari dependency failure dan permanent-ban.', 'err');
+    }
+
+    async function runRecoveryPasskeyHandoff() {
+      if (state.passkeyBusy || state.permanentLocked || state.passkeyPhase === 'complete') return;
+      state.passkeyBusy = true;
+      el.createPasskeyButton.disabled = true;
+      try {
+        assertRecoverySessionInMemory();
+        if (!browserIsOnline()) throw new Error('PASSKEY_NETWORK_OFFLINE');
+        if (state.passkeyPendingSubmission) {
+          await submitPendingRecoveryPasskey();
+          return;
+        }
+        await assertRecoveryPasskeyPlatformSupport();
+        if (state.passkeyPhase === 'confirm_prompt') {
+          await prepareRecoveryPasskeyConfirmation();
+        } else {
+          await prepareRecoveryPasskeyRegistration();
+        }
+        await submitPendingRecoveryPasskey();
+      } catch (error) {
+        await handleRecoveryPasskeyError(error);
+      } finally {
+        state.passkeyBusy = false;
+        if (!state.permanentLocked
+            && state.passkeyPhase !== 'complete'
+            && state.passkeyPhase !== 'closed') {
+          el.createPasskeyButton.disabled = !browserIsOnline();
+          if (state.passkeyPhase === 'confirm_prompt') {
+            el.createPasskeyButton.textContent = 'Konfirmasi Passkey baru';
+          } else if (state.passkeyPendingSubmission) {
+            el.createPasskeyButton.textContent = 'Kirim request tertahan';
+          } else {
+            el.createPasskeyButton.textContent = 'Buat Passkey pengganti';
+          }
+        }
+      }
     }
     async function decryptSubmit(event) {
       event.preventDefault();
@@ -2111,6 +3682,7 @@
       state.flowPhase = 'offline_kdf';
       try { document.body.classList.add('processing'); } catch (_) {}
       var envelope = null;
+      var serializedEnvelope = '';
       try {
         var bundle = state.vaultBundle;
         var manifest = state.manifestPayload || {};
@@ -2124,6 +3696,9 @@
           return buildHybridEnvelope(bundle, manifest, factors);
         });
         assertOfflinePhase('OFFLINE_REQUIRED_AFTER_ENVELOPE');
+        // dirac-client-hybrid-manual-retry-v282: retain this exact serialization and
+        // its response key only in volatile memory until a terminal response is opened.
+        serializedEnvelope = armHybridManualRetry(envelope);
 
         try { el.passwordMaterial.value = ''; } catch (_) {}
         try { el.emailSecret.value = ''; } catch (_) {}
@@ -2135,37 +3710,25 @@
         await waitForConnectivity(true, 'Envelope terenkripsi siap. Sambungkan internet untuk verifikasi melalui Central Guard.');
         state.flowPhase = 'online_submit';
         var response = await runLoadingStage('Memverifikasi permintaan pemulihan', function () {
-          return submitHybridEnvelope(envelope);
+          return submitHybridEnvelope(envelope, serializedEnvelope);
         });
-
-        state.flowPhase = 'await_offline_result';
-        await waitForConnectivity(false, 'Respons terenkripsi diterima. Matikan Wi-Fi dan data seluler untuk membuka hasil.');
-        state.flowPhase = 'offline_result';
-        assertOfflinePhase('OFFLINE_REQUIRED_FOR_RESULT_OPEN');
-        var recoveryMaterialBytes = await runLoadingStage('Menyiapkan kode pemulihan', function () {
-          return openSealedRecovery(response, envelope, bundle.request_id);
-        });
-        assertOfflinePhase('OFFLINE_REQUIRED_FOR_RESULT_READY');
-        await runLoadingStage('Menyiapkan tombol salin satu kali', function () {
-          keepOnlyRecoveryBuffer(recoveryMaterialBytes);
-          state.recoveryCopied = false;
-          state.flowPhase = 'complete_offline';
-          el.copyRecoveryButton.disabled = false;
-          el.copyRecoveryButton.textContent = 'Salin kode pemulihan — hanya 1×';
-          el.copyState.textContent = 'Kode tidak ditampilkan. Saat disalin, kode masuk ke clipboard sistem. Tempelkan segera; halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik.';
-          el.resultBox.classList.add('show');
-        });
-        setProcessStep(3);
-        setStatus('Verifikasi berhasil. Tetap offline; kode pemulihan siap disalin satu kali.', 'ok');
+        await finishHybridResponseOffline(response, envelope);
       } catch (error) {
         var msg = String(error && error.message || '');
-        if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') renderLockedState();
-        else if (isRetryableCredentialError(error) || /AES_KW|ARGON2|PASSWORD|SECRET_LENGTH/.test(msg)) renderCredentialError(error);
+        if (isHybridTransportRetryable(error)
+            && state.hybridPendingEnvelope === envelope
+            && Date.now() < Number(envelope && envelope.body && envelope.body.expires_at_ms || 0) - 1000) {
+          showHybridManualRetry(error);
+        } else if (msg === 'EXPIRED' || msg === 'RECOVERY_LOCKED') renderLockedState();
+        else if (isRetryableCredentialError(error)) renderCredentialError(error);
         else failClosed(error);
       } finally {
         try { document.body.classList.remove('processing'); } catch (_) {}
-        try { if (envelope && envelope.responseKey) envelope.responseKey.fill(0); } catch (_) {}
-        try { if (envelope && envelope.transcriptHash) envelope.transcriptHash.fill(0); } catch (_) {}
+        if (state.hybridPendingEnvelope !== envelope) {
+          try { if (envelope && envelope.responseKey) envelope.responseKey.fill(0); } catch (_) {}
+          try { if (envelope && envelope.transcriptHash) envelope.transcriptHash.fill(0); } catch (_) {}
+        }
+        serializedEnvelope = '';
         if (!el.form.hidden && !state.permanentLocked) el.decryptButton.disabled = browserIsOnline();
       }
     }
@@ -2198,6 +3761,7 @@
         setDebugStage('vault_fetch');
         return fetchVaultOnce(state.fragment);
       });
+      assertNotPermanentlyLocked();
       state.vaultResponse = raw;
 
       state.vaultBundle = await runLoadingStage('Memeriksa data pemulihan', function () {
@@ -2231,13 +3795,17 @@
     var startupWatchdogId = setTimeout(function () {
       if (state.bootstrapCompleted || state.permanentLocked) return;
       recoveryDebug('bootstrap_timeout', new Error('HTML_BOOTSTRAP_TIMEOUT'));
+      sealRecoveryFlow();
       setStatus('Layanan pemulihan belum selesai dimuat. Muat ulang halaman melalui tautan resmi dari email.', 'err');
-    }, 30000);
+    }, Math.min(CONFIG.vaultFetchTimeoutMs + 10000, 2147483647));
 
     hideCredentialForm();
 
     el.form.addEventListener('submit', decryptSubmit);
+    el.retryHybridButton.addEventListener('click', retryHybridEnvelopeManually);
     el.copyRecoveryButton.addEventListener('click', copyRecoveryMaterialOnce);
+    el.discardRecoveryButton.addEventListener('click', discardRecoveryMaterialForPasskey);
+    el.createPasskeyButton.addEventListener('click', runRecoveryPasskeyHandoff);
     el.clearButton.addEventListener('click', function () {
       wipeMemory();
       setLockNotice(false);
@@ -2253,6 +3821,16 @@
     window.addEventListener('online', function () {
       if (state.permanentLocked) return;
       if (state.flowPhase === 'offline_kdf' || state.flowPhase === 'offline_result' || state.flowPhase === 'complete_offline') return renderLockedState();
+      if (state.flowPhase === 'hybrid_manual_retry') {
+        el.retryHybridButton.disabled = false;
+        el.hybridRetryState.textContent = 'Internet tersedia. Tekan retry untuk mengirim byte envelope yang sama; tidak ada retry otomatis.';
+        setStatus('Internet tersedia. Retry hybrid menunggu tindakan manual.', 'waiting');
+        return;
+      }
+      if (state.flowPhase === 'hybrid_manual_retry_submit') {
+        setStatus('Retry manual sedang menunggu respons Central Guard.', 'waiting');
+        return;
+      }
       if (state.flowPhase === 'offline_credentials' || state.flowPhase === 'await_offline_credentials') {
         state.flowPhase = 'await_offline_credentials';
         wipeMemory();
@@ -2260,20 +3838,44 @@
       }
       if (state.flowPhase === 'await_online_submit' || state.flowPhase === 'online_submit') {
         setStatus('Koneksi tersedia. Envelope terenkripsi sedang diverifikasi melalui Central Guard.', 'waiting');
+        return;
+      }
+      if (state.recoverySessionBytes && (state.flowPhase === 'await_online_passkey'
+          || state.flowPhase === 'passkey_ready'
+          || /^passkey_/.test(String(state.flowPhase || '')))) {
+        state.flowPhase = 'passkey_ready';
+        el.createPasskeyButton.disabled = state.passkeyBusy;
+        el.passkeyState.textContent = state.passkeyPendingSubmission
+          ? 'Internet tersedia. Request perubahan belum pernah dikirim; tekan tombol untuk mengirim request tertahan.'
+          : state.passkeyPhase === 'confirm_prompt'
+            ? 'Internet tersedia. Tekan tombol untuk konfirmasi akhir Passkey baru.'
+            : 'Internet tersedia. Tekan tombol untuk melanjutkan pembuatan Passkey pengganti.';
       }
     }, { once: false });
     window.addEventListener('offline', function () {
       if (state.permanentLocked) return;
+      if (state.flowPhase === 'hybrid_manual_retry') {
+        el.retryHybridButton.disabled = true;
+        el.hybridRetryState.textContent = 'Offline. Sambungkan internet lalu tekan retry secara manual.';
+        setStatus('Retry hybrid ditahan sampai internet tersedia; tidak ada pengiriman otomatis.', 'waiting');
+        return;
+      }
       if (state.flowPhase === 'await_offline_credentials' || state.flowPhase === 'offline_credentials') return updateOfflineDecryptState();
       if (state.flowPhase === 'await_offline_result') {
         setStatus('Status offline terdeteksi. Membuka respons terenkripsi secara lokal.', 'waiting');
+        return;
+      }
+      if (state.recoverySessionBytes && !state.recoveryMaterialBytes) {
+        state.flowPhase = 'await_online_passkey';
+        el.createPasskeyButton.disabled = true;
+        el.passkeyState.textContent = 'Koneksi terputus. Recovery session tetap di memori; tidak ada request yang diulang otomatis.';
       }
     }, { once: false });
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'hidden' && state.recoveryMaterialBytes) renderLockedState();
     }, { once: false });
     document.addEventListener('freeze', function () {
-      if (state.recoveryMaterialBytes) renderLockedState();
+      if (state.recoveryMaterialBytes || state.recoverySessionBytes) renderLockedState();
     }, { once: false });
     window.addEventListener('pageshow', function (event) {
       if (event && event.persisted) renderLockedState();
