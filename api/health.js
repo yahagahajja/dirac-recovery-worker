@@ -12928,11 +12928,36 @@ const DIRAC_RECOVERY_SECURITY_DB_PAGE_WIRE_LIMIT_V265 = 30 * 1024;
 const DIRAC_RECOVERY_SECURITY_DB_PAGE_FIELD_CHUNK_CHARS_V273 = 23 * 1024;
 const DIRAC_RECOVERY_SECURITY_DB_PAGE_SEGMENT_CHARS_V273 = 128;
 const DIRAC_RECOVERY_SECURITY_REPORT_WIRE_LIMIT_V265 = 32 * 1024;
-const DIRAC_RECOVERY_SECURITY_DB_RESPONSE_CODEC_V275 = 'dirac-recovery-security-db-response-br-v275';
+const DIRAC_RECOVERY_SECURITY_DB_RESPONSE_CODEC_V277 = 'dirac-recovery-security-db-response-framed-br-v277';
 const DIRAC_RECOVERY_SECURITY_DB_RESPONSE_RAW_LIMIT_V275 = 256 * 1024;
 const DIRAC_RECOVERY_SECURITY_DB_RESPONSE_COMPRESSED_LIMIT_V275 = 20 * 1024;
+const DIRAC_RECOVERY_SECURITY_DB_RESPONSE_FRAME_SEGMENT_CHARS_V277 = 11;
+const DIRAC_RECOVERY_SECURITY_DB_RESPONSE_FRAME_CHUNK_CHARS_V277 = 4096;
+const DIRAC_RECOVERY_SECURITY_DB_RESPONSE_FRAME_MAX_CHUNKS_V277 = 8;
 
-function diracRecoverySecurityDbProxyDecodeResultV275(result, cleanPath, method) {
+function diracRecoverySecurityDbProxyUnframeScalarV277(value) {
+  if (typeof value !== 'string' || !value.length) return null;
+  const segments = value.split('~');
+  if (!segments.length || segments.some((segment, index) => !segment.length
+      || segment.length > DIRAC_RECOVERY_SECURITY_DB_RESPONSE_FRAME_SEGMENT_CHARS_V277
+      || (index < segments.length - 1 && segment.length !== DIRAC_RECOVERY_SECURITY_DB_RESPONSE_FRAME_SEGMENT_CHARS_V277)
+      || !/^[A-Za-z0-9_-]+$/.test(segment))) return null;
+  return segments.join('');
+}
+
+function diracRecoverySecurityDbProxyUnframePayloadV277(value) {
+  if (!Array.isArray(value)
+      || value.length < 1
+      || value.length > DIRAC_RECOVERY_SECURITY_DB_RESPONSE_FRAME_MAX_CHUNKS_V277
+      || value.some((chunk, index) => typeof chunk !== 'string'
+        || chunk.length < 1
+        || chunk.length > DIRAC_RECOVERY_SECURITY_DB_RESPONSE_FRAME_CHUNK_CHARS_V277
+        || (index < value.length - 1 && chunk.length !== DIRAC_RECOVERY_SECURITY_DB_RESPONSE_FRAME_CHUNK_CHARS_V277)
+        || !/^[A-Za-z0-9_~-]+$/.test(chunk))) return null;
+  return diracRecoverySecurityDbProxyUnframeScalarV277(value.join(''));
+}
+
+function diracRecoverySecurityDbProxyDecodeResultV277(result, cleanPath, method) {
   const eligible = String(cleanPath || '').startsWith('/rest/v1/security_lost_passkey_recovery_requests')
     && String(method || '') === 'GET'
     && result && result.ok === true
@@ -12945,19 +12970,20 @@ function diracRecoverySecurityDbProxyDecodeResultV275(result, cleanPath, method)
   const actualKeys = encoded ? Object.keys(encoded).sort() : [];
   const compressedBytes = Number(encoded && encoded.compressed_bytes);
   const rawBytes = Number(encoded && encoded.raw_bytes);
-  const payload = String(encoded && encoded.payload_b64url || '');
+  const payload = diracRecoverySecurityDbProxyUnframePayloadV277(encoded && encoded.payload_b64url);
+  const expectedDigest = diracRecoverySecurityDbProxyUnframeScalarV277(encoded && encoded.sha512);
   if (!encoded
       || actualKeys.length !== expectedKeys.length
       || actualKeys.some((key, index) => key !== expectedKeys[index])
-      || encoded.codec !== DIRAC_RECOVERY_SECURITY_DB_RESPONSE_CODEC_V275
+      || encoded.codec !== DIRAC_RECOVERY_SECURITY_DB_RESPONSE_CODEC_V277
       || !Number.isSafeInteger(compressedBytes)
       || compressedBytes < 1
       || compressedBytes > DIRAC_RECOVERY_SECURITY_DB_RESPONSE_COMPRESSED_LIMIT_V275
       || !Number.isSafeInteger(rawBytes)
       || rawBytes < 1
       || rawBytes > DIRAC_RECOVERY_SECURITY_DB_RESPONSE_RAW_LIMIT_V275
-      || !/^[A-Za-z0-9_-]+$/.test(payload)
-      || !/^[A-Za-z0-9_-]{86}$/.test(String(encoded.sha512 || ''))) {
+      || !payload
+      || !/^[A-Za-z0-9_-]{86}$/.test(String(expectedDigest || ''))) {
     return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_CODEC_INVALID' };
   }
   let compressed = null;
@@ -12974,7 +13000,7 @@ function diracRecoverySecurityDbProxyDecodeResultV275(result, cleanPath, method)
       return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_LENGTH_INVALID' };
     }
     const actualDigest = crypto.createHash('sha512').update(raw).digest('base64url');
-    if (!safeEqual(actualDigest, String(encoded.sha512))) {
+    if (!safeEqual(actualDigest, expectedDigest)) {
       return { ok: false, code: 'RECOVERY_SECURITY_DB_PROXY_RESPONSE_HASH_INVALID' };
     }
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(raw); }
@@ -13118,6 +13144,8 @@ async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
   const expectedResponseKeys = ['event', 'ok', 'request_id', 'response_mac', 'result', 'version'];
   const result = response.result && typeof response.result === 'object' && !Array.isArray(response.result) ? response.result : null;
   const resultKeys = result ? Object.keys(result).sort() : [];
+  const responseRequestIdV277 = diracRecoverySecurityDbProxyUnframeScalarV277(response && response.request_id);
+  const responseMacV277 = diracRecoverySecurityDbProxyUnframeScalarV277(response && response.response_mac);
   if (responseKeys.length !== expectedResponseKeys.length
       || responseKeys.some((key, index) => key !== expectedResponseKeys[index])
       || resultKeys.length !== 3
@@ -13127,8 +13155,8 @@ async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
       || response.ok !== true
       || response.event !== DIRAC_RECOVERY_SECURITY_DB_PROXY_EVENT_V234
       || response.version !== DIRAC_RECOVERY_SECURITY_DB_PROXY_V234
-      || response.request_id !== requestId
-      || !/^[A-Za-z0-9_-]{86}$/.test(String(response.response_mac || ''))
+      || responseRequestIdV277 !== requestId
+      || !/^[A-Za-z0-9_-]{86}$/.test(String(responseMacV277 || ''))
       || typeof result.ok !== 'boolean'
       || !Number.isFinite(Number(result.status))) {
     return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_RESPONSE_INVALID');
@@ -13143,12 +13171,12 @@ async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
   let expectedMac = '';
   try { expectedMac = diracRecoverySecurityDbProxyMacV234(authenticated); }
   catch (_) { return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_MAC_UNAVAILABLE'); }
-  if (!safeEqual(String(response.response_mac), expectedMac)) {
+  if (!safeEqual(responseMacV277, expectedMac)) {
     return diracRecoverySecurityDbProxyFailureV234('RECOVERY_SECURITY_DB_PROXY_MAC_INVALID');
   }
-  const decodedResultV275 = diracRecoverySecurityDbProxyDecodeResultV275(result, cleanPath, method);
-  if (!decodedResultV275.ok) return diracRecoverySecurityDbProxyFailureV234(decodedResultV275.code);
-  return { ok: result.ok === true, status: Number(result.status || 0), data: decodedResultV275.data };
+  const decodedResultV277 = diracRecoverySecurityDbProxyDecodeResultV277(result, cleanPath, method);
+  if (!decodedResultV277.ok) return diracRecoverySecurityDbProxyFailureV234(decodedResultV277.code);
+  return { ok: result.ok === true, status: Number(result.status || 0), data: decodedResultV277.data };
 }
 
 supabaseFetch = async function supabaseFetchViaServer1SecurityProxyV234(path, options = {}) {
