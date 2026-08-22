@@ -2,14 +2,14 @@
 
 ## Akar yang diperbaiki
 
-Data yang tersedia membuktikan target aplikasi tidak sempat mengirim status diagnostik 549–558: invocation berakhir sekitar 57–69 detik ketika RSS mencapai sekitar 1.235 GB, lalu platform menampilkan 503. Pola ini menunjukkan penghentian pada lapisan runtime/compute sebelum blok `catch` selesai. Data tersebut saja tidak dapat membedakan secara mutlak antara batas durasi plan dan hard resource termination; keduanya diperbaiki oleh target compute ini. S-RECO menjalankan beberapa Argon2id berurutan dengan minimum `memoryCost` 1.048.576 KiB; menurunkan parameter itu dilarang dan bukan solusi.
+Data yang tersedia membuktikan target aplikasi tidak sempat mengirim status diagnostik 549–558: invocation berakhir sekitar 57–69 detik ketika RSS mencapai sekitar 1.235 GB, lalu platform menampilkan 503. Pola ini menunjukkan penghentian pada lapisan runtime/compute sebelum blok `catch` selesai. Data tersebut saja tidak dapat membedakan secara mutlak antara batas durasi plan dan hard resource termination; keduanya diperbaiki oleh target compute ini. Pada revisi v276, S-RECO mengunci setiap Argon2id recovery pada `memoryCost` 512.000 KiB (500 MiB).
 
 Patch v262 tidak mengubah `api/health.js`, `vercel.json`, S-UTAMA, Central Guard, parameter Argon2id, signature, persistent ban, key separation, maupun kriptografi. Patch hanya menambahkan runtime container dengan sumber daya yang cukup dan tanpa batas eksekusi serverless satu menit.
 
 ## Syarat deployment wajib
 
 1. Deploy direktori `S-RECO` sebagai container dari `Dockerfile`, bukan sebagai Vercel Function.
-2. Sediakan hard limit minimum 8 GiB RAM dan sedikitnya 4 vCPU yang terjamin/tidak di-throttle. Jangan menurunkan parameter Argon2id untuk menyesuaikan mesin.
+2. Sediakan hard limit minimum 8 GiB RAM dan sedikitnya 4 vCPU yang terjamin/tidak di-throttle. Jangan menurunkan parameter Argon2id di bawah 512.000 KiB.
 3. Salin environment production S-RECO yang sekarang ke secret manager target secara persis. Jangan masukkan environment yang secara eksplisit dilarang oleh pemisahan Server 1/Server 2.
 4. Pertahankan `DIRAC_CENTRAL_DEPLOYMENT_ROLE=vercel2` dan flag S-RECO yang diwajibkan kode. Kata `vercel2` adalah nilai role keamanan; itu tidak mewajibkan runtime Vercel.
 5. Ekspos container hanya melalui reverse proxy HTTPS untuk `secure.diracgroup.store`. Port 3000 tetap private/loopback.
