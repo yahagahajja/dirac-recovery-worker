@@ -3103,6 +3103,7 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
   };
   let attempts = 0;
   let lastReason = 'queue_lock_busy';
+  let sameRequestGenerationHandoffChecked = false;
 
   while (true) {
     attempts += 1;
@@ -3110,6 +3111,83 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
     const memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
     let claimed = null;
     let patched = null;
+
+    // Generation has completed every Argon2id operation before its one-time
+    // recovery link can reach the browser. If only the durable release was
+    // lost, transfer that exact request's live lease with an owner-bound CAS.
+    // The global lock is never cleared or bypassed, and unrelated requests or
+    // active HPKE verifications remain serialized by the existing queue.
+    if (!sameRequestGenerationHandoffChecked
+        && queueTask === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159) {
+      sameRequestGenerationHandoffChecked = true;
+      const cleanNonce = customerSecurityNormalizeLostPasskeyRequestId(context.nonce);
+      const persistentState = cleanNonce
+        ? await customerSecurityLostPasskeyQueueReadStateV189()
+        : { ok: false, row: null };
+      const priorRow = persistentState && persistentState.ok ? persistentState.row : null;
+      const priorRecord = priorRow && priorRow.record_json && typeof priorRow.record_json === 'object'
+        && !Array.isArray(priorRow.record_json) ? priorRow.record_json : null;
+      const priorOwner = customerSecurityLostPasskeyQueueRowOwnerV164(priorRow);
+      const expectedNonceHash = cleanNonce
+        ? customerSecurityLostPasskeySha256B64(Buffer.from(cleanNonce, 'utf8'))
+        : '';
+      const priorNonceHash = String(priorRecord && priorRecord.request_nonce_hash || '');
+      const handoffEligible = Boolean(priorRecord
+        && String(priorRow.security_key || '') === DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164
+        && priorRecord.type === 'lost_passkey_generate_argon2id_queue_lock_v164'
+        && priorRecord.patch === DIRAC_LOST_PASSKEY_GENERATE_QUEUE_PATCH_V164
+        && priorRecord.scope === 'all_lost_passkey_argon2id'
+        && priorRecord.worker_action === DIRAC_RECOVERY_WORKER_TASK_GENERATE
+        && /^qv164_[A-Za-z0-9_-]{32}$/.test(priorOwner)
+        && /^[A-Za-z0-9_-]{43}$/.test(priorNonceHash)
+        && /^[A-Za-z0-9_-]{43}$/.test(expectedNonceHash)
+        && safeEqual(priorNonceHash, expectedNonceHash)
+        && customerSecurityLostPasskeyQueueRowActiveV164(priorRow, nowMs));
+      if (handoffEligible) {
+        const table = customerSecurityLostPasskeyQueueTableV164();
+        const lockUntilMs = nowMs + customerSecurityLostPasskeyQueueTtlMsV164();
+        const handoffPath = '/rest/v1/' + encodeURIComponent(table)
+          + '?security_key=eq.' + encodeURIComponent(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164)
+          + '&' + encodeURIComponent('record_json->>owner_id') + '=eq.' + encodeURIComponent(priorOwner)
+          + '&' + encodeURIComponent('record_json->>request_nonce_hash') + '=eq.' + encodeURIComponent(expectedNonceHash)
+          + '&' + encodeURIComponent('record_json->>worker_action') + '=eq.' + encodeURIComponent(DIRAC_RECOVERY_WORKER_TASK_GENERATE)
+          + '&blocked_until_ms=gt.' + encodeURIComponent(String(nowMs));
+        const handoff = await supabaseFetch(handoffPath, {
+          method: 'PATCH',
+          auth: 'service',
+          prefer: 'return=representation',
+          body: {
+            record_json: customerSecurityLostPasskeyQueueRecordV164(ownerId, nowMs, lockUntilMs, context),
+            blocked_until_ms: lockUntilMs,
+            updated_at: new Date(nowMs).toISOString(),
+            expires_at: new Date(lockUntilMs + 60_000).toISOString()
+          }
+        }).catch(() => null);
+        const handoffClaimed = Boolean(handoff && handoff.ok && Array.isArray(handoff.data)
+          && handoff.data.some((row) => customerSecurityLostPasskeyQueueRowOwnerV164(row) === ownerId
+            && customerSecurityLostPasskeyQueueRowActiveV164(row, Date.now())));
+        if (handoffClaimed) {
+          DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
+            ownerId,
+            lockUntilMs
+          });
+          const heartbeat = customerSecurityLostPasskeyQueueHeartbeatV188(ownerId, context);
+          return {
+            ok: true,
+            ownerId,
+            attempts,
+            waited_ms: Date.now() - startMs,
+            claim_mode: 'same_request_generation_handoff',
+            leaseHealthy: heartbeat.healthy,
+            release: async () => {
+              await heartbeat.stop();
+              return customerSecurityLostPasskeyQueueReleaseV164(ownerId);
+            }
+          };
+        }
+        lastReason = 'same_request_generation_handoff_conflict';
+      }
+    }
 
     if (memory && Number(memory.lockUntilMs || 0) > nowMs && String(memory.ownerId || '') !== ownerId) {
       const persistentState = await customerSecurityLostPasskeyQueueReadStateV189();
