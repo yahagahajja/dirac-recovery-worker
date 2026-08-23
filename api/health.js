@@ -4453,7 +4453,7 @@ function customerSecurityLostPasskeyWorkerVerifyTraceV174(stage, reason, ctx = {
     debug_hint: String(safeCtx.debugHint || '').slice(0, 220)
   };
   try {
-    console.error('[dirac-recovery-worker-verify-v210]', JSON.stringify({
+    console[trace.http_status === 200 && trace.stage === 'verify_success_response_ready' && trace.verify_contract.html_can_open_passkey_stage_from_this_response ? 'info' : 'error']('[dirac-recovery-worker-verify-v210]', JSON.stringify({
       stage: customerSecurityLostPasskeyDiagnosticCodeV210(stage, 80),
       reason: customerSecurityLostPasskeyDiagnosticCodeV210(reason, 120),
       request_id_hash: trace.request_id_hash || null,
@@ -9222,7 +9222,9 @@ async function customerSecurityFinalizeRecoveryLocalWorkerV162(req, res, action,
     website_secret_revoked: true,
     recovery_code_revoked: true
   };
-  const patched = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
+  const patched = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE
+    + '?select=' + encodeURIComponent('status,used_at,revoked_at')
+    + '&request_id=eq.' + encodeURIComponent(requestId), {
     method: 'PATCH',
     auth: 'service',
     prefer: 'return=representation',
