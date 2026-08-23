@@ -2934,7 +2934,7 @@ async function customerSecurityLostPasskeyQueueReadStateV189() {
   const table = customerSecurityLostPasskeyQueueTableV164();
   if (!table) return { ok: false, row: null, reason: 'queue_table_missing' };
   const path = '/rest/v1/' + encodeURIComponent(table)
-    + '?select=security_key,record_json,blocked_until_ms,expires_at'
+    + '?select=security_key,record_json,blocked_until_ms,updated_at,expires_at'
     + '&security_key=eq.' + encodeURIComponent(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164)
     + '&limit=1';
   const result = await supabaseFetch(path, { method: 'GET', auth: 'service' }).catch(() => null);
@@ -2960,17 +2960,42 @@ function customerSecurityLostPasskeyQueueRowActiveV164(row, nowMs) {
   return Number.isFinite(lockUntilMs) && lockUntilMs > Number(nowMs || Date.now());
 }
 
+function customerSecurityLostPasskeyQueueCasVersionV286(row) {
+  const blockedUntilMs = Number(row && row.blocked_until_ms);
+  const updatedAt = typeof (row && row.updated_at) === 'string' ? row.updated_at : '';
+  const expiresAt = typeof (row && row.expires_at) === 'string' ? row.expires_at : '';
+  if (String(row && row.security_key || '') !== DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164
+      || !Number.isSafeInteger(blockedUntilMs) || blockedUntilMs < 0
+      || !updatedAt || updatedAt !== updatedAt.trim() || updatedAt.length > 64 || !Number.isFinite(Date.parse(updatedAt))
+      || !expiresAt || expiresAt !== expiresAt.trim() || expiresAt.length > 64 || !Number.isFinite(Date.parse(expiresAt))) {
+    return null;
+  }
+  return {
+    blockedUntilMs,
+    updatedAt,
+    expiresAt,
+    query: '&blocked_until_ms=eq.' + encodeURIComponent(String(blockedUntilMs))
+      + '&updated_at=eq.' + encodeURIComponent(updatedAt)
+      + '&expires_at=eq.' + encodeURIComponent(expiresAt)
+  };
+}
+
 /* source 7392-7424 */
 async function customerSecurityLostPasskeyQueueRenewV188(ownerId, context = {}) {
   const cleanOwner = String(ownerId || '');
   const table = customerSecurityLostPasskeyQueueTableV164();
   if (!cleanOwner || !table) return false;
   const nowMs = Date.now();
+  const state = await customerSecurityLostPasskeyQueueReadStateV189();
+  const currentRow = state && state.ok ? state.row : null;
+  const currentVersion = customerSecurityLostPasskeyQueueCasVersionV286(currentRow);
+  if (!currentVersion
+      || customerSecurityLostPasskeyQueueRowOwnerV164(currentRow) !== cleanOwner
+      || !customerSecurityLostPasskeyQueueRowActiveV164(currentRow, nowMs)) return false;
   const lockUntilMs = nowMs + customerSecurityLostPasskeyQueueTtlMsV164();
   const path = '/rest/v1/' + encodeURIComponent(table)
     + '?security_key=eq.' + encodeURIComponent(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164)
-    + '&' + encodeURIComponent('record_json->>owner_id') + '=eq.' + encodeURIComponent(cleanOwner)
-    + '&blocked_until_ms=gt.' + encodeURIComponent(String(nowMs));
+    + currentVersion.query;
   const result = await supabaseFetch(path, {
     method: 'PATCH',
     auth: 'service',
@@ -2982,10 +3007,10 @@ async function customerSecurityLostPasskeyQueueRenewV188(ownerId, context = {}) 
       expires_at: new Date(lockUntilMs + 60_000).toISOString()
     }
   }).catch(() => null);
-  const renewed = Boolean(result && result.ok && Array.isArray(result.data) && result.data.some((row) => (
-    customerSecurityLostPasskeyQueueRowOwnerV164(row) === cleanOwner
-    && customerSecurityLostPasskeyQueueRowActiveV164(row, Date.now())
-  )));
+  const renewed = Boolean(result && result.ok && Array.isArray(result.data) && result.data.length === 1
+    && customerSecurityLostPasskeyQueueRowOwnerV164(result.data[0]) === cleanOwner
+    && Number(result.data[0] && result.data[0].blocked_until_ms) === lockUntilMs
+    && customerSecurityLostPasskeyQueueRowActiveV164(result.data[0], Date.now()));
   if (renewed) {
     DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
       ownerId: cleanOwner,
@@ -3050,6 +3075,9 @@ async function customerSecurityLostPasskeyQueueTryPatchAvailableV167(ownerId, co
   ))) {
     return { ok: true, ownerId, claimed: 'expired_or_released' };
   }
+  if (!result || !result.ok || !Array.isArray(result.data)) {
+    return { ok: false, reason: 'queue_storage_unavailable', unavailable: true };
+  }
   return { ok: false, reason: 'queue_lock_busy_or_absent' };
 }
 
@@ -3078,6 +3106,9 @@ async function customerSecurityLostPasskeyQueueTryInsertAvailableV167(ownerId, c
   ))) {
     return { ok: true, ownerId, claimed: 'inserted' };
   }
+  if (!result || !result.ok || !Array.isArray(result.data)) {
+    return { ok: false, reason: 'queue_storage_unavailable', unavailable: true };
+  }
   return { ok: false, reason: 'queue_lock_busy' };
 }
 
@@ -3104,6 +3135,7 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
   let attempts = 0;
   let lastReason = 'queue_lock_busy';
   let sameRequestGenerationHandoffChecked = false;
+  let terminalUnavailable = false;
 
   while (true) {
     attempts += 1;
@@ -3124,6 +3156,11 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
       const persistentState = cleanNonce
         ? await customerSecurityLostPasskeyQueueReadStateV189()
         : { ok: false, row: null };
+      if (!persistentState.ok) {
+        lastReason = String(persistentState.reason || 'queue_storage_unavailable');
+        terminalUnavailable = true;
+        break;
+      }
       const priorRow = persistentState && persistentState.ok ? persistentState.row : null;
       const priorRecord = priorRow && priorRow.record_json && typeof priorRow.record_json === 'object'
         && !Array.isArray(priorRow.record_json) ? priorRow.record_json : null;
@@ -3132,7 +3169,9 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
         ? customerSecurityLostPasskeySha256B64(Buffer.from(cleanNonce, 'utf8'))
         : '';
       const priorNonceHash = String(priorRecord && priorRecord.request_nonce_hash || '');
+      const priorVersion = customerSecurityLostPasskeyQueueCasVersionV286(priorRow);
       const handoffEligible = Boolean(priorRecord
+        && priorVersion
         && String(priorRow.security_key || '') === DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164
         && priorRecord.type === 'lost_passkey_generate_argon2id_queue_lock_v164'
         && priorRecord.patch === DIRAC_LOST_PASSKEY_GENERATE_QUEUE_PATCH_V164
@@ -3148,10 +3187,7 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
         const lockUntilMs = nowMs + customerSecurityLostPasskeyQueueTtlMsV164();
         const handoffPath = '/rest/v1/' + encodeURIComponent(table)
           + '?security_key=eq.' + encodeURIComponent(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164)
-          + '&' + encodeURIComponent('record_json->>owner_id') + '=eq.' + encodeURIComponent(priorOwner)
-          + '&' + encodeURIComponent('record_json->>request_nonce_hash') + '=eq.' + encodeURIComponent(expectedNonceHash)
-          + '&' + encodeURIComponent('record_json->>worker_action') + '=eq.' + encodeURIComponent(DIRAC_RECOVERY_WORKER_TASK_GENERATE)
-          + '&blocked_until_ms=gt.' + encodeURIComponent(String(nowMs));
+          + priorVersion.query;
         const handoff = await supabaseFetch(handoffPath, {
           method: 'PATCH',
           auth: 'service',
@@ -3163,9 +3199,15 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
             expires_at: new Date(lockUntilMs + 60_000).toISOString()
           }
         }).catch(() => null);
-        const handoffClaimed = Boolean(handoff && handoff.ok && Array.isArray(handoff.data)
-          && handoff.data.some((row) => customerSecurityLostPasskeyQueueRowOwnerV164(row) === ownerId
-            && customerSecurityLostPasskeyQueueRowActiveV164(row, Date.now())));
+        if (!handoff || !handoff.ok || !Array.isArray(handoff.data)) {
+          lastReason = 'queue_storage_unavailable';
+          terminalUnavailable = true;
+          break;
+        }
+        const handoffClaimed = Boolean(handoff.data.length === 1
+          && customerSecurityLostPasskeyQueueRowOwnerV164(handoff.data[0]) === ownerId
+          && Number(handoff.data[0] && handoff.data[0].blocked_until_ms) === lockUntilMs
+          && customerSecurityLostPasskeyQueueRowActiveV164(handoff.data[0], Date.now()));
         if (handoffClaimed) {
           DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
             ownerId,
@@ -3195,6 +3237,8 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
         // Never clear a live-looking memory lock when persistent storage cannot
         // confirm its state. This intentionally remains fail-closed.
         lastReason = 'memory_lock_busy_persistent_state_unavailable';
+        terminalUnavailable = true;
+        break;
       } else {
         const persistentOwner = customerSecurityLostPasskeyQueueRowOwnerV164(persistentState.row);
         const persistentActive = customerSecurityLostPasskeyQueueRowActiveV164(persistentState.row, nowMs);
@@ -3211,7 +3255,17 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
         DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
       }
       patched = await customerSecurityLostPasskeyQueueTryPatchAvailableV167(ownerId, context);
+      if (patched && patched.unavailable) {
+        lastReason = String(patched.reason || 'queue_storage_unavailable');
+        terminalUnavailable = true;
+        break;
+      }
       claimed = patched.ok ? patched : await customerSecurityLostPasskeyQueueTryInsertAvailableV167(ownerId, context);
+      if (claimed && claimed.unavailable) {
+        lastReason = String(claimed.reason || 'queue_storage_unavailable');
+        terminalUnavailable = true;
+        break;
+      }
       if (claimed && claimed.ok) {
         DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
           ownerId,
@@ -3241,10 +3295,12 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
 
   try {
     await customerSecurityWriteGuardEvent(null, {
-      event_type: 'lost_passkey_generate_queue_busy',
+      event_type: terminalUnavailable ? 'lost_passkey_generate_queue_unavailable' : 'lost_passkey_generate_queue_busy',
       status: 'blocked',
       risk_level: 'medium',
-      description: 'SERVER 2 menolak proses lost-passkey karena lock Argon2id sedang aktif.',
+      description: terminalUnavailable
+        ? 'SERVER 2 menolak proses lost-passkey karena penyimpanan antrean tidak tersedia.'
+        : 'SERVER 2 menolak proses lost-passkey karena lock Argon2id sedang aktif.',
       req,
       metadata: {
         patch: DIRAC_LOST_PASSKEY_GENERATE_QUEUE_PATCH_V164,
@@ -3256,10 +3312,19 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
       }
     }).catch(() => null);
   } catch (_) {}
+  try {
+    console.error('[dirac-recovery-argon2-queue-result-v286]', JSON.stringify({
+      result_class: terminalUnavailable ? 'dependency_unavailable' : 'active_lock_busy',
+      reason: String(lastReason || 'queue_state_unknown').slice(0, 96),
+      attempts,
+      waited_ms: Date.now() - startMs,
+      secrets_logged: false
+    }));
+  } catch (_) {}
   return {
     ok: false,
-    status: 429,
-    code: 'RECOVERY_GENERATE_QUEUE_BUSY',
+    status: terminalUnavailable ? 503 : 429,
+    code: terminalUnavailable ? 'RECOVERY_QUEUE_UNAVAILABLE' : 'RECOVERY_GENERATE_QUEUE_BUSY',
     reason: lastReason,
     attempts,
     waited_ms: Date.now() - startMs
@@ -3271,10 +3336,13 @@ async function customerSecurityLostPasskeyQueueReleaseV164(ownerId) {
   const cleanOwner = String(ownerId || '');
   if (!cleanOwner) return false;
   const memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
-  if (memory && String(memory.ownerId || '') === cleanOwner) DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
   const table = customerSecurityLostPasskeyQueueTableV164();
   if (!table) return false;
   const nowMs = Date.now();
+  const state = await customerSecurityLostPasskeyQueueReadStateV189();
+  const currentRow = state && state.ok ? state.row : null;
+  const currentVersion = customerSecurityLostPasskeyQueueCasVersionV286(currentRow);
+  if (!currentVersion || customerSecurityLostPasskeyQueueRowOwnerV164(currentRow) !== cleanOwner) return false;
   const releasedRecord = {
     type: 'lost_passkey_generate_argon2id_queue_lock_v164',
     patch: DIRAC_LOST_PASSKEY_GENERATE_QUEUE_PATCH_V164,
@@ -3286,11 +3354,11 @@ async function customerSecurityLostPasskeyQueueReleaseV164(ownerId) {
   };
   const path = '/rest/v1/' + encodeURIComponent(table)
     + '?security_key=eq.' + encodeURIComponent(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164)
-    + '&' + encodeURIComponent('record_json->>owner_id') + '=eq.' + encodeURIComponent(cleanOwner);
+    + currentVersion.query;
   const result = await supabaseFetch(path, {
     method: 'PATCH',
     auth: 'service',
-    prefer: 'return=minimal',
+    prefer: 'return=representation',
     body: {
       record_json: releasedRecord,
       blocked_until_ms: 0,
@@ -3298,7 +3366,14 @@ async function customerSecurityLostPasskeyQueueReleaseV164(ownerId) {
       expires_at: new Date(nowMs + 60_000).toISOString()
     }
   }).catch(() => null);
-  return !!(result && result.ok);
+  const released = Boolean(result && result.ok && Array.isArray(result.data) && result.data.length === 1
+    && customerSecurityLostPasskeyQueueRowOwnerV164(result.data[0]) === ''
+    && Number(result.data[0] && result.data[0].blocked_until_ms) === 0
+    && !customerSecurityLostPasskeyQueueRowActiveV164(result.data[0], Date.now()));
+  if (released && memory && String(memory.ownerId || '') === cleanOwner) {
+    DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
+  }
+  return released;
 }
 
 /* source 7700-7703 */
