@@ -3453,6 +3453,7 @@ function customerSecurityRecoveryWorkerCaller() {
 function customerSecurityRecoveryWorkerAllowedCaller() {
   const caller = customerSecurityRecoveryWorkerAsciiToken(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER);
   const server1 = customerSecurityRecoveryWorkerAsciiToken(process.env.DIRAC_RECOVERY_SERVER1_SERVER_ID);
+  if (caller === 'main' && server1 === 'main') return 'main';
   return caller && server1 && caller === server1 ? 'auth' : caller;
 }
 
@@ -10845,8 +10846,6 @@ async function diracRecoveryHpkeSendProofV159(env, proofBody) {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Origin': target.origin,
-        'Referer': target.origin + '/',
         'X-Dirac-HPKE-Caller': caller,
         'X-Dirac-HPKE-Timestamp': timestamp,
         'X-Dirac-HPKE-Signature': signature,
@@ -12463,6 +12462,7 @@ function diracS2STextV206(name) {
   const value = String(process.env[name] || '').trim();
   const allowedCaller = customerSecurityRecoveryWorkerAsciiToken(process.env.DIRAC_RECOVERY_WORKER_ALLOWED_CALLER);
   if (String(name) === 'DIRAC_S2S_SERVER_ID' && value === 'vercel2') return 'recovery';
+  if (String(name) === 'DIRAC_RECOVERY_SERVER1_SERVER_ID' && value === 'main') return 'main';
   if (String(name) === 'DIRAC_RECOVERY_SERVER1_SERVER_ID'
       && value && allowedCaller && value === allowedCaller) return 'auth';
   return value;
