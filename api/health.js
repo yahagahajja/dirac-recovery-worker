@@ -5011,7 +5011,14 @@ async function customerSecurityGenerateRecoveryCodes(req, res, action, override 
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
   const expiresAt = new Date(nowMs + LOST_PASSKEY_RECOVERY_TTL_MINUTES_V157 * 60 * 1000).toISOString();
-  const requestId = customerSecurityLostPasskeyRequestId();
+  const requestId = customerSecurityNormalizeLostPasskeyRequestId(override && override.requestId || '');
+  if (!requestId) {
+    return res.status(500).json({
+      ok: false,
+      code: 'RECOVERY_QUEUE_REQUEST_BINDING_INVALID',
+      message: 'Binding request recovery pada antrean keamanan tidak valid.'
+    });
+  }
   let bindings;
   try {
     bindings = customerSecurityLostPasskeyAuthoritativeBindingsV231(
@@ -9186,7 +9193,12 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
     if (!activePasskeys.length) {
       return res.status(409).json({ ok: false, code: 'ACTIVE_PASSKEY_NOT_FOUND', message: 'Passkey aktif untuk akun ini belum ditemukan.' });
     }
-    const queueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, body);
+    const queueRequestId = customerSecurityLostPasskeyRequestId();
+    const queueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, {
+      nonce: queueRequestId,
+      caller_id: body.caller_id,
+      worker_action: body.worker_action
+    });
     if (!queueTicket || !queueTicket.ok) {
       return res.status(queueTicket && queueTicket.status || 503).json({
         ok: false,
@@ -9206,6 +9218,7 @@ async function customerSecurityHandleRecoveryWorkerGenerate(req, res, action) {
         owner,
         activePasskeys,
         bindings,
+        requestId: queueRequestId,
         argonQueueTicket: queueTicket,
         passwordLatestMaterial: String(body.password_latest_material || body.password_latest_proof || body.account_password || '')
       });
