@@ -11473,6 +11473,97 @@ const DIRAC_RECOVERY_PERMANENT_BAN_MS_V201 = 100 * 365 * 24 * 60 * 60 * 1000;
 const DIRAC_RECOVERY_CONTEXT_STACK_V201 = [];
 const DIRAC_RECOVERY_MEMORY_BANS_V201 = globalThis.__DIRAC_RECOVERY_MEMORY_BANS_V201__ || new Map();
 globalThis.__DIRAC_RECOVERY_MEMORY_BANS_V201__ = DIRAC_RECOVERY_MEMORY_BANS_V201;
+const DIRAC_RECOVERY_MEMORY_BAN_CACHE_V282 = 'dirac-recovery-memory-ban-cache-v282';
+const DIRAC_RECOVERY_MEMORY_BAN_CACHE_MAX_V282 = 4096;
+const DIRAC_RECOVERY_MEMORY_BAN_CACHE_SWEEP_MS_V282 = 60_000;
+const DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282 = globalThis.__DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282__
+  || new Set(DIRAC_RECOVERY_MEMORY_BANS_V201.keys());
+const DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282 = globalThis.__DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282__
+  || { nextSweepMs: 0, nextLogMs: 0, failClosed: false };
+globalThis.__DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282__ = DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282;
+globalThis.__DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282__ = DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282;
+
+function diracRecoverySweepMemoryBansV282(now, force) {
+  if (force !== true && now < Number(DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282.nextSweepMs || 0)) return;
+  DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282.nextSweepMs = now + DIRAC_RECOVERY_MEMORY_BAN_CACHE_SWEEP_MS_V282;
+  for (const [cachedKey, cachedUntil] of DIRAC_RECOVERY_MEMORY_BANS_V201.entries()) {
+    if (!Number.isSafeInteger(Number(cachedUntil)) || Number(cachedUntil) <= now) {
+      DIRAC_RECOVERY_MEMORY_BANS_V201.delete(cachedKey);
+      DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282.delete(cachedKey);
+    }
+  }
+  for (const cachedKey of DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282) {
+    if (!DIRAC_RECOVERY_MEMORY_BANS_V201.has(cachedKey)) {
+      DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282.delete(cachedKey);
+    }
+  }
+}
+
+function diracRecoveryRememberMemoryBanV282(key, blockedUntilMs, durablyPersisted) {
+  const cleanKey = String(key || '');
+  const expiresAt = Number(blockedUntilMs || 0);
+  const now = Date.now();
+  if (!cleanKey || !Number.isSafeInteger(expiresAt) || expiresAt <= now) return false;
+
+  const current = Number(DIRAC_RECOVERY_MEMORY_BANS_V201.get(cleanKey) || 0);
+  if (Number.isSafeInteger(current) && current > now) {
+    if (expiresAt > current) {
+      DIRAC_RECOVERY_MEMORY_BANS_V201.set(cleanKey, expiresAt);
+      if (durablyPersisted === true) DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282.delete(cleanKey);
+      else DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282.add(cleanKey);
+    } else if (durablyPersisted === true && expiresAt === current) {
+      DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282.delete(cleanKey);
+    }
+    return true;
+  }
+  if (DIRAC_RECOVERY_MEMORY_BANS_V201.has(cleanKey)) {
+    DIRAC_RECOVERY_MEMORY_BANS_V201.delete(cleanKey);
+    DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282.delete(cleanKey);
+  }
+
+  diracRecoverySweepMemoryBansV282(
+    now,
+    DIRAC_RECOVERY_MEMORY_BANS_V201.size >= DIRAC_RECOVERY_MEMORY_BAN_CACHE_MAX_V282
+      && durablyPersisted !== true
+  );
+
+  if (DIRAC_RECOVERY_MEMORY_BANS_V201.size >= DIRAC_RECOVERY_MEMORY_BAN_CACHE_MAX_V282) {
+    if (durablyPersisted !== true) {
+      let durableKey;
+      for (const cachedKey of DIRAC_RECOVERY_MEMORY_BANS_V201.keys()) {
+        if (!DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282.has(cachedKey)) {
+          durableKey = cachedKey;
+          break;
+        }
+      }
+      if (durableKey !== undefined) {
+        DIRAC_RECOVERY_MEMORY_BANS_V201.delete(durableKey);
+      } else {
+        DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282.failClosed = true;
+      }
+    }
+    if (DIRAC_RECOVERY_MEMORY_BANS_V201.size >= DIRAC_RECOVERY_MEMORY_BAN_CACHE_MAX_V282
+        && now >= Number(DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282.nextLogMs || 0)) {
+      DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282.nextLogMs = now + DIRAC_RECOVERY_MEMORY_BAN_CACHE_SWEEP_MS_V282;
+      try {
+        console.warn('[dirac-recovery-memory-ban-cache-v282]', JSON.stringify({
+          patch: DIRAC_RECOVERY_MEMORY_BAN_CACHE_V282,
+          event: 'ban_cache_saturated',
+          size: DIRAC_RECOVERY_MEMORY_BANS_V201.size,
+          cap: DIRAC_RECOVERY_MEMORY_BAN_CACHE_MAX_V282,
+          fail_closed: DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282.failClosed === true,
+          secrets_logged: false
+        }));
+      } catch (_) {}
+    }
+    if (DIRAC_RECOVERY_MEMORY_BANS_V201.size >= DIRAC_RECOVERY_MEMORY_BAN_CACHE_MAX_V282) return false;
+  }
+
+  DIRAC_RECOVERY_MEMORY_BANS_V201.set(cleanKey, expiresAt);
+  if (durablyPersisted === true) DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282.delete(cleanKey);
+  else DIRAC_RECOVERY_MEMORY_BAN_CACHE_NON_DURABLE_V282.add(cleanKey);
+  return true;
+}
 
 function diracNowIso() {
   return new Date().toISOString();
@@ -11945,6 +12036,9 @@ function diracRecoveryIdentityKeysV205(req, action) {
 }
 
 async function diracRecoveryCheckBanV201(req, action) {
+  if (DIRAC_RECOVERY_MEMORY_BAN_CACHE_STATE_V282.failClosed === true) {
+    return { ok: false, key: '', persistenceUnavailable: true, memoryBanCacheSaturated: true };
+  }
   const keys = diracRecoveryIdentityKeysV205(req, action);
   const primaryKey = keys[0];
   for (const key of keys) {
@@ -11956,7 +12050,7 @@ async function diracRecoveryCheckBanV201(req, action) {
     if (!strict || strict.ok !== true) return { ok: false, key: primaryKey, persistenceUnavailable: true };
     const blockedUntilMs = Number(strict.found && strict.record && strict.record.blocked_until_ms || 0);
     if (blockedUntilMs > Date.now()) {
-      for (const banKey of keys) DIRAC_RECOVERY_MEMORY_BANS_V201.set(banKey, blockedUntilMs);
+      for (const banKey of keys) diracRecoveryRememberMemoryBanV282(banKey, blockedUntilMs, true);
       return { ok: false, key: primaryKey, blockedUntilMs };
     }
   }
@@ -11981,7 +12075,7 @@ async function diracRecoveryPermanentBanV201(req, action, reason, identityKey) {
     blocked_until_ms: blockedUntilMs
   };
   const wrote = await writePersistentSecurityJsonRequiredV194(key, record, blockedUntilMs, Math.ceil(DIRAC_RECOVERY_PERMANENT_BAN_MS_V201 / 1000));
-  if (wrote) DIRAC_RECOVERY_MEMORY_BANS_V201.set(key, blockedUntilMs);
+  if (wrote) diracRecoveryRememberMemoryBanV282(key, blockedUntilMs, true);
   return Boolean(wrote);
 }
 
@@ -13704,7 +13798,7 @@ async function diracRecoverySecurityDbProxyFetchV234(path, options = {}) {
   const outboundBytesV265 = Buffer.byteLength(JSON.stringify(payload), 'utf8');
   if (encodedPageV265.compressed) {
     try {
-      console.error('[dirac-recovery-security-db-page-codec-v265]', JSON.stringify({
+      console.info('[dirac-recovery-security-db-page-codec-v265]', JSON.stringify({
         patch: DIRAC_RECOVERY_SECURITY_DB_PAGE_CODEC_V265,
         phase: 'encoded',
         request_id: requestId,
