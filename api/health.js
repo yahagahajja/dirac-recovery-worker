@@ -12172,7 +12172,6 @@ async function diracRecoveryLinkOpenV202(req, res, ctx, body) {
 
   const requestId = customerSecurityNormalizeLostPasskeyRequestId(body && body.rid);
   const linkToken = String(body && body.token || '').trim();
-  let argonQueueTicket = null;
   let hpkePublicRaw = null;
   try {
     if (!requestId || !customerSecurityLostPasskeyLinkTokenShapeV162(linkToken)) return diracRecoveryLinkOpenGenericInvalidV202(res);
@@ -12207,41 +12206,19 @@ async function diracRecoveryLinkOpenV202(req, res, ctx, body) {
       return diracRecoveryLinkOpenJsonV202(res, 429, 'RECOVERY_LINK_RATE_LIMITED', 'Verifikasi recovery sedang dibatasi. Silakan coba kembali.');
     }
 
-    argonQueueTicket = await customerSecurityLostPasskeyQueueAcquireV164(req, {
-      nonce: requestId,
-      caller_id: 'recovery_link',
-      queue_task: DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
-    });
-    if (!argonQueueTicket || !argonQueueTicket.ok) {
-      try {
-        res.setHeader(
-          'Retry-After',
-          String(
-            Math.max(
-              15,
-              Math.ceil(
-                customerSecurityLostPasskeyQueueMaxWaitForTaskMsV191(
-                  DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
-                ) / 1000
-              )
-            )
-          )
-        );
-      } catch (_) {}
-
-      return diracRecoveryLinkOpenJsonV202(res, 429, 'RECOVERY_ARGON2_BUSY', 'Verifikasi recovery sedang diproses. Silakan coba kembali.');
+    const officialRecoveryLink = customerSecurityLostPasskeyOfficialBaseUrlV157()
+      + '/lost-passkey.html#rid=' + encodeURIComponent(requestId)
+      + '&token=' + encodeURIComponent(linkToken);
+    const storedLinkCommitment = String(metadata.official_recovery_link_hash || '');
+    const expectedLinkCommitment = customerSecurityLostPasskeyHmacHexV157(
+      vaultSecrets.rootSecret,
+      'official_recovery_link',
+      officialRecoveryLink
+    );
+    if (!/^[a-f0-9]{64}$/.test(storedLinkCommitment)) {
+      return diracRecoveryLinkOpenJsonV202(res, 503, 'RECOVERY_LINK_COMMITMENT_INVALID', 'Layanan recovery belum siap.');
     }
-
-    const tokenOk = await customerSecurityLostPasskeyArgon2VerifyHashV157(
-      'link_token',
-      linkToken,
-      argonPolicy.encoded,
-      vaultSecrets.pepper,
-      vaultSecrets.rootSecret
-    ).catch(() => false);
-    if (!customerSecurityLostPasskeyQueueLeaseHealthyV188(argonQueueTicket)) {
-      return diracRecoveryLinkOpenJsonV202(res, 503, 'RECOVERY_ARGON2_LEASE_LOST', 'Layanan recovery belum siap.');
-    }
+    const tokenOk = safeEqual(storedLinkCommitment, expectedLinkCommitment);
     if (!tokenOk) {
       const failure = await diracRecoveryLinkRegisterTokenFailureV281(req, row, requestId).catch(() => ({ ok: false, locked: false }));
       if (!failure.ok) {
@@ -12278,11 +12255,6 @@ async function diracRecoveryLinkOpenV202(req, res, ctx, body) {
       action: DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165,
       centralGuard: DIRAC_CENTRAL_SECURITY_GUARD_V146
     });
-    const argonQueueReleased = await argonQueueTicket.release();
-    if (argonQueueReleased !== true) {
-      return diracRecoveryLinkOpenJsonV202(res, 503, 'RECOVERY_ARGON2_LEASE_LOST', 'Layanan recovery belum siap.');
-    }
-    argonQueueTicket = null;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('X-Dirac-Central-Security-Guard', DIRAC_CENTRAL_SECURITY_GUARD_V146);
     res.setHeader('X-Dirac-Recovery-Signed-Envelope', DIRAC_RECOVERY_CRYPTO_V2.VERSION);
@@ -12294,7 +12266,6 @@ async function diracRecoveryLinkOpenV202(req, res, ctx, body) {
     }
     return diracRecoveryLinkOpenJsonV202(res, 503, 'RECOVERY_LINK_OPEN_FAILED', 'Layanan recovery belum siap.');
   } finally {
-    try { if (argonQueueTicket && typeof argonQueueTicket.release === 'function') await argonQueueTicket.release(); } catch (_) {}
     if (Buffer.isBuffer(hpkePublicRaw)) hpkePublicRaw.fill(0);
     if (body && typeof body === 'object') body.token = '';
   }
