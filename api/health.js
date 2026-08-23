@@ -8991,7 +8991,8 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
       + '&auth_user_id=eq.' + encodeURIComponent(owner.authUserId)
       + '&status=eq.verified'
       + '&used_at=is.null'
-      + '&revoked_at=is.null', {
+      + '&revoked_at=is.null'
+      + '&select=' + encodeURIComponent('status,used_at,revoked_at'), {
       method: 'PATCH',
       auth: 'service',
       prefer: 'return=representation',
@@ -9008,7 +9009,8 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
   const recoverySessionToken = crypto.randomBytes(32).toString('base64url');
   const recoverySessionHash = customerSecurityLostPasskeyRecoverySessionHash(recoverySessionToken);
   const sessionExpiresAt = new Date(Date.now() + Math.max(5, Math.min(30, Number(process.env.DIRAC_LOST_PASSKEY_SESSION_MINUTES || 10))) * 60 * 1000).toISOString();
-  const sessionCreated = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_SESSION_TABLE, {
+  const sessionCreated = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_SESSION_TABLE
+    + '?select=' + encodeURIComponent('status,created_at,expires_at'), {
     method: 'POST',
     auth: 'service',
     prefer: 'return=representation',
@@ -9066,7 +9068,9 @@ async function customerSecurityVerifyRecoveryCodeLocalWorker(req, res, action, o
     patch: DIRAC_LOST_PASSKEY_VAULT_PATCH_V157
   };
 
-  const patched = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE + '?request_id=eq.' + encodeURIComponent(requestId), {
+  const patched = await supabaseFetch('/rest/v1/' + LOST_PASSKEY_RECOVERY_REQUEST_TABLE
+    + '?select=' + encodeURIComponent('status,used_at,revoked_at,locked_at')
+    + '&request_id=eq.' + encodeURIComponent(requestId), {
     method: 'PATCH',
     auth: 'service',
     prefer: 'return=representation',
