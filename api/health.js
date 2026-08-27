@@ -4,7 +4,7 @@
 /* source 3-3 */
 const crypto = require('crypto');
 
-const DIRAC_RECOVERY_ARGON2_MEMORY_KIB_V266 = 102400;
+const DIRAC_RECOVERY_ARGON2_MEMORY_KIB_V266 = 512000;
 
 /* source 4-1184 */
 const DIRAC_RECOVERY_CRYPTO_V2 = (() => {
