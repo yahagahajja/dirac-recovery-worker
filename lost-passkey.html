@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store https://api.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-+vTFyNr2NqgGmNIEIjwZmMYjxzskQu10CckZ41lRU5Qx3sc9FJbz8m8hLJb/kTfRIBUWuU33sJ98aHDMMlwxRA=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store https://api.diracgroup.store; img-src data:; style-src 'sha512-CXEzGhZ+TkS+f6Vh8X7kG628pVlJDyhYm4xBhCeXeW2pj8StkiRuyHdmswnRkiw6rKGLuvlZAo18opRVe4CxcA=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-Jf7rxUjBCufeh5T7NMbtrwogMo5XYbt54/bOIortQDRMmiC3VfuDnZp8kidn9DFClg4IUBD92CLeCQrcUhlgHg=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -29,7 +29,7 @@
     X-DNS-Prefetch-Control: off
     X-Permitted-Cross-Domain-Policies: none
     Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), clipboard-read=(), clipboard-write=(self), publickey-credentials-create=(self), publickey-credentials-get=(self)
-    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store https://api.diracgroup.store; img-src data:; style-src 'sha512-Vhvx8int+2iPtX0Dg52WYkfDyxgB2Y90R1tZOabI8mD+Y8AeQxG2HkyWh086q8yU6H1w5BHnsGqa3JbMFdbuBQ=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-+vTFyNr2NqgGmNIEIjwZmMYjxzskQu10CckZ41lRU5Qx3sc9FJbz8m8hLJb/kTfRIBUWuU33sJ98aHDMMlwxRA=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
+    Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; connect-src https://secure.diracgroup.store https://api.diracgroup.store; img-src data:; style-src 'sha512-CXEzGhZ+TkS+f6Vh8X7kG628pVlJDyhYm4xBhCeXeW2pj8StkiRuyHdmswnRkiw6rKGLuvlZAo18opRVe4CxcA=='; style-src-attr 'none'; script-src 'wasm-unsafe-eval' 'sha512-7TYwqC3QZWccG1sgQlxqWb+kF0aH44+1wSKhL66c/bDQRwCDODANL0Q5+g2k3h5D8LmQ+bWNnhenX9MUCFG0Bw==' 'sha512-Jf7rxUjBCufeh5T7NMbtrwogMo5XYbt54/bOIortQDRMmiC3VfuDnZp8kidn9DFClg4IUBD92CLeCQrcUhlgHg=='; script-src-attr 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none';
 
     HTML ini sengaja fail-closed bila:
     - Ed25519 atau ML-DSA-87 public key belum diisi.
@@ -159,6 +159,40 @@
     }
     @media (max-width: 560px) { .process-steps { grid-template-columns: 1fr; } .brand-content, .footer-content { align-items: flex-start; flex-direction: column; } .brand-pill { align-self: flex-start; } .site-header { padding-top: 14px; } .brand-strip { min-height: 0; border-radius: 18px; } }
     @media (min-width: 760px) { .split { grid-template-columns: 1fr 1fr; } }
+
+
+    /* DIRAC RECOVERY EXPERIENCE v281 — presentation only. */
+    body { position: relative; isolation: isolate; background: #07110d; }
+    body::after { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .16; background-image: linear-gradient(rgba(110,255,157,.16) 1px, transparent 1px), linear-gradient(90deg, rgba(110,255,157,.16) 1px, transparent 1px); background-size: 42px 42px; mask-image: linear-gradient(to bottom, rgba(0,0,0,.8), transparent 82%); animation: gridFloat 18s linear infinite; }
+    main { width: min(980px, 100%); padding-top: 26px; }
+    .card { position: relative; isolation: isolate; overflow: hidden; border-color: rgba(116,255,162,.24); background: linear-gradient(145deg, rgba(18,30,26,.96), rgba(10,18,16,.98) 48%, rgba(14,23,28,.98)); box-shadow: 0 30px 90px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.055); }
+    .card::before { content: ""; position: absolute; z-index: -1; width: 360px; height: 360px; right: -155px; top: -190px; border-radius: 50%; background: radial-gradient(circle, rgba(91,255,142,.24), rgba(91,255,142,.04) 48%, transparent 72%); animation: sealBreath 6.5s ease-in-out infinite; }
+    .card::after { margin-top: 24px; background: linear-gradient(90deg, transparent, rgba(92,255,141,.58), rgba(133,196,255,.32), transparent); }
+    .badge { border-color: rgba(102,255,151,.28); background: rgba(18,58,35,.72); color: #d9ffe5; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+    h1 { max-width: 760px; margin-top: 14px; font-size: clamp(30px, 5vw, 48px); line-height: 1.06; letter-spacing: -.045em; background: linear-gradient(100deg, #f7fff9 0%, #caffe0 50%, #b9d9ff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .card > p { max-width: 750px; margin: 12px 0 0; font-size: 15px; }
+    .assurance-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 11px; margin: 21px 0 5px; opacity: 0; transform: translateY(12px); animation: sectionReveal .72s ease-out .44s forwards; }
+    .assurance-item { position: relative; overflow: hidden; min-height: 92px; padding: 14px; border: 1px solid rgba(122,164,151,.24); border-radius: 16px; background: linear-gradient(160deg, rgba(27,46,40,.82), rgba(13,24,29,.82)); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); }
+    .assurance-item::after { content: ""; position: absolute; inset: auto -28px -42px auto; width: 90px; height: 90px; border-radius: 50%; background: rgba(92,255,141,.07); }
+    .assurance-number { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: rgba(92,255,141,.14); color: #9dffba; font: 850 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .assurance-item strong { display: block; margin-top: 10px; color: #f0fff5; font-size: 13px; }
+    .assurance-item small { display: block; margin-top: 4px; color: #93a9a1; line-height: 1.42; }
+    .process-steps { margin-top: 18px; }
+    .process-step { min-height: 58px; background: rgba(8,17,20,.72); }
+    .process-step.active { box-shadow: 0 14px 34px rgba(39,231,104,.12), inset 0 1px 0 rgba(255,255,255,.05); }
+    .status { border-color: rgba(105,143,160,.31); background: linear-gradient(145deg, rgba(8,17,23,.94), rgba(11,25,21,.94)); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); }
+    input, textarea { min-height: 50px; border-color: rgba(112,151,163,.34); background: rgba(6,14,18,.84); }
+    button { min-height: 46px; border-radius: 14px; }
+    button.primary { background: linear-gradient(135deg, #d5ffdc 0%, #5dff90 46%, #30de72 100%); box-shadow: 0 14px 34px rgba(48,222,114,.2), inset 0 1px 0 rgba(255,255,255,.48); }
+    button.secondary { background: rgba(33,49,55,.86); border-color: rgba(129,165,177,.26); }
+    .result.show { padding: 18px; border: 1px solid rgba(91,255,142,.24); border-radius: 18px; background: linear-gradient(145deg, rgba(15,49,29,.72), rgba(10,23,26,.82)); box-shadow: 0 20px 50px rgba(0,0,0,.2); }
+    .result h2 { margin-top: 0; }
+    .danger { color: #e5f5ec; }
+    .debug-panel { border-color: rgba(111,145,157,.28); background: rgba(5,12,16,.86); }
+    @keyframes gridFloat { from { transform: translateY(0); } to { transform: translateY(42px); } }
+    @keyframes sealBreath { 0%,100% { transform: scale(.94); opacity: .62; } 50% { transform: scale(1.06); opacity: 1; } }
+    @media (max-width: 720px) { .assurance-grid { grid-template-columns: 1fr; } .assurance-item { min-height: 0; } .card { border-radius: 20px; padding: 19px; } }
+    @media (prefers-reduced-motion: reduce) { body::after, .card::before, .assurance-grid { animation: none; transform: none; opacity: 1; } }
   </style>
 </head>
 <body>
@@ -170,9 +204,15 @@
 
   <main>
     <section class="card" aria-labelledby="title">
-      <span class="badge">Dirac Secure Recovery • Account Assistance</span>
-      <h1 id="title">Pemulihan Akses Akun</h1>
-      <p>Halaman ini membantu proses pemulihan akses akun secara aman. Informasi yang Anda masukkan diproses di perangkat Anda dan tidak disimpan oleh halaman ini.</p>
+      <span class="badge">Dirac Secure Recovery • Verified account recovery</span>
+      <h1 id="title">Pulihkan akses tanpa membuka data rahasia</h1>
+      <p>Tautan, manifest, dan vault diperiksa berlapis sebelum formulir dibuka. Informasi sensitif diproses di perangkat Anda, kode tidak pernah ditampilkan, dan penyalinan hanya tersedia satu kali.</p>
+
+      <div class="assurance-grid" aria-label="Perlindungan proses pemulihan">
+        <div class="assurance-item"><span class="assurance-number">01</span><strong>Manifest terverifikasi</strong><small>Ed25519 dan ML-DSA-87 harus sama-sama valid.</small></div>
+        <div class="assurance-item"><span class="assurance-number">02</span><strong>Dekripsi lokal</strong><small>Vault dibuka pada perangkat setelah verifikasi kontrak keamanan.</small></div>
+        <div class="assurance-item"><span class="assurance-number">03</span><strong>Salin satu kali</strong><small>Kode tidak ditampilkan dan buffer langsung dibersihkan.</small></div>
+      </div>
 
       <div id="lockNotice" class="lock-notice" role="note" hidden>
         <span aria-hidden="true"></span>
@@ -180,9 +220,9 @@
       </div>
 
       <div class="process-steps" aria-label="Tahapan pemulihan akun">
-        <div class="process-step active" data-step="1"><span>1</span><strong>Validasi</strong></div>
-        <div class="process-step" data-step="2"><span>2</span><strong>Verifikasi</strong></div>
-        <div class="process-step" data-step="3"><span>3</span><strong>Penyelesaian</strong></div>
+        <div class="process-step active" data-step="1"><span>1</span><strong>Validasi tautan</strong></div>
+        <div class="process-step" data-step="2"><span>2</span><strong>Verifikasi lokal</strong></div>
+        <div class="process-step" data-step="3"><span>3</span><strong>Salin kode</strong></div>
       </div>
 
       <div id="status" class="status loading" role="status" aria-live="polite" aria-atomic="true"><span id="statusText" class="status-text">Memuat layanan pemulihan...</span><span id="statusCursor" class="status-cursor" aria-hidden="true"></span></div>
@@ -223,26 +263,17 @@
       </div>
 
       <section id="resultBox" class="result" aria-labelledby="resultTitle">
-        <h2 id="resultTitle">Recovery terverifikasi</h2>
-        <p class="danger">Kode pemulihan sengaja tidak ditampilkan. Anda boleh menyalinnya satu kali, atau menghapusnya tanpa menyalin lalu langsung membuat Passkey pengganti.</p>
+        <h2 id="resultTitle">Kode pemulihan siap</h2>
+        <p class="danger">Kode sengaja tidak ditampilkan. Setelah vault selesai dibuka secara lokal, Anda boleh tetap offline atau mengaktifkan internet sebelum menyalinnya satu kali.</p>
         <div class="row">
           <button id="copyRecoveryButton" class="primary" type="button">Salin kode pemulihan — hanya 1×</button>
-          <button id="discardRecoveryButton" class="secondary" type="button">Lewati penyalinan</button>
+          <button id="discardRecoveryButton" class="secondary" type="button">Hapus tanpa menyalin</button>
         </div>
-        <p id="copyState" class="small" role="status" aria-live="polite">Setelah penyalinan berhasil, halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik. Browser tidak menjamin penghapusan clipboard berhasil.</p>
-      </section>
-
-      <section id="passkeyBox" class="result" aria-labelledby="passkeyTitle" hidden>
-        <h2 id="passkeyTitle">Buat Passkey pengganti</h2>
-        <p>Aktifkan internet, lalu gunakan Face ID, sidik jari, atau PIN perangkat. Recovery session hanya disimpan di memori halaman dan tidak dimasukkan ke URL atau penyimpanan browser.</p>
-        <div class="row">
-          <button id="createPasskeyButton" class="primary" type="button" disabled>Buat Passkey pengganti</button>
-        </div>
-        <p id="passkeyState" class="small" role="status" aria-live="polite">Menunggu kode pemulihan dibersihkan.</p>
+        <p id="copyState" class="small" role="status" aria-live="polite">Internet boleh tetap aktif saat tombol salin digunakan. Setelah berhasil, buffer halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik.</p>
       </section>
 
       <h2>Tahapan pemulihan</h2>
-      <p class="small">Tautan resmi diperiksa → isi tiga informasi pemulihan → buka hasil terenkripsi secara offline → bersihkan kode → buat dan konfirmasikan Passkey baru.</p>
+      <p class="small">Tautan resmi diperiksa → isi tiga informasi pemulihan → buka vault secara lokal → salin kode satu kali → buffer sensitif dibersihkan otomatis.</p>
     </section>
   </main>
 
@@ -935,7 +966,7 @@
         try { el.copyRecoveryButton.disabled = false; } catch (_) {}
         try { el.discardRecoveryButton.disabled = false; } catch (_) {}
         try { el.copyRecoveryButton.textContent = 'Salin kode pemulihan — hanya 1×'; } catch (_) {}
-        try { el.copyState.textContent = 'Setelah penyalinan berhasil, halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik. Browser tidak menjamin penghapusan clipboard berhasil.'; } catch (_) {}
+        try { el.copyState.textContent = 'Internet boleh tetap aktif saat tombol salin digunakan. Setelah berhasil, buffer halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik.'; } catch (_) {}
         try { el.passkeyBox.hidden = true; } catch (_) {}
         try { el.passkeyBox.classList.remove('show'); } catch (_) {}
         try { el.createPasskeyButton.disabled = true; } catch (_) {}
@@ -1005,11 +1036,18 @@
 
     function clearRecoveryCodeForPasskey(copied) {
       var recoveryBytes = state.recoveryMaterialBytes;
-      if (recoveryBytes) {
-        try { recoveryBytes.fill(0); } catch (_) {}
-      }
-      state.sensitiveBuffers = state.sensitiveBuffers.filter(function (value) { return value !== recoveryBytes; });
+      var sessionBytes = state.recoverySessionBytes;
+      try { if (recoveryBytes) recoveryBytes.fill(0); } catch (_) {}
+      try { if (sessionBytes) sessionBytes.fill(0); } catch (_) {}
+      state.sensitiveBuffers = state.sensitiveBuffers.filter(function (value) {
+        return value !== recoveryBytes && value !== sessionBytes;
+      });
       state.recoveryMaterialBytes = null;
+      state.recoverySessionBytes = null;
+      state.recoverySessionExpiresAtMs = 0;
+      state.recoverySessionRequestId = '';
+      state.recoveryOwnerCustomerId = '';
+      state.recoveryOwnerAuthUserId = '';
       try {
         if (state.fragment && typeof state.fragment === 'object') state.fragment.token = '';
       } catch (_) {}
@@ -1020,20 +1058,15 @@
       state.vaultFetched = false;
       state.offlineDecryptRequired = false;
       state.offlineUnlockSeen = false;
-      state.flowPhase = browserIsOnline() ? 'passkey_ready' : 'await_online_passkey';
+      state.flowPhase = 'recovery_complete';
       state.recoveryCopied = Boolean(copied);
-      state.passkeyPhase = 'start';
+      state.passkeyPhase = 'closed';
+      try { if (state.expiryTimer) clearTimeout(state.expiryTimer); } catch (_) {}
+      state.expiryTimer = null;
+      state.expiresAtMs = 0;
       try { el.copyRecoveryButton.disabled = true; } catch (_) {}
       try { el.discardRecoveryButton.disabled = true; } catch (_) {}
-      try { el.passkeyBox.hidden = false; } catch (_) {}
-      try { el.passkeyBox.classList.add('show'); } catch (_) {}
-      try { el.createPasskeyButton.disabled = !browserIsOnline(); } catch (_) {}
-      try {
-        el.passkeyState.textContent = browserIsOnline()
-          ? 'Internet tersedia. Tekan tombol untuk meminta challenge Passkey dari server utama.'
-          : 'Aktifkan internet. Recovery session tetap berada di memori halaman sampai masa berlakunya habis.';
-      } catch (_) {}
-      try { history.replaceState(null, document.title, location.pathname + '#passkey'); } catch (_) {}
+      try { history.replaceState(null, document.title, location.pathname + '#complete'); } catch (_) {}
     }
 
     function legacyCopyText(text) {
@@ -1080,7 +1113,6 @@
     async function copyRecoveryMaterialOnce() {
       if (state.recoveryCopied || !state.recoveryMaterialBytes || !state.recoveryMaterialBytes.byteLength) return;
       assertNotExpired();
-      if (navigator.onLine !== false) return renderLockedState();
       el.copyRecoveryButton.disabled = true;
       var recoveryText = fromUtf8(state.recoveryMaterialBytes);
       var copied = false;
@@ -1091,7 +1123,7 @@
       }
       if (!copied) {
         el.copyRecoveryButton.disabled = false;
-        el.copyState.textContent = 'Penyalinan belum berhasil. Tetap offline dan tekan tombol sekali lagi.';
+        el.copyState.textContent = 'Penyalinan belum berhasil. Periksa izin clipboard lalu tekan tombol sekali lagi.';
         setStatus('Kode belum berhasil disalin. Tidak ada data yang ditampilkan atau dibersihkan sampai penyalinan benar-benar berhasil.', 'err');
         return;
       }
@@ -1099,23 +1131,22 @@
       scheduleClipboardClearAttempt();
       el.copyRecoveryButton.disabled = true;
       el.copyRecoveryButton.textContent = 'Kode sudah disalin dan memori dibersihkan';
-      el.copyState.textContent = 'Penyalinan berhasil. Buffer kode sudah dibersihkan. Clipboard akan dicoba dikosongkan setelah 30 detik. Aktifkan internet untuk membuat Passkey pengganti.';
+      el.copyState.textContent = 'Penyalinan berhasil. Buffer kode dan recovery session sudah dibersihkan. Clipboard akan dicoba dikosongkan setelah 30 detik.';
       el.resultBox.classList.add('show');
       setLockNotice(false);
       setProcessStep(3);
-      setStatus('Kode berhasil disalin satu kali. Recovery session tetap berada di memori untuk membuat Passkey pengganti.', 'ok');
+      setStatus('Kode berhasil disalin satu kali. Seluruh buffer sensitif halaman telah dibersihkan.', 'ok');
     }
 
     function discardRecoveryMaterialForPasskey() {
       if (!state.recoveryMaterialBytes || state.permanentLocked) return;
       assertNotExpired();
-      if (browserIsOnline()) return renderLockedState();
       clearRecoveryCodeForPasskey(false);
       el.copyRecoveryButton.disabled = true;
       el.discardRecoveryButton.disabled = true;
       el.copyState.textContent = 'Kode pemulihan dihapus tanpa disalin. Tindakan ini tidak dapat dibatalkan.';
       el.resultBox.classList.add('show');
-      setStatus('Kode pemulihan sudah dibersihkan. Aktifkan internet untuk membuat Passkey pengganti.', 'waiting');
+      setStatus('Kode pemulihan dan recovery session sudah dihapus dari memori halaman.', 'ok');
     }
 
     function hardenStorageAccess() {
@@ -2549,14 +2580,14 @@
         keepOnlyRecoveryHandoff(openedRecovery);
         clearHybridRetryContextAfterOpen();
         state.recoveryCopied = false;
-        state.flowPhase = 'complete_offline';
+        state.flowPhase = 'recovery_ready';
         el.copyRecoveryButton.disabled = false;
         el.copyRecoveryButton.textContent = 'Salin kode pemulihan — hanya 1×';
-        el.copyState.textContent = 'Kode tidak ditampilkan. Saat disalin, kode masuk ke clipboard sistem. Tempelkan segera; halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik.';
+        el.copyState.textContent = 'Kode tidak ditampilkan. Anda boleh mengaktifkan internet sebelum menyalin. Tempelkan segera; buffer halaman dibersihkan dan clipboard akan dicoba dikosongkan setelah 30 detik.';
         el.resultBox.classList.add('show');
       });
       setProcessStep(3);
-      setStatus('Verifikasi berhasil. Tetap offline; kode pemulihan siap disalin satu kali.', 'ok');
+      setStatus('Verifikasi berhasil. Dekripsi lokal selesai; internet boleh diaktifkan dan kode siap disalin satu kali.', 'ok');
     }
 
     async function retryHybridEnvelopeManually() {
@@ -3809,7 +3840,6 @@
     el.retryHybridButton.addEventListener('click', retryHybridEnvelopeManually);
     el.copyRecoveryButton.addEventListener('click', copyRecoveryMaterialOnce);
     el.discardRecoveryButton.addEventListener('click', discardRecoveryMaterialForPasskey);
-    el.createPasskeyButton.addEventListener('click', runRecoveryPasskeyHandoff);
     el.clearButton.addEventListener('click', function () {
       wipeMemory();
       setLockNotice(false);
@@ -3824,7 +3854,7 @@
     }, { once: false });
     window.addEventListener('online', function () {
       if (state.permanentLocked) return;
-      if (state.flowPhase === 'offline_kdf' || state.flowPhase === 'offline_result' || state.flowPhase === 'complete_offline') return renderLockedState();
+      if (state.flowPhase === 'offline_kdf' || state.flowPhase === 'offline_result') return renderLockedState();
       if (state.flowPhase === 'hybrid_manual_retry') {
         el.retryHybridButton.disabled = false;
         el.hybridRetryState.textContent = 'Internet tersedia. Tekan retry untuk mengirim byte envelope yang sama; tidak ada retry otomatis.';
