@@ -12815,6 +12815,23 @@ async function diracS2SRegistryEntryV206(serverId) {
   return { ok: true, found: true, entry: normalizedEntry, source: 'security_database_registry' };
 }
 
+const DIRAC_RECOVERY_S2S_NETWORK_ID_PATCH_V287 = 'dirac-recovery-s2s-network-id-kdf-v287';
+
+function diracS2SNetworkIdForActionV287(action, sourceServerId) {
+  const raw = diracS2STextV206('DIRAC_S2S_NETWORK_ID');
+  const cleanAction = String(action || '').trim().toLowerCase();
+  const cleanSource = diracS2SIdV206(sourceServerId || '');
+  const recoveryChannel = cleanAction === 'dirac_recovery_worker_generate'
+    || cleanAction === 'customer_security_recovery_hpke_submit'
+    || (cleanAction === 'security_report' && cleanSource === 'recovery');
+  if (!recoveryChannel) return raw;
+  if (!/^[A-Za-z0-9_-]{43,256}$/.test(raw)) return raw;
+  return crypto.createHash('sha512')
+    .update('dirac/recovery-s2s/network-id/v287\\n', 'utf8')
+    .update(raw, 'utf8')
+    .digest('base64url');
+}
+
 function diracS2SSignHeadersV206(input) {
   const target = input && input.target instanceof URL ? input.target : new URL(String(input && input.target || ''));
   const action = String(input && input.action || '').trim().toLowerCase();
@@ -12822,7 +12839,7 @@ function diracS2SSignHeadersV206(input) {
   const serverId = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
   const targetServerId = diracS2SIdV206(input && input.targetServerId || '');
   const keyVersion = diracS2SKeyVersionV206(diracS2STextV206('DIRAC_S2S_KEY_VERSION'));
-  const networkId = diracS2STextV206('DIRAC_S2S_NETWORK_ID');
+  const networkId = diracS2SNetworkIdForActionV287(action, serverId);
   if (!serverId || !targetServerId || !keyVersion || !action || !/^[A-Za-z0-9_-]{43,256}$/.test(networkId)) throw new Error('DIRAC_S2S_SIGNING_IDENTITY_INVALID');
   const timestamp = String(Date.now());
   const nonce = crypto.randomBytes(32).toString('base64url');
@@ -12984,7 +13001,7 @@ async function diracS2SVerifyInboundV206(req, ctx, body) {
   const targetServerId = diracS2SIdV206(diracS2SHeaderV206(req, 'x-dirac-target-server-id'));
   const localServerId = diracS2SIdV206(diracS2STextV206('DIRAC_S2S_SERVER_ID'));
   const suppliedNetworkId = diracS2SHeaderV206(req, 'x-dirac-network-id');
-  const expectedNetworkId = diracS2STextV206('DIRAC_S2S_NETWORK_ID');
+  const expectedNetworkId = diracS2SNetworkIdForActionV287(ctx && ctx.action, serverId);
   const keyVersion = diracS2SKeyVersionV206(diracS2SHeaderV206(req, 'x-dirac-key-version'));
   const timestampText = diracS2SHeaderV206(req, 'x-dirac-timestamp');
   const timestamp = Number(timestampText);
