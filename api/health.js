@@ -4,7 +4,7 @@
 /* source 3-3 */
 const crypto = require('crypto');
 
-const DIRAC_RECOVERY_ARGON2_MEMORY_KIB_V266 = 512000;
+const DIRAC_RECOVERY_ARGON2_MEMORY_KIB_V266 = 102400;
 
 /* source 4-1184 */
 const DIRAC_RECOVERY_CRYPTO_V2 = (() => {
@@ -3120,7 +3120,8 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
   const ownerId = customerSecurityLostPasskeyQueueOwnerV164();
   const startMs = Date.now();
   const queueTask = String(body && (body.worker_action || body.queue_task) || '').trim();
-  const mayWaitForExistingArgon2 = queueTask === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
+  const mayWaitForExistingArgon2 = queueTask === DIRAC_RECOVERY_WORKER_TASK_GENERATE
+    || queueTask === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
     || queueTask === DIRAC_RECOVERY_WORKER_TASK_VERIFY
     || queueTask === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159;
   const deadlineMs = mayWaitForExistingArgon2
