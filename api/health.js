@@ -4663,7 +4663,7 @@ async function customerSecuritySmtpCommand(socket, command, allowed) {
 function customerSecurityLostPasskeyEmailEscapeHtmlV157(value) {
   return String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
-
+function customerSecurityLostPasskeyEmailWibV325(value) { const millis = Date.parse(String(value || '').trim()); if (!Number.isFinite(millis)) return 'Waktu WIB tidak tersedia'; const date = new Date(millis + (7 * 60 * 60 * 1000)); if (!Number.isFinite(date.getTime())) return 'Waktu WIB tidak tersedia'; const pad = (number) => String(number).padStart(2, '0'); const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']; return pad(date.getUTCDate()) + ' ' + months[date.getUTCMonth()] + ' ' + date.getUTCFullYear() + ', ' + pad(date.getUTCHours()) + ':' + pad(date.getUTCMinutes()) + ':' + pad(date.getUTCSeconds()) + ' WIB'; }
 /* source 10121-10133 */
 function customerSecurityLostPasskeyRecoveryEmailBannerUrlV172() {
   const fallback = 'https://secure.diracgroup.store/mmmail.webp';
@@ -4682,44 +4682,44 @@ function customerSecurityLostPasskeyRecoveryEmailBannerUrlV172() {
 /* source 10135-10179 */
 function customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context = {}) {
   const requestId = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.requestId || '');
-  const expiresAt = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.expiresAt || '');
+  const expiresAt = customerSecurityLostPasskeyEmailEscapeHtmlV157(customerSecurityLostPasskeyEmailWibV325(context.expiresAt));
   const recoveryLink = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.recoveryLink || '');
   const emailSecret = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.emailSecret || '');
   const bannerUrl = customerSecurityLostPasskeyEmailEscapeHtmlV157(customerSecurityLostPasskeyRecoveryEmailBannerUrlV172());
 
   return '<!doctype html>'
-    + '<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dirac Group Secure Recovery</title></head>'
-    + '<body style="margin:0;padding:0;background:#1f1f1f;font-family:Arial,Helvetica,sans-serif;color:#f1f3f4">'
-    + '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#1f1f1f;margin:0;padding:24px 0"><tr><td align="center" style="padding:0 12px">'
-    + '<table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:100%;border-collapse:collapse;border:1px solid #b8c3d9;background:#202124">'
+    + '<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>:root{color-scheme:light dark;supported-color-schemes:light dark}.dirac-black{background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important}u+.dirac-body .dirac-black{background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important}</style><title>Dirac Group Secure Recovery</title></head>'
+    + '<body class="dirac-body dirac-black" bgcolor="#000000" style="margin:0;padding:0;background:#000000;background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important;font-family:Arial,Helvetica,sans-serif;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">'
+    + '<table class="dirac-black" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#000000" style="width:100%;background:#000000;background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important;margin:0;padding:24px 0;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff"><tr><td align="center" bgcolor="#000000" style="padding:0 12px;background:#000000;background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important">'
+    + '<table class="dirac-black" role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" bgcolor="#000000" style="width:600px;max-width:100%;border-collapse:collapse;border:1px solid #4b5563;background:#000000;background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">'
     + '<tr><td style="height:2px;line-height:2px;font-size:0;background:#b8c3d9">&nbsp;</td></tr>'
-    + '<tr><td style="padding:0;border-bottom:1px solid #b8c3d9;background:#202124">'
+    + '<tr><td class="dirac-black" bgcolor="#000000" style="padding:0;border-bottom:1px solid #4b5563;background:#000000;background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important">'
     + '<img src="' + bannerUrl + '" width="600" alt="Dirac Group Secure Recovery" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none">'
     + '</td></tr>'
-    + '<tr><td style="padding:28px 28px 12px;background:#202124;color:#f1f3f4">'
-    + '<p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#f1f3f4">Yth. Pengguna Dirac Group,</p>'
-    + '<p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#f1f3f4">Permintaan pemulihan Passkey Anda telah diterima dan paket recovery terenkripsi sudah disiapkan oleh sistem Dirac Group.</p>'
-    + '<p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#f1f3f4">Silakan buka link resmi berikut untuk mengambil vault recovery. Proses decrypt tetap dilakukan secara lokal di browser dan membutuhkan Secret Email, Secret Website, serta material password terbaru akun Anda.</p>'
-    + '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;margin:20px 0 24px;background:#202124;border:1px solid #b8c3d9">'
-    + '<tr><td style="padding:13px 14px;border-bottom:1px solid #b8c3d9;color:#d7dbe3;font-size:13px">Request ID</td><td style="padding:13px 14px;border-bottom:1px solid #b8c3d9;color:#ffffff;font-size:13px;font-weight:700;text-align:right;word-break:break-all">' + requestId + '</td></tr>'
-    + '<tr><td style="padding:13px 14px;color:#d7dbe3;font-size:13px">Berlaku sampai</td><td style="padding:13px 14px;color:#ffffff;font-size:13px;font-weight:700;text-align:right;word-break:break-all">' + expiresAt + '</td></tr>'
+    + '<tr><td class="dirac-black" bgcolor="#000000" style="padding:28px 28px 12px;background:#000000;background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">'
+    + '<p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Yth. Pengguna Dirac Group,</p>'
+    + '<p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Permintaan pemulihan Passkey Anda telah diterima dan paket recovery terenkripsi sudah disiapkan oleh sistem Dirac Group.</p>'
+    + '<p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Silakan buka link resmi berikut untuk mengambil vault recovery. Proses decrypt tetap dilakukan secara lokal di browser dan membutuhkan Secret Email, Secret Website, serta material password terbaru akun Anda.</p>'
+    + '<table class="dirac-black" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#000000" style="border-collapse:collapse;margin:20px 0 24px;background:#000000;background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important;border:1px solid #4b5563;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">'
+    + '<tr><td style="padding:13px 14px;border-bottom:1px solid #4b5563;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;font-size:13px">Request ID</td><td style="padding:13px 14px;border-bottom:1px solid #4b5563;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;font-size:13px;font-weight:700;text-align:right;word-break:break-all">' + requestId + '</td></tr>'
+    + '<tr><td style="padding:13px 14px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;font-size:13px">Berlaku sampai</td><td style="padding:13px 14px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;font-size:13px;font-weight:700;text-align:right;word-break:break-all">' + expiresAt + '</td></tr>'
     + '</table>'
     + '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:6px 0 24px"><tr><td bgcolor="#6f8df7" style="border-radius:9px">'
-    + '<a href="' + recoveryLink + '" style="display:inline-block;padding:13px 18px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:9px">Buka Recovery Resmi</a>'
+    + '<a href="' + recoveryLink + '" style="display:inline-block;padding:13px 18px;font-size:14px;font-weight:700;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;text-decoration:none;border-radius:9px">Buka Recovery Resmi</a>'
     + '</td></tr></table>'
-    + '<p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#f1f3f4;font-weight:700;letter-spacing:.2px">SECRET_EMAIL_100_CHAR</p>'
-    + '<div style="font-family:Consolas,Menlo,Monaco,monospace;font-size:12px;line-height:1.7;color:#f1f5ff;background:#202124;border:1px solid #b8c3d9;border-radius:10px;padding:14px;word-break:break-all;white-space:pre-wrap">' + emailSecret + '</div>'
-    + '<div style="margin:20px 0 0;padding:15px 16px;background:#202124;border-left:4px solid #b8c3d9;color:#f1f3f4;font-size:13px;line-height:1.7">'
-    + '<b style="color:#ffffff">Petunjuk singkat:</b><br>'
+    + '<p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;font-weight:700;letter-spacing:.2px">SECRET_EMAIL_100_CHAR</p>'
+    + '<div class="dirac-black" style="font-family:Consolas,Menlo,Monaco,monospace;font-size:12px;line-height:1.7;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;background:#000000;background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important;border:1px solid #7187ff;border-radius:10px;padding:14px;word-break:break-all;white-space:pre-wrap">' + emailSecret + '</div>'
+    + '<div class="dirac-black" style="margin:20px 0 0;padding:15px 16px;background:#000000;background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important;border-left:4px solid #f5b521;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;font-size:13px;line-height:1.7">'
+    + '<b style="color:#ffffff!important;-webkit-text-fill-color:#ffffff!important">Petunjuk singkat:</b><br>'
     + '1. Buka link recovery resmi di atas.<br>'
     + '2. Setelah vault diterima, halaman akan meminta decrypt lokal/offline.<br>'
     + '3. Masukkan material password terbaru, Secret Email, dan Secret Website sesuai instruksi sistem.'
     + '</div>'
-    + '<p style="margin:22px 0 0;font-size:13px;line-height:1.7;color:#f1f3f4">Jangan membagikan link recovery, Secret Email, Secret Website, atau hasil decrypt kepada pihak mana pun. Jika Anda tidak meminta pemulihan ini, abaikan email ini dan segera hubungi bantuan resmi Dirac Group.</p>'
-    + '<p style="margin:24px 0 0;font-size:14px;line-height:1.8;color:#f1f3f4">Terima kasih,<br><b>Dirac Group</b></p>'
+    + '<p style="margin:22px 0 0;font-size:13px;line-height:1.7;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important">Jangan membagikan link recovery, Secret Email, Secret Website, atau hasil decrypt kepada pihak mana pun. Jika Anda tidak meminta pemulihan ini, abaikan email ini dan segera hubungi bantuan resmi Dirac Group.</p>'
+    + '<p style="margin:24px 0 0;font-size:14px;line-height:1.8;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important">Terima kasih,<br><b>Dirac Group</b></p>'
     + '</td></tr>'
-    + '<tr><td style="padding:16px 28px 22px;background:#202124;color:#f1f3f4;font-size:12px;line-height:1.7;border-top:1px solid #b8c3d9">'
-    + '(Email ini dibuat otomatis oleh sistem, mohon untuk tidak dibalas.)<br>Dirac Group Secure Recovery • Dirac Group'
+    + '<tr><td class="dirac-black" bgcolor="#000000" style="padding:0;background:#000000;background-color:#000000!important;background-image:linear-gradient(#000000,#000000)!important;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;border-top:1px solid #4b5563">' + '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td height="5" bgcolor="#7187ff" style="height:5px;line-height:5px;font-size:0;background:#7187ff">&nbsp;</td><td width="10" bgcolor="#000000" style="width:10px;background:#000000">&nbsp;</td><td width="84" bgcolor="#18a8d8" style="width:84px;background:#18a8d8">&nbsp;</td><td width="10" bgcolor="#000000" style="width:10px;background:#000000">&nbsp;</td><td width="32" bgcolor="#f5b521" style="width:32px;background:#f5b521">&nbsp;</td></tr></table>'
+    + '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td width="48" valign="top" style="padding:18px 0 18px 28px"><div style="width:38px;height:38px;line-height:38px;text-align:center;background:#172554;border:1px solid #7187ff;border-radius:10px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;font-weight:900">DG</div></td><td valign="top" style="padding:18px 28px 18px 14px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;font-size:12px;line-height:1.7"><b>DIRAC GROUP</b><br>SECURE RECOVERY MAIL · ENCRYPTED • PRIVATE<br>(Email ini dibuat otomatis oleh sistem, mohon untuk tidak dibalas.)</td></tr></table>'
     + '</td></tr>'
     + '</table>'
     + '</td></tr></table>'
@@ -4757,7 +4757,7 @@ async function customerSecuritySendLostPasskeyRecoveryLinkEmailV157(to, context 
   const text = [
     'Link recovery Passkey resmi sudah dibuat.',
     'Request ID: ' + String(context.requestId || ''),
-    'Berlaku sampai: ' + String(context.expiresAt || ''),
+    'Berlaku sampai: ' + customerSecurityLostPasskeyEmailWibV325(context.expiresAt),
     'Link resmi: ' + recoveryLink,
     'SECRET_EMAIL_100_CHAR: ' + String(context.emailSecret || ''),
     'Jangan bagikan email secret, link, atau isi pesan ini kepada pihak lain. Website secret hanya tampil di website yang masih login.'
