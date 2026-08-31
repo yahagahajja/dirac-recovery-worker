@@ -4720,6 +4720,7 @@ function customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context = {}) {
   const recoveryLink = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.recoveryLink || '');
   const emailSecret = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.emailSecret || '');
   const officialHost = customerSecurityLostPasskeyEmailEscapeHtmlV157(new URL(customerSecurityLostPasskeyOfficialBaseUrlV157()).hostname);
+  const bannerUrl = customerSecurityLostPasskeyEmailEscapeHtmlV157(customerSecurityLostPasskeyRecoveryEmailBannerUrlV172());
 
   return `<!doctype html>
 <html lang="id">
@@ -4760,6 +4761,11 @@ function customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context = {}) {
                   <td width="20%" height="4" bgcolor="#9a741f" style="height:4px;line-height:4px;font-size:0;background:#9a741f;background-color:#9a741f">&nbsp;</td>
                 </tr>
               </table>
+            </td>
+          </tr>
+          <tr>
+            <td class="dirac-pad" bgcolor="#141820" style="padding:22px 24px 0;background:#141820;background-color:#141820;background-image:linear-gradient(#141820,#141820)">
+              <img src="${bannerUrl}" width="552" alt="Dirac Group Secure Recovery" style="display:block;width:100%;max-width:552px;height:auto;border:0;outline:none;text-decoration:none;border-radius:14px;background:#10151e;background-color:#10151e">
             </td>
           </tr>
           <tr>
@@ -4929,13 +4935,11 @@ function customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context = {}) {
             </td>
           </tr>
           <tr>
-            <td class="dirac-pad" bgcolor="#0e1219" style="padding:25px 32px 27px;border-top:1px solid #2c3544;background:#0e1219;background-color:#0e1219;background-image:linear-gradient(#0e1219,#0e1219)">
-              <div class="gmail-blend-screen"><div class="gmail-blend-difference">
-                <div style="font-size:17px;line-height:1.3;font-weight:800;letter-spacing:.16em;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9">DIRAC GROUP</div>
-                <div style="margin-top:7px;font-size:11px;line-height:1.5;font-weight:700;letter-spacing:.14em;color:#9aa4b2!important;-webkit-text-fill-color:#9aa4b2!important;mso-color-alt:#9aa4b2">RECOVERY &bull; PRIVACY &bull; SECURITY</div>
-                <div style="margin-top:14px;font-size:13px;line-height:1.55;color:#c5ccd6!important;-webkit-text-fill-color:#c5ccd6!important;mso-color-alt:#c5ccd6">Secure Recovery &middot; Protected Delivery</div>
-                <p style="margin:18px 0 0;font-size:11px;line-height:1.65;color:#7f8a99!important;-webkit-text-fill-color:#7f8a99!important;mso-color-alt:#7f8a99">Email ini dibuat otomatis oleh sistem Dirac Group. Mohon tidak membalas dan jangan meneruskan material recovery kepada pihak lain.</p>
-              </div></div>
+            <td class="dirac-pad" bgcolor="#dbeafe" style="padding:25px 32px 27px;border-top:1px solid #93b4e8;background:#dbeafe;background-color:#dbeafe;background-image:linear-gradient(#dbeafe,#dbeafe)">
+              <div style="font-size:17px;line-height:1.3;font-weight:800;letter-spacing:.16em;color:#0f2345!important;-webkit-text-fill-color:#0f2345!important;mso-color-alt:#0f2345">DIRAC GROUP</div>
+              <div style="margin-top:7px;font-size:11px;line-height:1.5;font-weight:700;letter-spacing:.14em;color:#1d3a64!important;-webkit-text-fill-color:#1d3a64!important;mso-color-alt:#1d3a64">RECOVERY &bull; PRIVACY &bull; SECURITY</div>
+              <div style="margin-top:14px;font-size:13px;line-height:1.55;color:#2f4c73!important;-webkit-text-fill-color:#2f4c73!important;mso-color-alt:#2f4c73">Secure Recovery &middot; Protected Delivery</div>
+              <p style="margin:18px 0 0;font-size:11px;line-height:1.65;color:#415a7d!important;-webkit-text-fill-color:#415a7d!important;mso-color-alt:#415a7d">Email ini dibuat otomatis oleh sistem Dirac Group. Mohon tidak membalas dan jangan meneruskan material recovery kepada pihak lain.</p>
             </td>
           </tr>
           <tr>
