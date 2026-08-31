@@ -4719,7 +4719,7 @@ function customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context = {}) {
   const expiresAt = customerSecurityLostPasskeyEmailEscapeHtmlV157(customerSecurityRecoveryFormatWibV326(context.expiresAt || ''));
   const recoveryLink = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.recoveryLink || '');
   const emailSecret = customerSecurityLostPasskeyEmailEscapeHtmlV157(context.emailSecret || '');
-  const bannerUrl = customerSecurityLostPasskeyEmailEscapeHtmlV157(customerSecurityLostPasskeyRecoveryEmailBannerUrlV172());
+  const officialHost = customerSecurityLostPasskeyEmailEscapeHtmlV157(new URL(customerSecurityLostPasskeyOfficialBaseUrlV157()).hostname);
 
   return `<!doctype html>
 <html lang="id">
@@ -4731,47 +4731,222 @@ function customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(context = {}) {
   <title>Dirac Group Secure Recovery</title>
   <style>
     :root { color-scheme:dark; supported-color-schemes:dark; }
-    html, body, .dirac-recovery-bg { background:#202124!important; background-color:#202124!important; }
-    .dirac-recovery-surface { background:#23262d!important; background-color:#23262d!important; }
-    .dirac-recovery-deep { background:#17191e!important; background-color:#17191e!important; }
-    body, table, td, div, p, span, strong, b, a { color:#ffffff!important; -webkit-text-fill-color:#ffffff!important; mso-color-alt:#ffffff!important; }
-    a[x-apple-data-detectors], .x-gmail-data-detectors, .ii a[href] { color:#ffffff!important; -webkit-text-fill-color:#ffffff!important; }
+    body { margin:0!important; padding:0!important; }
+    .dirac-preheader { display:none!important; max-height:0!important; max-width:0!important; opacity:0!important; overflow:hidden!important; mso-hide:all!important; }
+    u + .body .gmail-blend-screen { background:#000; mix-blend-mode:screen; }
+    u + .body .gmail-blend-difference { background:#000; mix-blend-mode:difference; }
+    a[x-apple-data-detectors], .x-gmail-data-detectors, .ii a[href] { text-decoration:none!important; }
+    @media only screen and (max-width:620px) {
+      .dirac-outer-pad { padding:0!important; }
+      .dirac-shell { width:100%!important; max-width:100%!important; }
+      .dirac-pad { padding-left:24px!important; padding-right:24px!important; }
+      .dirac-title { font-size:32px!important; line-height:1.18!important; }
+      .dirac-button a { display:block!important; padding:17px 14px!important; }
+    }
   </style>
 </head>
-<body class="dirac-recovery-bg" bgcolor="#202124" style="margin:0!important;padding:0!important;background:#202124;background-color:#202124;font-family:Arial,Helvetica,sans-serif;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">
-  <table class="dirac-recovery-bg" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#202124" style="width:100%;margin:0;padding:24px 0;background:#202124;background-color:#202124;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">
+<body class="body" bgcolor="#090c12" style="margin:0!important;padding:0!important;background:#090c12;background-color:#090c12;background-image:linear-gradient(#090c12,#090c12);font-family:Arial,Helvetica,sans-serif;color:#f4f6f9">
+  <div class="dirac-preheader">Pemulihan Passkey siap digunakan. Berlaku sampai ${expiresAt}.</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#090c12" style="width:100%;margin:0;padding:0;background:#090c12;background-color:#090c12;background-image:linear-gradient(#090c12,#090c12)">
     <tr>
-      <td class="dirac-recovery-bg" align="center" bgcolor="#202124" style="padding:0 12px;background:#202124;background-color:#202124;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">
-        <table class="dirac-recovery-surface" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#23262d" style="width:100%;max-width:600px;border-collapse:separate;border-spacing:0;border:1px solid #4a505b;border-radius:18px;overflow:hidden;background:#23262d;background-color:#23262d;box-shadow:0 18px 46px rgba(0,0,0,.55);color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">
+      <td class="dirac-outer-pad" align="center" bgcolor="#090c12" style="padding:18px 12px;background:#090c12;background-color:#090c12;background-image:linear-gradient(#090c12,#090c12)">
+        <table class="dirac-shell" role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" bgcolor="#141820" style="width:100%;max-width:600px;border-collapse:collapse;border:1px solid #2c3544;background:#141820;background-color:#141820;background-image:linear-gradient(#141820,#141820)">
           <tr>
-            <td class="dirac-recovery-surface" bgcolor="#23262d" style="padding:0;background:#23262d;background-color:#23262d;border-bottom:1px solid #4a505b">
-              <img src="${bannerUrl}" width="600" alt="Dirac Group Secure Recovery" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;background:#23262d">
-            </td>
-          </tr>
-          <tr>
-            <td class="dirac-recovery-surface" bgcolor="#23262d" style="padding:28px 28px 12px;background:#23262d;background-color:#23262d;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">
-              <div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">DIRAC GROUP • SECURE RECOVERY</div>
-              <div style="font-size:26px;line-height:1.25;font-weight:900;margin-top:10px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Pemulihan Passkey Siap</div>
-              <p style="margin:16px 0 0;font-size:15px;line-height:1.8;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Yth. Pengguna Dirac Group,</p>
-              <p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Permintaan pemulihan Passkey Anda telah diterima dan paket recovery terenkripsi sudah disiapkan oleh sistem Dirac Group.</p>
-              <p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Buka link resmi berikut untuk mengambil vault recovery. Proses decrypt tetap dilakukan secara lokal di browser dan membutuhkan Secret Email, Secret Website, serta material password terbaru akun Anda.</p>
-              <table class="dirac-recovery-deep" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#17191e" style="width:100%;border-collapse:separate;border-spacing:0;margin:20px 0 24px;border:1px solid #4a505b;border-radius:14px;background:#17191e;background-color:#17191e;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">
-                <tr><td style="padding:13px 14px;border-bottom:1px solid #4a505b;font-size:13px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Request ID</td><td style="padding:13px 14px;border-bottom:1px solid #4a505b;font-size:13px;font-weight:800;text-align:right;word-break:break-all;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">${requestId}</td></tr>
-                <tr><td style="padding:13px 14px;font-size:13px;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Berlaku sampai</td><td style="padding:13px 14px;font-size:13px;font-weight:800;text-align:right;word-break:break-word;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">${expiresAt}</td></tr>
+            <td style="padding:0;line-height:0;font-size:0">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse">
+                <tr>
+                  <td width="50%" height="4" bgcolor="#5276e8" style="height:4px;line-height:4px;font-size:0;background:#5276e8;background-color:#5276e8">&nbsp;</td>
+                  <td width="30%" height="4" bgcolor="#148ba4" style="height:4px;line-height:4px;font-size:0;background:#148ba4;background-color:#148ba4">&nbsp;</td>
+                  <td width="20%" height="4" bgcolor="#9a741f" style="height:4px;line-height:4px;font-size:0;background:#9a741f;background-color:#9a741f">&nbsp;</td>
+                </tr>
               </table>
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:6px 0 24px"><tr><td bgcolor="#6f8df7" style="border-radius:10px;background:#6f8df7;background-color:#6f8df7"><a href="${recoveryLink}" style="display:inline-block;padding:14px 20px;font-size:14px;font-weight:900;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff;text-decoration:none;border-radius:10px">Buka Recovery Resmi</a></td></tr></table>
-              <p style="margin:0 0 8px;font-size:13px;line-height:1.6;font-weight:900;letter-spacing:.08em;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">SECRET_EMAIL_100_CHAR</p>
-              <div class="dirac-recovery-deep" style="font-family:Consolas,Menlo,Monaco,monospace;font-size:12px;line-height:1.7;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff;background:#17191e;background-color:#17191e;border:1px solid #4a505b;border-radius:12px;padding:15px;word-break:break-all;white-space:pre-wrap">${emailSecret}</div>
-              <div class="dirac-recovery-deep" style="margin:20px 0 0;padding:15px 16px;background:#17191e;background-color:#17191e;border:1px solid #4a505b;border-left:4px solid #58b7d3;border-radius:12px;font-size:13px;line-height:1.7;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff"><b style="color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Petunjuk singkat:</b><br>1. Buka link recovery resmi di atas.<br>2. Setelah vault diterima, halaman akan meminta decrypt lokal/offline.<br>3. Masukkan material password terbaru, Secret Email, dan Secret Website sesuai instruksi sistem.</div>
-              <p style="margin:22px 0 0;font-size:13px;line-height:1.7;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Jangan membagikan link recovery, Secret Email, Secret Website, atau hasil decrypt kepada pihak mana pun. Jika Anda tidak meminta pemulihan ini, abaikan email ini dan segera hubungi bantuan resmi Dirac Group.</p>
-              <p style="margin:24px 0 0;font-size:14px;line-height:1.8;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Terima kasih,<br><b style="color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Dirac Group</b></p>
             </td>
           </tr>
           <tr>
-            <td class="dirac-recovery-deep" bgcolor="#17191e" style="padding:0 28px 24px;background:#17191e;background-color:#17191e;border-top:1px solid #4a505b;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 20px;border-collapse:collapse"><tr><td width="34%" height="5" bgcolor="#6f8df7" style="height:5px;line-height:5px;font-size:0;background:#6f8df7">&nbsp;</td><td width="33%" height="5" bgcolor="#58b7d3" style="height:5px;line-height:5px;font-size:0;background:#58b7d3">&nbsp;</td><td width="33%" height="5" bgcolor="#f2b84b" style="height:5px;line-height:5px;font-size:0;background:#f2b84b">&nbsp;</td></tr></table>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff"><tr><td valign="top"><div style="font-size:15px;font-weight:900;letter-spacing:.12em;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">DIRAC GROUP</div><div style="margin-top:5px;font-size:11px;letter-spacing:.12em;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">RECOVERY • PRIVACY • SECURITY</div></td><td valign="top" align="right" style="font-size:12px;line-height:1.6;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Secure Recovery<br>Protected Delivery</td></tr></table>
-              <p style="margin:18px 0 0;font-size:11px;line-height:1.65;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff">Email ini dibuat otomatis oleh sistem Dirac Group. Mohon tidak membalas dan jangan meneruskan material recovery kepada pihak lain.</p>
+            <td class="dirac-pad" bgcolor="#141820" style="padding:30px 32px 12px;background:#141820;background-color:#141820;background-image:linear-gradient(#141820,#141820)">
+              <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                <div style="font-size:21px;line-height:1.2;font-weight:800;letter-spacing:.18em;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9">DIRAC GROUP</div>
+                <div style="margin-top:7px;font-size:11px;line-height:1.4;font-weight:700;letter-spacing:.2em;color:#aeb7c4!important;-webkit-text-fill-color:#aeb7c4!important;mso-color-alt:#aeb7c4">SECURE ACCOUNT RECOVERY</div>
+              </div></div>
+            </td>
+          </tr>
+          <tr>
+            <td class="dirac-pad" bgcolor="#141820" style="padding:24px 32px 32px;background:#141820;background-color:#141820;background-image:linear-gradient(#141820,#141820)">
+              <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                <div style="font-size:12px;line-height:1.4;font-weight:800;letter-spacing:.16em;color:#9eb6ff!important;-webkit-text-fill-color:#9eb6ff!important;mso-color-alt:#9eb6ff">SECURE RECOVERY REQUEST</div>
+                <div class="dirac-title" style="margin-top:13px;font-size:38px;line-height:1.16;font-weight:800;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9">Pemulihan Passkey<br>Siap Digunakan</div>
+                <p style="margin:25px 0 0;font-size:17px;line-height:1.55;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9">Yth. Pengguna Dirac Group,</p>
+                <p style="margin:12px 0 0;font-size:16px;line-height:1.65;color:#c5ccd6!important;-webkit-text-fill-color:#c5ccd6!important;mso-color-alt:#c5ccd6">Permintaan pemulihan Passkey Anda telah diterima. Paket recovery terenkripsi siap diambil dan hanya dapat diproses melalui browser resmi Dirac Group.</p>
+              </div></div>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#1a1f29" style="width:100%;margin:24px 0 18px;border-collapse:collapse;border:1px solid #303a49;background:#1a1f29;background-color:#1a1f29;background-image:linear-gradient(#1a1f29,#1a1f29)">
+                <tr>
+                  <td style="padding:18px 20px;border-left:4px solid #5276e8">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                      <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:.16em;color:#9eb6ff!important;-webkit-text-fill-color:#9eb6ff!important;mso-color-alt:#9eb6ff">RECOVERY LINK ACTIVE</div>
+                      <div style="margin-top:9px;font-size:13px;line-height:1.4;color:#aeb7c4!important;-webkit-text-fill-color:#aeb7c4!important;mso-color-alt:#aeb7c4">Berlaku sampai</div>
+                      <div style="margin-top:4px;font-size:18px;line-height:1.45;font-weight:800;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9">${expiresAt}</div>
+                    </div></div>
+                  </td>
+                </tr>
+              </table>
+
+              <table class="dirac-button" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;margin:0 0 12px">
+                <tr>
+                  <td align="center" bgcolor="#4568d4" style="background:#4568d4;background-color:#4568d4;background-image:linear-gradient(#4568d4,#4568d4);border-radius:8px">
+                    <a href="${recoveryLink}" style="display:block;padding:17px 18px;font-size:16px;line-height:1.3;font-weight:800;letter-spacing:.04em;color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;mso-color-alt:#ffffff;text-decoration:none;border-radius:8px">
+                      <span class="gmail-blend-screen" style="display:inline-block"><span class="gmail-blend-difference" style="display:inline-block">BUKA RECOVERY RESMI</span></span>
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                <p style="margin:0 0 30px;font-size:13px;line-height:1.55;text-align:center;color:#9aa4b2!important;-webkit-text-fill-color:#9aa4b2!important;mso-color-alt:#9aa4b2">Tujuan resmi: <strong style="color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9">${officialHost}</strong></p>
+                <div style="font-size:12px;line-height:1.4;font-weight:800;letter-spacing:.16em;color:#aeb7c4!important;-webkit-text-fill-color:#aeb7c4!important;mso-color-alt:#aeb7c4">DETAIL PERMINTAAN</div>
+              </div></div>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#1a1f29" style="width:100%;margin:12px 0 28px;border-collapse:collapse;border:1px solid #303a49;background:#1a1f29;background-color:#1a1f29;background-image:linear-gradient(#1a1f29,#1a1f29)">
+                <tr>
+                  <td style="padding:17px 20px;border-bottom:1px solid #303a49">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                      <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:.14em;color:#8f99a7!important;-webkit-text-fill-color:#8f99a7!important;mso-color-alt:#8f99a7">REQUEST ID</div>
+                      <div style="margin-top:7px;font-family:Menlo,Consolas,'Courier New',monospace;font-size:14px;line-height:1.55;font-weight:700;word-break:break-all;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9">${requestId}</div>
+                    </div></div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:17px 20px">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                      <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:.14em;color:#8f99a7!important;-webkit-text-fill-color:#8f99a7!important;mso-color-alt:#8f99a7">BERLAKU SAMPAI</div>
+                      <div style="margin-top:7px;font-size:15px;line-height:1.5;font-weight:800;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9">${expiresAt}</div>
+                    </div></div>
+                  </td>
+                </tr>
+              </table>
+
+              <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                <div style="font-size:12px;line-height:1.4;font-weight:800;letter-spacing:.16em;color:#aeb7c4!important;-webkit-text-fill-color:#aeb7c4!important;mso-color-alt:#aeb7c4">SECRET EMAIL</div>
+                <div style="margin-top:5px;font-size:11px;line-height:1.4;font-weight:700;letter-spacing:.12em;color:#7f8a99!important;-webkit-text-fill-color:#7f8a99!important;mso-color-alt:#7f8a99">RAHASIA &bull; 100 KARAKTER</div>
+              </div></div>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#0e1219" style="width:100%;margin:12px 0 12px;border-collapse:collapse;border:1px solid #344052;background:#0e1219;background-color:#0e1219;background-image:linear-gradient(#0e1219,#0e1219)">
+                <tr>
+                  <td style="padding:19px 20px;border-left:4px solid #148ba4">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                      <div style="font-family:Menlo,Consolas,'Courier New',monospace;font-size:14px;line-height:1.65;font-weight:600;word-break:break-all;white-space:pre-wrap;color:#eef3f8!important;-webkit-text-fill-color:#eef3f8!important;mso-color-alt:#eef3f8">${emailSecret}</div>
+                    </div></div>
+                  </td>
+                </tr>
+              </table>
+
+              <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                <p style="margin:0 0 28px;font-size:13px;line-height:1.6;color:#9aa4b2!important;-webkit-text-fill-color:#9aa4b2!important;mso-color-alt:#9aa4b2">Jangan mengirimkan Secret Email melalui balasan email, chat, telepon, atau formulir pihak lain.</p>
+                <div style="font-size:12px;line-height:1.4;font-weight:800;letter-spacing:.16em;color:#aeb7c4!important;-webkit-text-fill-color:#aeb7c4!important;mso-color-alt:#aeb7c4">CARA MENGGUNAKAN</div>
+              </div></div>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:13px 0 27px;border-collapse:collapse">
+                <tr>
+                  <td width="38" valign="top" style="padding:0 0 14px">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference"><div style="font-size:14px;line-height:1.55;font-weight:800;color:#9eb6ff!important;-webkit-text-fill-color:#9eb6ff!important;mso-color-alt:#9eb6ff">01</div></div></div>
+                  </td>
+                  <td valign="top" style="padding:0 0 14px">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference"><div style="font-size:15px;line-height:1.55;color:#c5ccd6!important;-webkit-text-fill-color:#c5ccd6!important;mso-color-alt:#c5ccd6">Buka tautan recovery resmi melalui tombol di atas.</div></div></div>
+                  </td>
+                </tr>
+                <tr>
+                  <td width="38" valign="top" style="padding:0 0 14px">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference"><div style="font-size:14px;line-height:1.55;font-weight:800;color:#9eb6ff!important;-webkit-text-fill-color:#9eb6ff!important;mso-color-alt:#9eb6ff">02</div></div></div>
+                  </td>
+                  <td valign="top" style="padding:0 0 14px">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference"><div style="font-size:15px;line-height:1.55;color:#c5ccd6!important;-webkit-text-fill-color:#c5ccd6!important;mso-color-alt:#c5ccd6">Setelah vault diterima, lakukan decrypt secara lokal atau offline di browser.</div></div></div>
+                  </td>
+                </tr>
+                <tr>
+                  <td width="38" valign="top" style="padding:0">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference"><div style="font-size:14px;line-height:1.55;font-weight:800;color:#9eb6ff!important;-webkit-text-fill-color:#9eb6ff!important;mso-color-alt:#9eb6ff">03</div></div></div>
+                  </td>
+                  <td valign="top" style="padding:0">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference"><div style="font-size:15px;line-height:1.55;color:#c5ccd6!important;-webkit-text-fill-color:#c5ccd6!important;mso-color-alt:#c5ccd6">Masukkan material password terbaru, Secret Email, dan Secret Website sesuai instruksi sistem.</div></div></div>
+                  </td>
+                </tr>
+              </table>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#1d1b17" style="width:100%;margin:0 0 28px;border-collapse:collapse;border:1px solid #4a4030;background:#1d1b17;background-color:#1d1b17;background-image:linear-gradient(#1d1b17,#1d1b17)">
+                <tr>
+                  <td style="padding:18px 20px;border-left:4px solid #9a741f">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                      <div style="font-size:12px;line-height:1.4;font-weight:800;letter-spacing:.14em;color:#f0c86c!important;-webkit-text-fill-color:#f0c86c!important;mso-color-alt:#f0c86c">PERINGATAN KEAMANAN</div>
+                      <p style="margin:10px 0 0;font-size:14px;line-height:1.65;color:#e8ebef!important;-webkit-text-fill-color:#e8ebef!important;mso-color-alt:#e8ebef">Jangan membagikan link recovery, Secret Email, Secret Website, password, OTP, atau hasil decrypt kepada siapa pun. Jika Anda tidak meminta pemulihan ini, abaikan email ini dan hubungi bantuan resmi Dirac Group.</p>
+                    </div></div>
+                  </td>
+                </tr>
+              </table>
+
+              <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                <div style="font-size:12px;line-height:1.4;font-weight:800;letter-spacing:.16em;color:#aeb7c4!important;-webkit-text-fill-color:#aeb7c4!important;mso-color-alt:#aeb7c4">BANTUAN RESMI DIRAC GROUP</div>
+                <p style="margin:9px 0 13px;font-size:14px;line-height:1.6;color:#9aa4b2!important;-webkit-text-fill-color:#9aa4b2!important;mso-color-alt:#9aa4b2">Mengalami kendala saat melakukan recovery? Hubungi tim support melalui kanal resmi berikut.</p>
+              </div></div>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#10151e" style="width:100%;margin:0 0 13px;border-collapse:collapse;border:1px solid #2c3544;background:#10151e;background-color:#10151e;background-image:linear-gradient(#10151e,#10151e)">
+                <tr>
+                  <td style="padding:15px 20px;border-left:4px solid #148ba4;border-bottom:1px solid #2c3544">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                      <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:.12em;color:#7f8a99!important;-webkit-text-fill-color:#7f8a99!important;mso-color-alt:#7f8a99">WHATSAPP</div>
+                      <a href="https://wa.me/6287892523968" style="display:inline-block;margin-top:5px;font-size:15px;line-height:1.5;font-weight:700;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9;text-decoration:none">0878 9252 3968</a>
+                    </div></div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:15px 20px;border-left:4px solid #148ba4;border-bottom:1px solid #2c3544">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                      <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:.12em;color:#7f8a99!important;-webkit-text-fill-color:#7f8a99!important;mso-color-alt:#7f8a99">EMAIL SUPPORT</div>
+                      <a href="mailto:support@diracgroup.store" style="display:inline-block;margin-top:5px;font-size:15px;line-height:1.5;font-weight:700;word-break:break-all;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9;text-decoration:none">support@diracgroup.store</a>
+                    </div></div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:15px 20px;border-left:4px solid #148ba4;border-bottom:1px solid #2c3544">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                      <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:.12em;color:#7f8a99!important;-webkit-text-fill-color:#7f8a99!important;mso-color-alt:#7f8a99">EMAIL PERUSAHAAN</div>
+                      <a href="mailto:companydirac@gmail.com" style="display:inline-block;margin-top:5px;font-size:15px;line-height:1.5;font-weight:700;word-break:break-all;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9;text-decoration:none">companydirac@gmail.com</a>
+                    </div></div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:15px 20px;border-left:4px solid #148ba4">
+                    <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                      <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:.12em;color:#7f8a99!important;-webkit-text-fill-color:#7f8a99!important;mso-color-alt:#7f8a99">INSTAGRAM</div>
+                      <a href="https://www.instagram.com/diraccorp/" style="display:inline-block;margin-top:5px;font-size:15px;line-height:1.5;font-weight:700;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9;text-decoration:none">@diraccorp</a>
+                    </div></div>
+                  </td>
+                </tr>
+              </table>
+
+              <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                <p style="margin:0;font-size:12px;line-height:1.65;color:#8f99a7!important;-webkit-text-fill-color:#8f99a7!important;mso-color-alt:#8f99a7">Tim Dirac Group tidak pernah meminta Secret Email, Secret Website, password, OTP, atau hasil decrypt melalui WhatsApp, Instagram, telepon, maupun balasan email.</p>
+              </div></div>
+            </td>
+          </tr>
+          <tr>
+            <td class="dirac-pad" bgcolor="#0e1219" style="padding:25px 32px 27px;border-top:1px solid #2c3544;background:#0e1219;background-color:#0e1219;background-image:linear-gradient(#0e1219,#0e1219)">
+              <div class="gmail-blend-screen"><div class="gmail-blend-difference">
+                <div style="font-size:17px;line-height:1.3;font-weight:800;letter-spacing:.16em;color:#f4f6f9!important;-webkit-text-fill-color:#f4f6f9!important;mso-color-alt:#f4f6f9">DIRAC GROUP</div>
+                <div style="margin-top:7px;font-size:11px;line-height:1.5;font-weight:700;letter-spacing:.14em;color:#9aa4b2!important;-webkit-text-fill-color:#9aa4b2!important;mso-color-alt:#9aa4b2">RECOVERY &bull; PRIVACY &bull; SECURITY</div>
+                <div style="margin-top:14px;font-size:13px;line-height:1.55;color:#c5ccd6!important;-webkit-text-fill-color:#c5ccd6!important;mso-color-alt:#c5ccd6">Secure Recovery &middot; Protected Delivery</div>
+                <p style="margin:18px 0 0;font-size:11px;line-height:1.65;color:#7f8a99!important;-webkit-text-fill-color:#7f8a99!important;mso-color-alt:#7f8a99">Email ini dibuat otomatis oleh sistem Dirac Group. Mohon tidak membalas dan jangan meneruskan material recovery kepada pihak lain.</p>
+              </div></div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0;line-height:0;font-size:0">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse">
+                <tr>
+                  <td width="50%" height="4" bgcolor="#5276e8" style="height:4px;line-height:4px;font-size:0;background:#5276e8;background-color:#5276e8">&nbsp;</td>
+                  <td width="30%" height="4" bgcolor="#148ba4" style="height:4px;line-height:4px;font-size:0;background:#148ba4;background-color:#148ba4">&nbsp;</td>
+                  <td width="20%" height="4" bgcolor="#9a741f" style="height:4px;line-height:4px;font-size:0;background:#9a741f;background-color:#9a741f">&nbsp;</td>
+                </tr>
+              </table>
             </td>
           </tr>
         </table>
@@ -4816,7 +4991,9 @@ async function customerSecuritySendLostPasskeyRecoveryLinkEmailV157(to, context 
     'Berlaku sampai: ' + customerSecurityRecoveryFormatWibV326(context.expiresAt || ''),
     'Link resmi: ' + recoveryLink,
     'SECRET_EMAIL_100_CHAR: ' + String(context.emailSecret || ''),
-    'Jangan bagikan email secret, link, atau isi pesan ini kepada pihak lain. Website secret hanya tampil di website yang masih login.'
+    'Jangan bagikan email secret, link, atau isi pesan ini kepada pihak lain. Website secret hanya tampil di website yang masih login.',
+    'Bantuan resmi Dirac Group:\nWhatsApp: 0878 9252 3968\nEmail Support: support@diracgroup.store\nEmail Perusahaan: companydirac@gmail.com\nInstagram: @diraccorp',
+    'Tim Dirac Group tidak pernah meminta Secret Email, Secret Website, password, OTP, atau hasil decrypt melalui WhatsApp, Instagram, telepon, maupun balasan email.'
   ].join('\n\n');
   const html = customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(emailContext);
 
