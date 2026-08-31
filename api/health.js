@@ -4988,7 +4988,8 @@ async function customerSecuritySendLostPasskeyRecoveryLinkEmailV157(to, context 
   if (!recoveryLink) return { ok: false, status: 500, code: 'RECOVERY_EMAIL_LINK_INVALID', message: 'Link recovery resmi tidak valid.' };
   const emailContext = Object.assign({}, context, { recoveryLink });
   const from = String(process.env.DIRAC_RECOVERY_EMAIL_FROM || process.env.DIRAC_EMAIL_FROM || process.env.RESEND_FROM || 'Dirac Secure <no-reply@diracgroup.store>').trim();
-  const subject = 'DiracGroup Secure Recovery - Link Pemulihan Passkey';
+  const subjectRef = crypto.createHash('sha256').update(recoveryLink, 'utf8').digest('hex').slice(0, 10).toUpperCase();
+  const subject = 'DiracGroup Secure Recovery - Link Pemulihan Passkey [' + subjectRef + ']';
   const text = [
     'Link recovery Passkey resmi sudah dibuat.',
     'Request ID: ' + String(context.requestId || ''),
