@@ -4660,6 +4660,41 @@ async function customerSecuritySmtpCommand(socket, command, allowed) {
 }
 
 
+function customerSecurityLostPasskeyEmail100HtmlV343(context = {}) {
+  const reference = String(context.reference || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
+  const expiresAt = String(context.expiresAt || '').trim();
+  const emailSecret = customerSecurityLostPasskeyExactSecret100V182(context.emailSecret);
+  if (!reference || !emailSecret || !Number.isFinite(Date.parse(expiresAt))) return '';
+  const authUrl = 'https://auth.diracgroup.store/masuk.html';
+  let html = customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157({
+    requestId: reference,
+    expiresAt,
+    recoveryLink: authUrl,
+    emailSecret
+  });
+  const replacements = [
+    ['Pemulihan Passkey siap digunakan. Berlaku sampai ', 'Kode pemulihan Passkey 100 karakter siap digunakan. Berlaku sampai '],
+    ['SECURE RECOVERY REQUEST', 'SECURE RECOVERY CODE'],
+    ['Pemulihan Passkey<br>Siap Digunakan', 'Kode Pemulihan Passkey<br>Siap Digunakan'],
+    ['Permintaan pemulihan Passkey Anda telah diterima. Paket recovery terenkripsi siap diambil dan hanya dapat diproses melalui browser resmi Dirac Group.', 'Password akun Anda sudah diverifikasi. Kode keamanan 100 karakter di bawah hanya boleh digunakan pada halaman masuk resmi Dirac Group.'],
+    ['RECOVERY LINK ACTIVE', 'RECOVERY CODE ACTIVE'],
+    ['BUKA RECOVERY RESMI', 'KEMBALI KE HALAMAN MASUK'],
+    ['DETAIL PERMINTAAN', 'DETAIL KODE PEMULIHAN'],
+    ['REQUEST ID', 'REFERENSI'],
+    ['SECRET EMAIL', 'KODE EMAIL'],
+    ['RAHASIA &bull; 100 KARAKTER', 'RAHASIA &bull; 100 KARAKTER'],
+    ['Jangan mengirimkan Secret Email melalui balasan email, chat, telepon, atau formulir pihak lain.', 'Jangan mengirimkan kode email ini melalui balasan email, chat, telepon, atau formulir pihak lain.'],
+    ['Buka tautan recovery resmi melalui tombol di atas.', 'Kembali ke halaman masuk resmi Dirac Group melalui tombol di atas.'],
+    ['Setelah vault diterima, lakukan decrypt secara lokal atau offline di browser.', 'Masukkan kode email 100 karakter ini pada kolom verifikasi pemulihan Passkey.'],
+    ['Masukkan material password terbaru, Secret Email, dan Secret Website sesuai instruksi sistem.', 'Password akun dan kode email 100 karakter wajib sama-sama lolos verifikasi sebelum tahap penggantian Passkey dibuka.'],
+    ['Jangan membagikan link recovery, Secret Email, Secret Website, password, OTP, atau hasil decrypt kepada siapa pun. Jika Anda tidak meminta pemulihan ini, abaikan email ini dan hubungi bantuan resmi Dirac Group.', 'Jangan membagikan kode email, password, OTP, token, atau Passkey kepada siapa pun. Jika Anda tidak meminta pemulihan ini, abaikan email ini dan hubungi bantuan resmi Dirac Group.'],
+    ['Tim Dirac Group tidak pernah meminta Secret Email, Secret Website, password, OTP, atau hasil decrypt melalui WhatsApp, Instagram, telepon, maupun balasan email.', 'Tim Dirac Group tidak pernah meminta kode email, password, OTP, token, atau Passkey melalui WhatsApp, Instagram, telepon, maupun balasan email.'],
+    ['>secure.diracgroup.store</strong>', '>auth.diracgroup.store</strong>']
+  ];
+  for (const pair of replacements) html = html.replace(pair[0], pair[1]);
+  return html;
+}
+
 async function customerSecuritySendLostPasskeyEmailCodeV342(to, context = {}) {
   const email = normalizeAuthEmail(to);
   const requestId = customerSecurityNormalizeLostPasskeyRequestId(context.requestId || '');
@@ -4690,17 +4725,8 @@ async function customerSecuritySendLostPasskeyEmailCodeV342(to, context = {}) {
     'Jika Anda tidak meminta pemulihan Passkey, abaikan email ini dan tinjau keamanan akun.',
     'Jangan membagikan password, kode ini, OTP, token, atau Passkey kepada siapa pun.'
   ].join('\n\n');
-  const html = '<!doctype html><html><body style="margin:0;background:#0b0f16;color:#eef3f8;font-family:Arial,sans-serif">'
-    + '<div style="max-width:680px;margin:0 auto;padding:32px 20px">'
-    + '<div style="background:#111827;border:1px solid #334155;border-radius:18px;padding:28px">'
-    + '<div style="font-size:12px;letter-spacing:.16em;color:#93c5fd;font-weight:700">DIRAC GROUP SECURITY</div>'
-    + '<h1 style="font-size:24px;margin:12px 0 8px;color:#fff">Kode Pemulihan Passkey</h1>'
-    + '<p style="line-height:1.65;color:#cbd5e1">Password akun sudah diverifikasi. Gunakan kode 100 karakter di bawah hanya pada halaman masuk resmi Dirac Group.</p>'
-    + '<div style="margin:22px 0;padding:18px;border-radius:14px;background:#020617;border:1px solid #475569;font-family:Menlo,Consolas,monospace;font-size:14px;line-height:1.7;word-break:break-all;color:#fff">'
-    + emailSecret + '</div>'
-    + '<p style="font-size:13px;line-height:1.6;color:#94a3b8">Referensi: ' + reference + '<br>Berlaku sampai: ' + expiresWib + '</p>'
-    + '<p style="font-size:13px;line-height:1.6;color:#fbbf24">Jangan bagikan password, kode ini, OTP, token, atau Passkey kepada siapa pun.</p>'
-    + '</div></div></body></html>';
+  const html = customerSecurityLostPasskeyEmail100HtmlV343({ reference, expiresAt, emailSecret });
+  if (!html) return { ok: false, status: 500, code: 'RECOVERY_EMAIL100_TEMPLATE_INVALID', message: 'Template email recovery tidak valid.' };
 
   const boundary = 'dirac-email100-' + crypto.randomBytes(18).toString('hex');
   const fromHeader = 'Dirac Group Security <' + fromEmail + '>';
