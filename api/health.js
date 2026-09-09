@@ -12510,6 +12510,7 @@ async function diracRecoveryReadResponseLimitedV201(response, maximum = 2 * 1024
     ? response.headers.get('content-length') || ''
     : '').trim();
   if (lengthHeader && (!/^\d+$/.test(lengthHeader) || Number(lengthHeader) > limit)) {
+    try { if (response && response.body && typeof response.body.cancel === 'function') Promise.resolve(response.body.cancel('response_limit_exceeded')).catch(() => {}); } catch (_) {}
     const error = new Error('UPSTREAM_RESPONSE_TOO_LARGE');
     error.code = 'UPSTREAM_RESPONSE_TOO_LARGE';
     throw error;
@@ -12535,7 +12536,7 @@ async function diracRecoveryReadResponseLimitedV201(response, maximum = 2 * 1024
       total += chunk.length;
       if (total > limit) {
         chunk.fill(0);
-        try { await reader.cancel('response_limit_exceeded'); } catch (_) {}
+        try { Promise.resolve(reader.cancel('response_limit_exceeded')).catch(() => {}); } catch (_) {}
         const error = new Error('UPSTREAM_RESPONSE_TOO_LARGE');
         error.code = 'UPSTREAM_RESPONSE_TOO_LARGE';
         throw error;
