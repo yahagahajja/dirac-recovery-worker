@@ -3022,7 +3022,7 @@ function customerSecurityLostPasskeyQueueTableV164() {
 
 /* source 7296-7298 */
 function customerSecurityLostPasskeyQueueTtlMsV164() {
-  return customerSecurityLostPasskeyQueueIntV164('DIRAC_LOST_PASSKEY_QUEUE_LOCK_TTL_SECONDS', 360, 60, 1200) * 1000;
+  return customerSecurityLostPasskeyQueueIntV164('DIRAC_LOST_PASSKEY_QUEUE_LOCK_TTL_SECONDS', 360, 360, 1200) * 1000;
 }
 
 function customerSecurityLostPasskeyOperationBudgetMsV281() {
@@ -3198,27 +3198,23 @@ async function customerSecurityLostPasskeyQueueRenewV188(ownerId, context = {}) 
 
 /* source 7426-7446 */
 function customerSecurityLostPasskeyQueueHeartbeatV188(ownerId, context = {}) {
+  const cleanOwner = String(ownerId || '');
   let active = true;
-  let leaseLost = false;
-  let pending = Promise.resolve();
-  let renewing = false;
-  const tick = () => {
-    if (!active || leaseLost || renewing) return;
-    renewing = true;
-    pending = customerSecurityLostPasskeyQueueRenewV188(ownerId, context)
-      .then((renewed) => { if (!renewed) leaseLost = true; })
-      .catch(() => { leaseLost = true; })
-      .finally(() => { renewing = false; });
+  let leaseLost = !cleanOwner;
+  const healthy = () => {
+    if (!active || leaseLost) return false;
+    const memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
+    const valid = Boolean(
+      memory
+      && String(memory.ownerId || '') === cleanOwner
+      && Number(memory.lockUntilMs || 0) > Date.now()
+    );
+    if (!valid) leaseLost = true;
+    return valid;
   };
-  const timer = setInterval(tick, customerSecurityLostPasskeyQueueHeartbeatMsV188());
-  if (timer && typeof timer.unref === 'function') timer.unref();
   return {
-    healthy: () => !leaseLost,
-    stop: async () => {
-      active = false;
-      clearInterval(timer);
-      await pending.catch(() => null);
-    }
+    healthy,
+    stop: async () => { active = false; }
   };
 }
 
@@ -3299,50 +3295,37 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
   const ownerId = customerSecurityLostPasskeyQueueOwnerV164();
   const startMs = Date.now();
   const queueTask = String(body && (body.worker_action || body.queue_task) || '').trim();
-  const mayWaitForExistingArgon2 = queueTask === DIRAC_RECOVERY_WORKER_TASK_GENERATE
-    || queueTask === DIRAC_LOST_PASSKEY_RECOVERY_LINK_ACTION_V165
-    || queueTask === DIRAC_RECOVERY_WORKER_TASK_VERIFY
-    || queueTask === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159;
-  const deadlineMs = mayWaitForExistingArgon2
-    ? startMs + customerSecurityLostPasskeyQueueMaxWaitForTaskMsV191(queueTask)
-    : startMs;
+  const mayWaitForExistingArgon2 = false;
   const context = {
     nonce: body && body.nonce,
     callerId: body && body.caller_id,
     workerAction: queueTask,
     lockedAtMs: startMs
   };
-  let attempts = 0;
+  const attempts = 1;
   let lastReason = 'queue_lock_busy';
-  let sameRequestGenerationHandoffChecked = false;
   let terminalUnavailable = false;
+  const nowMs = Date.now();
+  let memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
+  let allowClaim = true;
 
-  while (true) {
-    attempts += 1;
-    const nowMs = Date.now();
-    const memory = DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.get(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
-    let claimed = null;
-    let patched = null;
-
-    // Generation has completed every Argon2id operation before its one-time
-    // recovery link can reach the browser. If only the durable release was
-    // lost, transfer that exact request's live lease with an owner-bound CAS.
-    // The global lock is never cleared or bypassed, and unrelated requests or
-    // active HPKE verifications remain serialized by the existing queue.
-    if (!sameRequestGenerationHandoffChecked
-        && (queueTask === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159
-          || queueTask === DIRAC_RECOVERY_WORKER_TASK_VERIFY)) {
-      sameRequestGenerationHandoffChecked = true;
-      const cleanNonce = customerSecurityNormalizeLostPasskeyRequestId(context.nonce);
-      const persistentState = cleanNonce
-        ? await customerSecurityLostPasskeyQueueReadStateV189()
-        : { ok: false, row: null };
-      if (!persistentState.ok) {
-        lastReason = String(persistentState.reason || 'queue_storage_unavailable');
-        terminalUnavailable = true;
-        break;
-      }
-      const priorRow = persistentState && persistentState.ok ? persistentState.row : null;
+  // Generation has completed every Argon2id operation before its one-time
+  // recovery link can reach the browser. If only the durable release was
+  // lost, transfer that exact request's live lease with an owner-bound CAS.
+  // The global lock is never cleared or bypassed, and unrelated requests or
+  // active HPKE verifications remain serialized by the existing queue.
+  if (queueTask === DIRAC_RECOVERY_HPKE_VERIFY_ACTION_V159
+      || queueTask === DIRAC_RECOVERY_WORKER_TASK_VERIFY) {
+    const cleanNonce = customerSecurityNormalizeLostPasskeyRequestId(context.nonce);
+    const persistentState = cleanNonce
+      ? await customerSecurityLostPasskeyQueueReadStateV189()
+      : { ok: false, row: null };
+    if (!persistentState.ok) {
+      lastReason = String(persistentState.reason || 'queue_storage_unavailable');
+      terminalUnavailable = true;
+      allowClaim = false;
+    } else {
+      const priorRow = persistentState.row;
       const priorRecord = priorRow && priorRow.record_json && typeof priorRow.record_json === 'object'
         && !Array.isArray(priorRow.record_json) ? priorRow.record_json : null;
       const priorOwner = customerSecurityLostPasskeyQueueRowOwnerV164(priorRow);
@@ -3383,71 +3366,75 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
         if (!handoff || !handoff.ok || !Array.isArray(handoff.data)) {
           lastReason = 'queue_storage_unavailable';
           terminalUnavailable = true;
-          break;
+          allowClaim = false;
+        } else {
+          const handoffClaimed = Boolean(handoff.data.length === 1
+            && customerSecurityLostPasskeyQueueRowOwnerV164(handoff.data[0]) === ownerId
+            && Number(handoff.data[0] && handoff.data[0].blocked_until_ms) === lockUntilMs
+            && customerSecurityLostPasskeyQueueRowActiveV164(handoff.data[0], Date.now()));
+          if (handoffClaimed) {
+            DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
+              ownerId,
+              lockUntilMs
+            });
+            const heartbeat = customerSecurityLostPasskeyQueueHeartbeatV188(ownerId, context);
+            return {
+              ok: true,
+              ownerId,
+              attempts,
+              waited_ms: Date.now() - startMs,
+              claim_mode: 'same_request_generation_handoff',
+              leaseHealthy: heartbeat.healthy,
+              release: async () => {
+                await heartbeat.stop();
+                return customerSecurityLostPasskeyQueueReleaseV164(ownerId);
+              }
+            };
+          }
+          lastReason = 'same_request_generation_handoff_conflict';
         }
-        const handoffClaimed = Boolean(handoff.data.length === 1
-          && customerSecurityLostPasskeyQueueRowOwnerV164(handoff.data[0]) === ownerId
-          && Number(handoff.data[0] && handoff.data[0].blocked_until_ms) === lockUntilMs
-          && customerSecurityLostPasskeyQueueRowActiveV164(handoff.data[0], Date.now()));
-        if (handoffClaimed) {
-          DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
-            ownerId,
-            lockUntilMs
-          });
-          const heartbeat = customerSecurityLostPasskeyQueueHeartbeatV188(ownerId, context);
-          return {
-            ok: true,
-            ownerId,
-            attempts,
-            waited_ms: Date.now() - startMs,
-            claim_mode: 'same_request_generation_handoff',
-            leaseHealthy: heartbeat.healthy,
-            release: async () => {
-              await heartbeat.stop();
-              return customerSecurityLostPasskeyQueueReleaseV164(ownerId);
-            }
-          };
-        }
-        lastReason = 'same_request_generation_handoff_conflict';
       }
     }
+  }
 
-    if (memory && Number(memory.lockUntilMs || 0) > nowMs && String(memory.ownerId || '') !== ownerId) {
-      const persistentState = await customerSecurityLostPasskeyQueueReadStateV189();
-      if (!persistentState.ok) {
-        // Never clear a live-looking memory lock when persistent storage cannot
-        // confirm its state. This intentionally remains fail-closed.
-        lastReason = 'memory_lock_busy_persistent_state_unavailable';
-        terminalUnavailable = true;
-        break;
-      } else {
-        const persistentOwner = customerSecurityLostPasskeyQueueRowOwnerV164(persistentState.row);
-        const persistentActive = customerSecurityLostPasskeyQueueRowActiveV164(persistentState.row, nowMs);
-        const memoryOwner = String(memory.ownerId || '');
-        if (!persistentActive || !persistentOwner || persistentOwner !== memoryOwner) {
-          DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
-          lastReason = 'stale_memory_lock_cleared';
-          continue;
-        }
-        lastReason = 'memory_and_persistent_lock_busy';
-      }
+  if (allowClaim && memory && Number(memory.lockUntilMs || 0) > nowMs && String(memory.ownerId || '') !== ownerId) {
+    const persistentState = await customerSecurityLostPasskeyQueueReadStateV189();
+    if (!persistentState.ok) {
+      // Never clear a live-looking memory lock when persistent storage cannot
+      // confirm its state. This intentionally remains fail-closed.
+      lastReason = 'memory_lock_busy_persistent_state_unavailable';
+      terminalUnavailable = true;
+      allowClaim = false;
     } else {
-      if (memory && Number(memory.lockUntilMs || 0) <= nowMs) {
+      const persistentOwner = customerSecurityLostPasskeyQueueRowOwnerV164(persistentState.row);
+      const persistentActive = customerSecurityLostPasskeyQueueRowActiveV164(persistentState.row, nowMs);
+      const memoryOwner = String(memory.ownerId || '');
+      if (!persistentActive || !persistentOwner || persistentOwner !== memoryOwner) {
         DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
+        memory = null;
+        lastReason = 'stale_memory_lock_cleared';
+      } else {
+        lastReason = 'memory_and_persistent_lock_busy';
+        allowClaim = false;
       }
-      patched = await customerSecurityLostPasskeyQueueTryPatchAvailableV167(ownerId, context);
-      if (patched && patched.unavailable) {
-        lastReason = String(patched.reason || 'queue_storage_unavailable');
-        terminalUnavailable = true;
-        break;
-      }
-      claimed = patched.ok ? patched : await customerSecurityLostPasskeyQueueTryInsertAvailableV167(ownerId, context);
+    }
+  } else if (allowClaim && memory && Number(memory.lockUntilMs || 0) <= nowMs) {
+    DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.delete(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164);
+    memory = null;
+  }
+
+  if (allowClaim) {
+    const patched = await customerSecurityLostPasskeyQueueTryPatchAvailableV167(ownerId, context);
+    if (patched && patched.unavailable) {
+      lastReason = String(patched.reason || 'queue_storage_unavailable');
+      terminalUnavailable = true;
+      allowClaim = false;
+    } else {
+      const claimed = patched.ok ? patched : await customerSecurityLostPasskeyQueueTryInsertAvailableV167(ownerId, context);
       if (claimed && claimed.unavailable) {
         lastReason = String(claimed.reason || 'queue_storage_unavailable');
         terminalUnavailable = true;
-        break;
-      }
-      if (claimed && claimed.ok) {
+      } else if (claimed && claimed.ok) {
         DIRAC_LOST_PASSKEY_GENERATE_QUEUE_MEMORY_V164.set(DIRAC_LOST_PASSKEY_GENERATE_QUEUE_LOCK_KEY_V164, {
           ownerId,
           lockUntilMs: Date.now() + customerSecurityLostPasskeyQueueTtlMsV164()
@@ -3465,13 +3452,10 @@ async function customerSecurityLostPasskeyQueueAcquireV164(req, body = {}) {
             return customerSecurityLostPasskeyQueueReleaseV164(ownerId);
           }
         };
+      } else {
+        lastReason = (claimed && claimed.reason) || (patched && patched.reason) || 'queue_lock_busy';
       }
-      lastReason = (claimed && claimed.reason) || (patched && patched.reason) || 'queue_lock_busy';
     }
-
-    const remainingMs = deadlineMs - Date.now();
-    if (!mayWaitForExistingArgon2 || remainingMs <= 0) break;
-    await customerSecurityLostPasskeyQueueSleepV164(Math.min(customerSecurityLostPasskeyQueuePollMsV164(), remainingMs));
   }
 
   try {
@@ -4685,8 +4669,12 @@ async function customerSecurityVerifyAccountPasswordForPdfV156(email, accountPas
     body: { email: normalizedEmail, password }
   });
   const user = result && result.data && result.data.user;
-  const verified = Boolean(result && result.ok === true && user
+  const directIdentityVerified = Boolean(result && result.ok === true && user
     && user.id === expectedAuthUserId && normalizeAuthEmail(user.email || '') === normalizedEmail);
+  const proxyPasswordGrantVerified = Boolean(result && result.ok === true && Number(result.status) === 200
+    && result.data === null && typeof supabaseFetch === 'function'
+    && supabaseFetch.__diracRecoverySecurityDbProxyV234 === true);
+  const verified = directIdentityVerified || proxyPasswordGrantVerified;
   return { ok: verified, status: verified ? 200 : (result && result.ok === false ? result.status || 503 : 403) };
 }
 
