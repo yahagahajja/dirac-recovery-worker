@@ -4872,9 +4872,8 @@ async function customerSecuritySmtpCommand(socket, command, allowed) {
 
 function diracBaseDomainV250() {
   const configured = String(process.env.DIRAC_BASE_DOMAIN || '').trim();
-  if (!configured && process.env.NODE_ENV === 'production') throw new Error('DIRAC_BASE_DOMAIN_REQUIRED');
-  const raw = String(configured || 'example.invalid').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/^\./, '');
-  if (!raw || raw.length > 253 || raw.includes('/') || raw.includes(':') || !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(raw)) {
+  const raw = String(configured || (process.env.NODE_ENV === 'production' ? 'diracgroup.store' : 'example.invalid')).toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/^\./, '');
+  if (!raw || raw.length > 253 || raw.includes('/') || raw.includes(':') || !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(raw) || (process.env.NODE_ENV === 'production' && raw !== 'diracgroup.store')) {
     throw new Error('DIRAC_BASE_DOMAIN_INVALID');
   }
   return raw;
@@ -4883,7 +4882,7 @@ function diracBaseDomainV250() {
 function diracRoleOriginV250(role) {
   const clean = String(role || '').trim().toLowerCase();
   if (clean === 'auth') return 'https://auth.' + diracBaseDomainV250();
-  if (clean === 'security') return 'https://security.' + diracBaseDomainV250();
+  if (clean === 'security') return 'https://secure.' + diracBaseDomainV250();
   if (clean === 'www') return 'https://www.' + diracBaseDomainV250();
   return 'https://' + diracBaseDomainV250();
 }
