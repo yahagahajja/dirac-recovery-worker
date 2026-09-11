@@ -14272,7 +14272,7 @@ function diracRecoverySecurityDbProxyUnframePayloadV277(value) {
 
 function diracRecoverySecurityDbProxyDecodeResultV277(result, cleanPath, method) {
   const eligible = String(cleanPath || '').startsWith('/rest/v1/security_lost_passkey_recovery_requests')
-    && String(method || '') === 'GET'
+    && (String(method || '') === 'GET' || String(method || '') === 'PATCH')
     && result && result.ok === true
     && Number(result.status) === 200;
   if (!eligible || Array.isArray(result.data)) {
