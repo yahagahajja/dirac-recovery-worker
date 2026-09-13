@@ -550,7 +550,7 @@ function assertVaultBundlePolicy(bundle) {
     if (metadata.schema !== 'dirac-recovery-vault-metadata-v2'
         || metadata.version !== VERSION
         || metadata.purpose !== PURPOSE
-        || metadata.domain !== 'https://secure.diracgroup.store'
+        || metadata.domain !== diracRoleOriginV250('security')
         || metadata.request_id !== bundle.request_id
         || metadata.vault_id !== bundle.vault_id
         || metadata.generation !== 2
@@ -716,7 +716,7 @@ async function createVault(options) {
   const required = ['requestId', 'expiresAt', 'nowIso', 'officialOrigin', 'passwordMaterial', 'emailSecret', 'websiteSecret', 'recoveryCode'];
   for (const key of required) if (!String(options && options[key] || '')) throw fail('VAULT_INPUT_MISSING_' + key.toUpperCase());
   if (!/^[A-Za-z0-9_-]{16,120}$/.test(String(options.requestId))) throw fail('VAULT_REQUEST_ID_INVALID');
-  if (String(options.officialOrigin) !== 'https://secure.diracgroup.store') throw fail('VAULT_ORIGIN_INVALID');
+  if (String(options.officialOrigin) !== diracRoleOriginV250('security')) throw fail('VAULT_ORIGIN_INVALID');
   const createdAtMs = parseIsoMsStrict(options.nowIso, 'VAULT_CREATED_AT_INVALID');
   const expiresAtMs = parseIsoMsStrict(options.expiresAt, 'VAULT_EXPIRES_AT_INVALID');
   if (expiresAtMs <= createdAtMs || expiresAtMs - createdAtMs > 15 * 60 * 1000) throw fail('VAULT_TIME_POLICY_INVALID');
@@ -958,7 +958,7 @@ function envelopeAad(body, mlkemCiphertextHash) {
     action: String(body.action || ''),
     version: ENVELOPE_VERSION,
     purpose: PURPOSE,
-    origin: 'https://secure.diracgroup.store',
+    origin: diracRoleOriginV250('security'),
     request_id: String(body.request_id || ''),
     hpke_suite: HYBRID_SUITE,
     hpke_key_id: String(body.hpke_key_id || ''),
@@ -1364,8 +1364,8 @@ return Object.freeze({
 
 /* source 1189-1194 */
 const DEFAULT_ALLOWED_ORIGINS = [
-  'https://diracgroup.store',
-  'https://www.diracgroup.store',
+  'https://' + diracBaseDomainV250(),
+  diracRoleOriginV250('www'),
   'https://companyprofilee-ochre.vercel.app',
   'https://companyprofilee-expk.vercel.app'
 ];
@@ -1408,7 +1408,7 @@ const DOMAIN_ACTION_ALIASES = Object.freeze({
 function getAllowedOrigins() {
   const server2RecoveryOnly = /^(vercel2)$/i.test(String(process.env.DIRAC_CENTRAL_DEPLOYMENT_ROLE || process.env.DIRAC_DEPLOYMENT_ROLE || '').trim())
     || /^(1|true|yes|on|enabled|enable)$/i.test(String(process.env.DIRAC_CENTRAL_VERCEL2_ACTIONS_ENABLED || process.env.DIRAC_VERCEL2_ACTIONS_ENABLED || '').trim());
-  if (server2RecoveryOnly) return ['https://secure.diracgroup.store'];
+  if (server2RecoveryOnly) return [diracRoleOriginV250('security')];
 
   const fromEnv = String(process.env.AI_ALLOWED_ORIGINS || '').split(',').map((item) => item.trim()).filter(Boolean);
   const domainSite = String(process.env.DOMAIN_SITE_URL || '').trim();
@@ -2116,7 +2116,7 @@ function appendSetCookie(res, cookies) {
 function makeCookie(name, value, options = {}) {
   // Produksi paling aman: token customer hanya lewat backend-only cookie.
   // Default None agar cookie tetap dikirim saat frontend dan API beda origin
-  // (misal diracgroup.store -> *.vercel.app). Untuk dev HTTP lokal, set env DOMAIN_COOKIE_SAMESITE=Lax.
+  // (misal configured deployment domain -> *.vercel.app). Untuk dev HTTP lokal, set env DOMAIN_COOKIE_SAMESITE=Lax.
   const sameSite = normalizeCookieSameSite(process.env.DOMAIN_COOKIE_SAMESITE || 'None');
   if (process.env.NODE_ENV === 'production' && sameSite !== 'Strict') {
     const err = new Error('DOMAIN_COOKIE_SAMESITE production wajib Strict.');
@@ -2169,10 +2169,10 @@ function getCompactCookieDomainsForSession() {
     domains.push(domain);
   };
 
-  // Host-only harus utama agar diracgroup.store langsung membaca cookie hasil login/register.
+  // Host-only harus utama agar configured deployment domain langsung membaca cookie hasil login/register.
   add('');
   add(process.env.DOMAIN_COOKIE_DOMAIN);
-  add('diracgroup.store');
+  add(diracBaseDomainV250());
   getCompactCookieDomainsForSession.__diracCache = { fingerprint, value: domains.slice() };
   return domains;
 }
@@ -4422,15 +4422,15 @@ async function customerSecurityLostPasskeyArgon2VerifyHashV157(label, value, enc
 /* source 8902-8917 */
 function customerSecurityLostPasskeyOfficialBaseUrlV157() {
   // SERVER 2 SECURE ORIGIN LOCK v169:
-  // Lost-passkey static HTML and vault API are only allowed on secure.diracgroup.store.
-  // Do not fall back to diracgroup.store or www.diracgroup.store.
-  const requiredOrigin = 'https://secure.diracgroup.store';
+  // Lost-passkey static HTML and vault API are only allowed on secure.configured deployment domain.
+  // Do not fall back to configured deployment domain or www.configured deployment domain.
+  const requiredOrigin = diracRoleOriginV250('security');
   const raw = String(process.env.DIRAC_LOST_PASSKEY_RECOVERY_BASE_URL || requiredOrigin).trim().replace(/\/+$/, '');
   try {
     const url = new URL(raw);
     const host = String(url.hostname || '').toLowerCase();
     if (url.protocol !== 'https:') return requiredOrigin;
-    if (host !== 'secure.diracgroup.store') return requiredOrigin;
+    if (host !== new URL(requiredOrigin).hostname) return requiredOrigin;
     return requiredOrigin;
   } catch (_) {
     return requiredOrigin;
@@ -4703,7 +4703,7 @@ function customerSecurityLostPasskeyBindings(req, owner) {
 
 const DIRAC_LOST_PASSKEY_AUTHORITATIVE_BINDING_V231 =
   'dirac-lost-passkey-authoritative-recovery-binding-v231';
-const DIRAC_LOST_PASSKEY_RP_ID_V231 = 'diracgroup.store';
+const DIRAC_LOST_PASSKEY_RP_ID_V231 = diracBaseDomainV250();
 
 function customerSecurityLostPasskeyPasskeyIdsV231(passkeys) {
   const ids = Array.from(new Set((Array.isArray(passkeys) ? passkeys : [])
@@ -4872,8 +4872,9 @@ async function customerSecuritySmtpCommand(socket, command, allowed) {
 
 function diracBaseDomainV250() {
   const configured = String(process.env.DIRAC_BASE_DOMAIN || '').trim();
-  const raw = String(configured || (process.env.NODE_ENV === 'production' ? 'diracgroup.store' : 'example.invalid')).toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/^\./, '');
-  if (!raw || raw.length > 253 || raw.includes('/') || raw.includes(':') || !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(raw) || (process.env.NODE_ENV === 'production' && raw !== 'diracgroup.store')) {
+  if (!configured && process.env.NODE_ENV === 'production') throw new Error('DIRAC_BASE_DOMAIN_REQUIRED');
+  const raw = String(configured || 'example.invalid').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/^\./, '');
+  if (!raw || raw.length > 253 || raw.includes('/') || raw.includes(':') || !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(raw)) {
     throw new Error('DIRAC_BASE_DOMAIN_INVALID');
   }
   return raw;
@@ -5125,7 +5126,7 @@ async function customerSecuritySendLostPasskeyEmailCodeV342(to, context = {}) {
     smtpStage = 'greeting_220';
     await customerSecuritySmtpCommand(socket, '', 220);
     smtpStage = 'ehlo_250';
-    await customerSecuritySmtpCommand(socket, 'EHLO diracgroup.store', 250);
+    await customerSecuritySmtpCommand(socket, 'EHLO ' + diracBaseDomainV250(), 250);
     const auth = Buffer.from('\u0000' + config.user + '\u0000' + config.pass, 'utf8').toString('base64');
     smtpStage = 'auth_plain_235';
     await customerSecuritySmtpCommand(socket, 'AUTH PLAIN ' + auth, 235);
@@ -5191,13 +5192,14 @@ function customerSecurityRecoveryFormatWibV326(value) {
 
 /* source 10121-10133 */
 function customerSecurityLostPasskeyRecoveryEmailBannerUrlV172() {
-  const fallback = 'https://secure.diracgroup.store/mmmail.webp';
+  const fallback = diracRoleOriginV250('security') + '/mmmail.webp';
   const raw = String(process.env.DIRAC_RECOVERY_EMAIL_BANNER_URL || process.env.DIRAC_LOST_PASSKEY_EMAIL_BANNER_URL || fallback).trim();
   try {
     const url = new URL(raw);
     const host = url.hostname.toLowerCase();
     if (url.protocol !== 'https:') return fallback;
-    if (host !== 'diracgroup.store' && host !== 'www.diracgroup.store' && host !== 'secure.diracgroup.store' && !host.endsWith('.diracgroup.store')) return fallback;
+    const base = diracBaseDomainV250();
+    if (host !== base && host !== 'www.' + base && host !== 'secure.' + base && !host.endsWith('.' + base)) return fallback;
     return url.toString();
   } catch (_) {
     return fallback;
@@ -5262,7 +5264,7 @@ async function customerSecuritySendLostPasskeyRecoveryLinkEmailV157(to, context 
   const recoveryLink = customerSecurityLostPasskeyOfficialEmailLinkV187(context);
   if (!recoveryLink) return { ok: false, status: 500, code: 'RECOVERY_EMAIL_LINK_INVALID', message: 'Link recovery resmi tidak valid.' };
   const emailContext = Object.assign({}, context, { recoveryLink });
-  const from = String(process.env.DIRAC_RECOVERY_EMAIL_FROM || process.env.DIRAC_EMAIL_FROM || process.env.RESEND_FROM || 'Dirac Secure <no-reply@diracgroup.store>').trim();
+  const from = String(process.env.DIRAC_RECOVERY_EMAIL_FROM || process.env.DIRAC_EMAIL_FROM || process.env.RESEND_FROM || 'Dirac Secure <no-reply@' + diracBaseDomainV250() + '>').trim();
   const subjectRef = crypto.createHash('sha256').update(recoveryLink, 'utf8').digest('hex').slice(0, 10).toUpperCase();
   const subject = 'DiracGroup Secure Recovery - Link Pemulihan Passkey [' + subjectRef + ']';
   const text = [
@@ -5272,7 +5274,7 @@ async function customerSecuritySendLostPasskeyRecoveryLinkEmailV157(to, context 
     'Link resmi: ' + recoveryLink,
     'SECRET_EMAIL_100_CHAR: ' + String(context.emailSecret || ''),
     'Jangan bagikan email secret, link, atau isi pesan ini kepada pihak lain. Website secret hanya tampil di website yang masih login.',
-    'Bantuan resmi Dirac Group:\nWhatsApp: 0878 9252 3968\nEmail Support: support@diracgroup.store\nEmail Perusahaan: companydirac@gmail.com\nInstagram: @diraccorp',
+    'Bantuan resmi Dirac Group:\nWhatsApp: 0878 9252 3968\nEmail Support: support@' + diracBaseDomainV250() + '\nEmail Perusahaan: companydirac@gmail.com\nInstagram: @diraccorp',
     'Tim Dirac Group tidak pernah meminta Secret Email, Secret Website, password, OTP, atau hasil decrypt melalui WhatsApp, Instagram, telepon, maupun balasan email.'
   ].join('\n\n');
   const html = customerSecurityLostPasskeyRecoveryLinkEmailHtmlV157(emailContext);
@@ -5310,7 +5312,7 @@ async function customerSecuritySendLostPasskeyRecoveryLinkEmailV157(to, context 
       smtpStage = 'greeting_220';
       await customerSecuritySmtpCommand(socket, '', 220);
       smtpStage = 'ehlo_250';
-      await customerSecuritySmtpCommand(socket, 'EHLO diracgroup.store', 250);
+      await customerSecuritySmtpCommand(socket, 'EHLO ' + diracBaseDomainV250(), 250);
       const auth = Buffer.from('\u0000' + config.user + '\u0000' + config.pass, 'utf8').toString('base64');
       smtpStage = 'auth_plain_235';
       await customerSecuritySmtpCommand(socket, 'AUTH PLAIN ' + auth, 235);
@@ -12151,7 +12153,7 @@ async function diracRecoveryCryptoV2VerifyEnvelope(req, res, ctx, body) {
 const DIRAC_RECOVERY_ONLY_SERVER2_V201 = 'dirac-recovery-only-server2-v201';
 const DIRAC_RECOVERY_WORKER_AUTH_CONTEXT_V201 = 'dirac-recovery-worker-auth-v201';
 const DIRAC_RECOVERY_WORKER_DEFAULT_PATH_V201 = '/api/health';
-const DIRAC_RECOVERY_BROWSER_ORIGIN_V201 = 'https://secure.diracgroup.store';
+const DIRAC_RECOVERY_BROWSER_ORIGIN_V201 = diracRoleOriginV250('security');
 const DIRAC_RECOVERY_PAGE_NONCE_HEADER_V203 = 'X-Dirac-Page-Nonce';
 const DIRAC_RECOVERY_PAGE_NONCE_TYPE_V203 = 'dirac-recovery-page-nonce-v203';
 const DIRAC_RECOVERY_PAGE_NONCE_MAX_AGE_MS_V203 = 120_000;
@@ -12631,7 +12633,7 @@ function diracRecoveryIdentityV201(req, action) {
   const originClass = origin === DIRAC_RECOVERY_BROWSER_ORIGIN_V201 ? 'official-origin' : (origin ? 'untrusted-origin' : 'origin-absent');
   const forwardedHost = diracRecoveryHeaderV201(req, 'x-forwarded-host').split(',')[0].trim().slice(0, 255).toLowerCase();
   const host = (forwardedHost || diracRecoveryHeaderV201(req, 'host').split(',')[0].trim()).slice(0, 255).toLowerCase();
-  const hostClass = host === 'secure.diracgroup.store' ? 'official-host' : (host ? 'untrusted-host' : 'host-absent');
+  const hostClass = host === new URL(diracRoleOriginV250('security')).hostname ? 'official-host' : (host ? 'untrusted-host' : 'host-absent');
   const fetchSite = diracRecoveryHeaderV201(req, 'sec-fetch-site').slice(0, 32).toLowerCase();
   const fetchSiteClass = fetchSite === 'same-origin' || fetchSite === 'same-site' ? fetchSite : (fetchSite ? 'cross-site' : 'fetch-site-absent');
   let sessionHash = '';
@@ -12961,7 +12963,7 @@ async function diracRecoveryLinkOpenGuardV202(req, res, ctx, body, identityKey) 
     return diracRecoveryGuardRejectV201(req, res, ctx.action, 'recovery_link_origin_invalid', 403, identityKey);
   }
   const host = diracRecoveryHeaderV201(req, 'host').toLowerCase();
-  if (host !== 'secure.diracgroup.store') {
+  if (host !== 'secure.configured deployment domain') {
     return diracRecoveryGuardRejectV201(req, res, ctx.action, 'recovery_link_host_invalid', 403, identityKey);
   }
   const forwardedProto = diracRecoveryRequestTransportV356(req) ? 'https' : '';
@@ -13784,7 +13786,7 @@ async function diracRecoveryBrowserGuardV201(req, res, ctx, body, identityKey) {
   const forwardedProto = diracRecoveryRequestTransportV356(req) ? 'https' : '';
 
   const exactBrowserOrigin = origin === DIRAC_RECOVERY_BROWSER_ORIGIN_V201;
-  const exactBrowserTarget = host === 'secure.diracgroup.store'
+  const exactBrowserTarget = host === new URL(diracRoleOriginV250('security')).hostname
     && (process.env.NODE_ENV === 'production' ? forwardedProto === 'https' : (!forwardedProto || forwardedProto === 'https'));
   const exactHeadTarget = method !== 'HEAD'
     || (secFetchSite === 'same-origin' && exactBrowserTarget);
@@ -13834,7 +13836,7 @@ async function diracRecoveryPreflightGuardV204(req, res, ctx, identityKey) {
   const forwardedProto = diracRecoveryRequestTransportV356(req) ? 'https' : '';
   const secFetchSite = diracRecoveryHeaderV201(req, 'sec-fetch-site').toLowerCase();
   if (origin !== DIRAC_RECOVERY_BROWSER_ORIGIN_V201
-      || host !== 'secure.diracgroup.store'
+      || host !== 'secure.configured deployment domain'
       || (process.env.NODE_ENV === 'production' ? forwardedProto !== 'https' : (forwardedProto && forwardedProto !== 'https'))
       || (secFetchSite && !['same-origin', 'same-site'].includes(secFetchSite))) {
     return diracRecoveryGuardRejectV201(req, res, ctx.action, 'preflight_origin_invalid', 403, identityKey);
@@ -14655,14 +14657,14 @@ function diracRecoveryRequestBoundaryV356(req) {
   if (typeof rawUrl !== 'string' || !rawUrl.startsWith('/api/health?')
       || /[\u0000-\u0020\u007f\\#]/.test(rawUrl)) return deny('RECOVERY_PATH_INVALID');
   let target;
-  try { target = new URL(rawUrl, 'https://secure.diracgroup.store'); } catch (_) { return deny('RECOVERY_PATH_INVALID'); }
+  try { target = new URL(rawUrl, diracRoleOriginV250('security')); } catch (_) { return deny('RECOVERY_PATH_INVALID'); }
   const parameters = Array.from(target.searchParams.entries());
   const action = req.query && req.query.action;
   if (target.pathname !== '/api/health' || parameters.length !== 1 || parameters[0][0] !== 'action'
       || typeof action !== 'string' || parameters[0][1] !== action
       || rawUrl !== '/api/health?action=' + action || !/^[a-z0-9_]{1,80}$/.test(action)) return deny('RECOVERY_QUERY_INVALID');
   const headers = req.headers || {};
-  if (typeof headers.host !== 'string' || headers.host.toLowerCase() !== 'secure.diracgroup.store') return deny('RECOVERY_HOST_INVALID');
+  if (typeof headers.host !== 'string' || headers.host.toLowerCase() !== new URL(diracRoleOriginV250('security')).hostname) return deny('RECOVERY_HOST_INVALID');
   if (process.env.NODE_ENV === 'production' && !diracRecoveryRequestTransportV356(req)) return deny('RECOVERY_TRANSPORT_INVALID');
   if (Object.values(headers).some(Array.isArray)) return deny('RECOVERY_HEADER_AMBIGUOUS');
   const seen = new Set();
